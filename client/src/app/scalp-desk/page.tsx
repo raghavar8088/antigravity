@@ -58,7 +58,7 @@ const SYMBOLS = ["ALL", "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "
 const GATE_RULES = ["≥ 200 live trades", "PF ≥ 1.2", "max DD ≤ 25%", "both halves net-positive"];
 const MIN_N_OPTS = [0, 5, 20, 50, 100, 200];
 
-type SortKey = "n" | "wr_pct" | "pf" | "net_usd" | "max_dd_pct" | "missed";
+type SortKey = "n" | "wr_pct" | "pf" | "net_usd" | "max_dd_pct" | "missed" | "live_net_usd" | "live_fee_drag_pct";
 type Side = "ALL" | "LONG" | "SHORT";
 
 function fmtUSD(v: number): string {
@@ -139,6 +139,14 @@ export default function ScalpDeskPage() {
   const [minN, setMinN] = useState<number>(0);
   const [gateOnly, setGateOnly] = useState<boolean>(false);
   const [profitOnly, setProfitOnly] = useState<boolean>(false);
+  // Column-level filters. Separate from the chips above because these are
+  // thresholds rather than toggles, and the number that matters differs by
+  // question: fee drag for "can it pay for itself", qualified % for "is there
+  // enough evidence", net for "did it earn anything on live terms".
+  const [minWR, setMinWR] = useState<number>(0);
+  const [minNet, setMinNet] = useState<number>(0);
+  const [maxDrag, setMaxDrag] = useState<number>(0);
+  const [minQual, setMinQual] = useState<number>(0);
   const [sortKey, setSortKey] = useState<SortKey>("net_usd");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [error, setError] = useState<string>("");
@@ -216,6 +224,12 @@ export default function ScalpDeskPage() {
         .filter((r) => r.n >= minN)
         .filter((r) => !gateOnly || r.gate_pass)
         .filter((r) => !profitOnly || r.net_usd > 0)
+        .filter((r) => r.wr_pct >= minWR)
+        .filter((r) => (r.live_net_usd ?? 0) >= minNet)
+        // 0 means "no cap" — a drag filter that excluded everything by default
+        // would hide the whole board on first load.
+        .filter((r) => maxDrag <= 0 || (r.live_fee_drag_pct ?? 0) <= maxDrag)
+        .filter((r) => qualPct(r) >= minQual)
         .filter((r) =>
           side === "ALL" ? true : side === "LONG" ? r.strategy.endsWith("_Long") : r.strategy.endsWith("_Short"),
         )
@@ -225,10 +239,11 @@ export default function ScalpDeskPage() {
           const d = a[sortKey] - b[sortKey];
           return sortDir === "desc" ? -d : d;
         }),
-    [rows, symbol, minN, gateOnly, profitOnly, side, q, sortKey, sortDir],
+    [rows, symbol, minN, gateOnly, profitOnly, side, q, minWR, minNet, maxDrag, minQual, sortKey, sortDir],
   );
   const filtersActive =
-    symbol !== "ALL" || q !== "" || side !== "ALL" || minN !== 0 || gateOnly || profitOnly;
+    symbol !== "ALL" || q !== "" || side !== "ALL" || minN !== 0 || gateOnly || profitOnly ||
+    minWR !== 0 || minNet !== 0 || maxDrag !== 0 || minQual !== 0;
   const resetFilters = () => {
     setSymbol("ALL");
     setQuery("");
@@ -236,6 +251,10 @@ export default function ScalpDeskPage() {
     setMinN(0);
     setGateOnly(false);
     setProfitOnly(false);
+    setMinWR(0);
+    setMinNet(0);
+    setMaxDrag(0);
+    setMinQual(0);
   };
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
@@ -272,64 +291,6 @@ export default function ScalpDeskPage() {
    */
   const liveStrategyNames = useMemo(() => new Set(liveRoster), [liveRoster]);
   const liveStreamSet = useMemo(() => new Set(liveStreams), [liveStreams]);
-  const liveRows = useMemo(
-    () =>
-      rows
-        // Match the exact stream the venue gates on, not just the name.
-        .filter((r) =>
-          liveStreamSet.size > 0
-            ? liveStreamSet.has(`${r.strategy}|${r.symbol.toUpperCase()}`)
-            : liveStrategyNames.has(r.strategy),
-        )
-        // Ranked by the $100 taker result, not the paper one. Sorting by paper
-        // net would put the same strategies on top that the paper board already
-        // flatters — the habit this table exists to break.
-        .sort((a, b) => (b.live_net_usd ?? 0) - (a.live_net_usd ?? 0)),
-    [rows, liveStreamSet, liveStrategyNames],
-  );
-
-  /**
-   * Columns for the live-routed board.
-   *
-   * Deliberately NOT the paper leaderboard's columns. That board reports $1,000
-   * notional with maker fees; this reports the $100 account the desk actually
-   * runs, with taker fees both legs. Both are shown — the gap between them is
-   * what a promotion decision turns on.
-   */
-  /**
-   * ONE $100 portfolio spread across the live-routed streams.
-   *
-   * The leaderboard column gives every stream its own $100 account, which is
-   * the right way to COMPARE strategies but is not a portfolio: 136 streams on
-   * $100 each is $13,600 of capital. Summing that column would report the
-   * return on thirteen thousand dollars as if it were the return on one
-   * hundred, and it would be the most flattering number on the page.
-   *
-   * An equal-weight portfolio gives each stream $100/N. P&L scales linearly
-   * with size, so each stream contributes its own figure divided by N — which
-   * makes the portfolio return the MEAN of the per-strategy returns, not their
-   * sum. That single division is the whole difference between a real number and
-   * a fantasy.
-   */
-  const portfolio = useMemo(() => {
-    const traded = liveRows.filter((r) => r.n > 0);
-    const n = traded.length;
-    if (n === 0) {
-      return { n: 0, net: 0, fees: 0, roi: 0, value: 100, perStrategy: 0, trades: 0, winners: 0 };
-    }
-    const net = traded.reduce((a, r) => a + (r.live_net_usd ?? 0), 0) / n;
-    const fees = traded.reduce((a, r) => a + (r.live_fees_usd ?? 0), 0) / n;
-    return {
-      n,
-      net,
-      fees,
-      roi: net,
-      value: 100 + net,
-      perStrategy: 100 / n,
-      trades: traded.reduce((a, r) => a + r.n, 0),
-      winners: traded.filter((r) => (r.live_net_usd ?? 0) > 0).length,
-    };
-  }, [liveRows]);
 
   /**
    * How close a stream is to the pre-registered go-live gate, as a percentage.
@@ -357,113 +318,6 @@ export default function ScalpDeskPage() {
     return ((trades + pf + dd + net) / 4) * 100;
   };
 
-  const liveLbColumns: DeskColumn<LbRow>[] = [
-    { id: "strategy", header: "Strategy", cell: (r) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{r.strategy}</span> },
-    { id: "symbol", header: "Symbol", cell: (r) => r.symbol.replace("USDT", "") },
-    {
-      id: "capital",
-      align: "right",
-      header: "Capital",
-      // What $100 given to THIS strategy alone is worth now, on live terms.
-      // Stated as a balance rather than a P&L because a balance is the thing an
-      // operator actually checks, and $95.40 is harder to misread than -$4.60.
-      cell: (r) => {
-        const cap = 100 + (r.live_net_usd ?? 0);
-        return (
-          <span className={pnlToneClass(r.live_net_usd ?? 0)} style={{ fontWeight: 700 }}>
-            {`$${cap.toFixed(2)}`}
-          </span>
-        );
-      },
-    },
-    {
-      id: "qual",
-      align: "right",
-      header: "Qualified %",
-      // Progress toward the go-live gate, not a verdict. Dominated by the trade
-      // count, which is the only gate term variance cannot fake.
-      cell: (r) => {
-        const q = qualPct(r);
-        return (
-          <span
-            className={q >= 100 ? "desk-pnl-positive" : undefined}
-            style={{ fontWeight: q >= 100 ? 700 : 400, opacity: q < 40 ? 0.7 : 1 }}
-          >
-            {`${q.toFixed(0)}%`}
-          </span>
-        );
-      },
-    },
-    { id: "n", align: "right", header: "Trades", cell: (r) => r.n },
-    { id: "wr", align: "right", header: "WR %", cell: (r) => r.wr_pct.toFixed(1) },
-    {
-      // Ordered Gross -> Taker Fees -> Net so the row reads as the equation it
-      // is. Showing net beside fees with no gross gives no way to tell whether
-      // the subtraction already happened, and a reader who assumes it did not
-      // will deduct the fees a second time.
-      id: "gross",
-      align: "right",
-      header: "Gross",
-      cell: (r) => (
-        <span className={pnlToneClass(r.live_gross_usd ?? 0)}>{fmtUSD(r.live_gross_usd ?? 0)}</span>
-      ),
-    },
-    {
-      id: "fees",
-      align: "right",
-      header: "− Taker Fees",
-      cell: (r) => <span className="desk-pnl-negative">{fmtUSD(-(r.live_fees_usd ?? 0))}</span>,
-    },
-    {
-      id: "livenet",
-      align: "right",
-      header: "= Net on $100",
-      cell: (r) => (
-        <span className={pnlToneClass(r.live_net_usd ?? 0)} style={{ fontWeight: 700 }}>
-          {fmtUSD(r.live_net_usd ?? 0)}
-        </span>
-      ),
-    },
-    {
-      id: "roi",
-      align: "right",
-      header: "ROI %",
-      cell: (r) => (
-        <span className={pnlToneClass(r.live_roi_pct ?? 0)}>
-          {`${(r.live_roi_pct ?? 0) >= 0 ? "+" : ""}${(r.live_roi_pct ?? 0).toFixed(1)}%`}
-        </span>
-      ),
-    },
-    {
-      id: "drag",
-      align: "right",
-      header: "Fee Drag",
-      // Above 100% means it earns less than it costs to trade.
-      cell: (r) => (
-        <span className={(r.live_fee_drag_pct ?? 0) >= 100 ? "desk-pnl-negative" : undefined}>
-          {`${(r.live_fee_drag_pct ?? 0).toFixed(0)}%`}
-        </span>
-      ),
-    },
-    {
-      id: "paper",
-      align: "right",
-      header: "Paper (maker)",
-      cell: (r) => (
-        <span className={pnlToneClass(r.net_usd)} style={{ opacity: 0.6 }}>{fmtUSD(r.net_usd)}</span>
-      ),
-    },
-    {
-      id: "verdict",
-      header: "Qualified",
-      cell: (r) =>
-        (r.live_net_usd ?? 0) > 0 ? (
-          <DeskChip tone="success" style={{ fontWeight: 700 }}>YES</DeskChip>
-        ) : (
-          <DeskChip tone="danger">NO</DeskChip>
-        ),
-    },
-  ];
 
   const positionColumns: DeskColumn<OpenPos>[] = [
     {
@@ -564,7 +418,82 @@ export default function ScalpDeskPage() {
         );
       },
     },
+    {
+      id: "qual",
+      align: "right",
+      header: "Qualified %",
+      // Progress toward the pre-registered gate, not a verdict. Dominated by
+      // the trade count, which is the only gate term variance cannot fake.
+      cell: (r) => {
+        const q = qualPct(r);
+        return (
+          <span className={q >= 100 ? "desk-pnl-positive" : undefined}
+            style={{ fontWeight: q >= 100 ? 700 : 400, opacity: q < 40 ? 0.7 : 1 }}>
+            {`${q.toFixed(0)}%`}
+          </span>
+        );
+      },
+    },
     { id: "n", align: "right", header: <SortableHeader label="Trades" k="n" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.n },
+    {
+      id: "gross",
+      align: "right",
+      header: "Gross",
+      cell: (r) => <span className={pnlToneClass(r.live_gross_usd ?? 0)}>{fmtUSD(r.live_gross_usd ?? 0)}</span>,
+    },
+    {
+      id: "fees",
+      align: "right",
+      header: "− Taker Fees",
+      cell: (r) => <span className="desk-pnl-negative">{fmtUSD(-(r.live_fees_usd ?? 0))}</span>,
+    },
+    {
+      id: "livenet",
+      align: "right",
+      // Ordered Gross → − Fees → = Net so the row reads as the equation it is.
+      header: <SortableHeader label="= Net on $100" k="live_net_usd" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
+      cell: (r) => (
+        <span className={pnlToneClass(r.live_net_usd ?? 0)} style={{ fontWeight: 700 }}>
+          {fmtUSD(r.live_net_usd ?? 0)}
+        </span>
+      ),
+    },
+    {
+      id: "roi",
+      align: "right",
+      header: "ROI %",
+      cell: (r) => (
+        <span className={pnlToneClass(r.live_roi_pct ?? 0)}>
+          {`${(r.live_roi_pct ?? 0) >= 0 ? "+" : ""}${(r.live_roi_pct ?? 0).toFixed(1)}%`}
+        </span>
+      ),
+    },
+    {
+      id: "drag",
+      align: "right",
+      header: <SortableHeader label="Fee Drag" k="live_fee_drag_pct" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
+      // Above 100% means the stream earns less than it costs to trade.
+      cell: (r) => (
+        <span className={(r.live_fee_drag_pct ?? 0) >= 100 ? "desk-pnl-negative" : undefined}>
+          {`${(r.live_fee_drag_pct ?? 0).toFixed(0)}%`}
+        </span>
+      ),
+    },
+    {
+      id: "verdict",
+      header: "Qualified",
+      // A question, not a verdict, and silent below 30 trades. A green chip at
+      // n=1 is how a leaderboard starts lying — and across 27,784 streams the
+      // right tail is long enough to produce hundreds of them.
+      cell: (r) =>
+        r.n < 30 ? (
+          <DeskChip tone="default">too few</DeskChip>
+        ) : (r.live_net_usd ?? 0) > 0 ? (
+          <DeskChip tone="success" style={{ fontWeight: 700 }}>YES</DeskChip>
+        ) : (
+          <DeskChip tone="danger">NO</DeskChip>
+        ),
+    },
     { id: "wr", align: "right", header: <SortableHeader label="WR %" k="wr_pct" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.wr_pct.toFixed(1) },
     { id: "pf", align: "right", header: <SortableHeader label="PF" k="pf" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.pf.toFixed(2) },
     {
@@ -736,93 +665,6 @@ export default function ScalpDeskPage() {
           </p>
         </DeskCard>
 
-        {/* Live-routed leaderboard — the streams that spend real money */}
-        <DeskCard padding="md">
-          <DeskSectionHeader
-            title="Live Strategy Leaderboard"
-            subtitle="Each strategy on its OWN $100 account at 3x notional, with Delta taker fees both legs — the terms the live desk actually trades on."
-            actions={
-              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
-                {liveRows.length} of {liveStreamSet.size || liveRows.length} live-routed streams
-              </span>
-            }
-          />
-          {/* One $100 portfolio, equal-weight across the traded streams. */}
-          <div className="desk-metrics-row" style={{ marginBottom: 16 }}>
-            <DeskMetricTile
-              label="Portfolio Value"
-              value={`$${portfolio.value.toFixed(2)}`}
-              valueClassName={pnlToneClass(portfolio.net)}
-              sub={`started at $100.00`}
-              highlight
-            />
-            <DeskMetricTile
-              compact
-              label="Net P&L"
-              value={fmtUSD(portfolio.net)}
-              valueClassName={pnlToneClass(portfolio.net)}
-              sub={`${portfolio.roi >= 0 ? "+" : ""}${portfolio.roi.toFixed(2)}% return`}
-            />
-            <DeskMetricTile
-              compact
-              label="Allocation"
-              value={portfolio.n ? `$${portfolio.perStrategy.toFixed(2)}` : "—"}
-              sub={`each, across ${portfolio.n} streams`}
-            />
-            <DeskMetricTile
-              compact
-              label="Taker Fees Paid"
-              value={fmtUSD(-portfolio.fees)}
-              valueClassName="desk-pnl-negative"
-              sub={`over ${portfolio.trades} trades`}
-            />
-            <DeskMetricTile
-              compact
-              label="Streams Positive"
-              value={portfolio.n ? `${portfolio.winners} / ${portfolio.n}` : "—"}
-              valueClassName={portfolio.winners > portfolio.n / 2 ? "desk-pnl-positive" : undefined}
-              sub="net > 0 on live terms"
-            />
-          </div>
-
-          {liveRows.length === 0 ? (
-            <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "8px 0 0" }}>
-              No closed trades yet on the live-routed streams.
-            </p>
-          ) : (
-            <DeskDataTable
-              columns={liveLbColumns}
-              rows={liveRows}
-              getRowKey={(r) => `live-${r.strategy}|${r.symbol}`}
-              minWidth={860}
-            />
-          )}
-          <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 780, color: "var(--desk-on-surface-variant)" }}>
-            The tiles above are ONE $100 portfolio split equally across the traded streams — each gets
-            ${portfolio.perStrategy.toFixed(2)}, so the portfolio return is the AVERAGE of the per-strategy returns,
-            not their sum. Summing the column below would be the return on ${(portfolio.n * 100).toLocaleString()} of
-            capital reported as if it were $100.
-            <br />
-            <br />
-            <strong>Capital</strong> is what $100 given to that strategy <em>alone</em> would be worth now — not a
-            slice of the portfolio above. <strong>Qualified %</strong> is progress toward the pre-registered gate
-            (≥200 trades, PF ≥ 1.2, max DD ≤ 25%, net positive), averaged across the four and capped so a lucky profit
-            factor cannot substitute for a missing sample. It is progress, not a verdict: the gate&apos;s
-            both-halves-positive condition is not computable from a single row.
-            <br />
-            <br />
-            <strong>Gross − Taker Fees = Net on $100</strong>, read left to right. Net is ALREADY after fees; the
-            gross column is there so you can see what was taken rather than having to trust that it was.
-            <br />
-            <br />
-            <strong>Net on $100</strong> restates each strategy&apos;s record on live terms: a $100 account, 3x
-            notional, Delta&apos;s taker fee of 0.059% per side. <strong>Paper</strong> is the desk's own figure — same $100 basis, but with the MAKER fees the paper desk models — shown alongside because the gap between the two is the whole point. A
-            taker round trip costs 0.118% of notional, which is larger than the average move most of these strategies
-            target, so a high paper rank does not survive the restatement. Qualified = positive on the $100 column.
-            That, not paper rank, is what earns a place in the Live Engine.
-          </p>
-        </DeskCard>
-
         {/* Leaderboard */}
         <DeskCard padding="md">
           <DeskSectionHeader
@@ -880,6 +722,42 @@ export default function ScalpDeskPage() {
                 Profitable only
               </button>
             </div>
+
+            {/* Column thresholds.
+                Separate from the toggles above because these are numbers, and
+                the one that matters depends on the question being asked: fee
+                drag for "can it pay for itself", qualified % for "is there
+                enough evidence yet", net for "did it earn on live terms". */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginTop: 10 }}>
+              {[
+                { label: "min WR %", value: minWR, set: setMinWR, opts: [0, 50, 60, 70, 80, 90] },
+                { label: "min Net $100", value: minNet, set: setMinNet, opts: [0, 1, 2, 5, 10] },
+                { label: "max Fee Drag %", value: maxDrag, set: setMaxDrag, opts: [0, 25, 50, 75, 100] },
+                { label: "min Qualified %", value: minQual, set: setMinQual, opts: [0, 50, 75, 90, 100] },
+              ].map((f) => (
+                <label key={f.label} className="desk-label-md" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ color: "var(--desk-on-surface-variant)" }}>{f.label}</span>
+                  <select
+                    value={f.value}
+                    onChange={(e) => f.set(Number(e.target.value))}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid var(--desk-outline)",
+                      background: f.value !== 0 ? "var(--desk-primary-container)" : "transparent",
+                      color: "inherit",
+                      fontWeight: f.value !== 0 ? 700 : 400,
+                    }}
+                  >
+                    {f.opts.map((o) => (
+                      <option key={o} value={o}>
+                        {o === 0 ? "any" : o}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
             {filtersActive && (
               <button type="button" onClick={resetFilters} className="desk-label-md" style={{ color: "var(--desk-primary)", cursor: "pointer", fontWeight: 700, background: "none", border: "none" }}>
                 Reset
@@ -891,7 +769,7 @@ export default function ScalpDeskPage() {
             columns={leaderboardColumns}
             rows={showAllTrades ? filtered : filtered.slice(0, 150)}
             getRowKey={(r) => `${r.strategy}|${r.symbol}`}
-            minWidth={860}
+            minWidth={1560}
             empty={
               <DeskEmptyState
                 title="No streams match"
