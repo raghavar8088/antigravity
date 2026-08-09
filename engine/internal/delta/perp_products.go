@@ -47,6 +47,16 @@ type PerpProduct struct {
 	// TickSize is the minimum price increment. A limit price off the tick is
 	// rejected by the venue.
 	TickSize float64
+	// MaintenanceMarginPct is the venue's maintenance requirement for THIS
+	// contract, as a percentage of notional.
+	//
+	// Read per product rather than assumed. The bridge hardcoded 0.5, which is
+	// true for 13 of the 92 perpetuals this desk trades; 56 of them are 2.5,
+	// where the real liquidation distance at 10x is 7.50% and not the 9.50% the
+	// constant implied. Harmless at today's 0.35-0.98% stops, and exactly the
+	// shape of the 2026-08-01 failure, where an assumed margin number put the
+	// liquidation price inside the strategy's own stop.
+	MaintenanceMarginPct float64
 	// MarkPrice at the time the registry was refreshed. Used for sizing, not for
 	// P&L.
 	MarkPrice float64
@@ -95,6 +105,9 @@ type perpTickerRow struct {
 	ContractValue string `json:"contract_value"`
 	TickSize      string `json:"tick_size"`
 	MarkPrice     string `json:"mark_price"`
+	// MaintenanceMargin is a PERCENTAGE ("0.5", "2.5"), and it varies by
+	// contract far more than the code assumed.
+	MaintenanceMargin string `json:"maintenance_margin"`
 }
 
 type perpTickersResponse struct {
@@ -159,6 +172,14 @@ func (r *PerpRegistry) Refresh(ctx context.Context) error {
 	return nil
 }
 
+// perpFallbackMaintenanceMarginPct is used when the venue does not report one.
+//
+// The WIDEST value Delta uses on these contracts, not the narrowest. An unknown
+// margin must produce a conservative liquidation estimate: assuming a low
+// requirement would say the venue liquidates further away than it does, and
+// approve a stop the venue would pre-empt.
+const perpFallbackMaintenanceMarginPct = 2.5
+
 // perpFromRow converts one ticker row, rejecting anything unusable.
 //
 // A product missing its contract value or product ID is DROPPED rather than
@@ -175,13 +196,22 @@ func perpFromRow(row perpTickerRow, now time.Time) (PerpProduct, bool) {
 	}
 	tick, _ := strconv.ParseFloat(row.TickSize, 64)
 	mark, _ := strconv.ParseFloat(row.MarkPrice, 64)
+	// A missing or nonsensical maintenance margin falls back to the widest value
+	// Delta uses rather than the narrowest. Guessing low here would overstate
+	// the liquidation distance and approve a trade the venue closes first, which
+	// is the precise failure being prevented.
+	mm, err := strconv.ParseFloat(row.MaintenanceMargin, 64)
+	if err != nil || mm <= 0 {
+		mm = perpFallbackMaintenanceMarginPct
+	}
 	return PerpProduct{
-		Symbol:        row.Symbol,
-		ProductID:     row.ProductID,
-		ContractValue: cv,
-		TickSize:      tick,
-		MarkPrice:     mark,
-		FetchedAt:     now,
+		Symbol:               row.Symbol,
+		ProductID:            row.ProductID,
+		ContractValue:        cv,
+		TickSize:             tick,
+		MarkPrice:            mark,
+		MaintenanceMarginPct: mm,
+		FetchedAt:            now,
 	}, true
 }
 

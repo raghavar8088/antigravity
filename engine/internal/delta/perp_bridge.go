@@ -182,8 +182,15 @@ func (b *PerpBridge) EnsureLeverage(ctx context.Context, symbols []string) error
 			}
 			continue
 		}
-		log.Printf("[PERP LIVE] %s leverage set to %dx (liquidation ~%.1f%% adverse; stops are 0.35-1%%)",
-			sym, PerpLeverage, LiquidationDistanceFraction(PerpLeverage, perpMaintenanceMarginPct)*100)
+		// Report THIS contract's liquidation distance. The old line printed a
+		// constant 9.5% for every symbol, which was right for 13 of 92 and
+		// wrong-but-reassuring for the rest.
+		symMaint := perpMaintenanceMarginPct
+		if pr, ok := b.reg.Lookup(sym); ok && pr.MaintenanceMarginPct > 0 {
+			symMaint = pr.MaintenanceMarginPct
+		}
+		log.Printf("[PERP LIVE] %s leverage set to %dx (maint %.2f%% — liquidation ~%.1f%% adverse; stops are 0.35-1%%)",
+			sym, PerpLeverage, symMaint, LiquidationDistanceFraction(PerpLeverage, symMaint)*100)
 	}
 	return firstErr
 }
@@ -294,7 +301,14 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	// at exactly 0.500% before their own stops were reached. Refusing here means
 	// the STRATEGY decides the exit; taking the trade anyway produces a record of
 	// liquidations dressed as stop-outs.
-	if !StopIsReachable(plan.LimitPrice, plan.StopPrice, PerpLeverage, perpMaintenanceMarginPct) {
+	// This contract's own maintenance margin, not a constant. 56 of the 92
+	// perpetuals require 2.5%, where liquidation sits at 7.50% rather than the
+	// 9.50% the old constant assumed.
+	maint := perpMaintenanceMarginPct
+	if pr, ok := b.reg.Lookup(plan.Symbol); ok && pr.MaintenanceMarginPct > 0 {
+		maint = pr.MaintenanceMarginPct
+	}
+	if !StopIsReachable(plan.LimitPrice, plan.StopPrice, PerpLeverage, maint) {
 		b.noteError(ErrStopBeyondLiquidation.Error())
 		log.Printf("[PERP LIVE] ⏭️  skip %s %s — stop %.6f is beyond the liquidation distance at %dx",
 			strategy, plan.Symbol, plan.StopPrice, PerpLeverage)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -202,6 +203,54 @@ func TestPerpRegistry_LookupIsCaseAndSpaceTolerant(t *testing.T) {
 	for _, s := range []string{"adausd", " ADAUSD ", "AdaUsd"} {
 		if _, ok := r.Lookup(s); !ok {
 			t.Errorf("Lookup(%q) missed", s)
+		}
+	}
+}
+
+// Maintenance margin must come from the PRODUCT, not a constant.
+//
+// The bridge hardcoded 0.5%, true for 13 of the 92 perpetuals this desk trades.
+// 56 require 2.5%, where the real liquidation distance at 10x is 7.50% and not
+// the 9.50% the constant implied. Harmless at today's 0.35-0.98% stops, and
+// exactly the shape of the 2026-08-01 failure: an assumed margin number put the
+// liquidation price inside the strategy's own stop and the venue closed every
+// losing trade first.
+func TestPerpProduct_MaintenanceMarginIsReadPerContract(t *testing.T) {
+	p, ok := perpFromRow(perpTickerRow{
+		Symbol: "BEATUSD", ProductID: 1, ContractValue: "1", TickSize: "0.001",
+		MarkPrice: "2.1", MaintenanceMargin: "2.5",
+	}, time.Now())
+	if !ok {
+		t.Fatal("a well-formed row was rejected")
+	}
+	if p.MaintenanceMarginPct != 2.5 {
+		t.Errorf("maintenance margin %.2f, want the product's 2.5", p.MaintenanceMarginPct)
+	}
+	if got := LiquidationDistanceFraction(PerpLeverage, p.MaintenanceMarginPct); math.Abs(got-0.075) > 1e-9 {
+		t.Errorf("liquidation distance %.4f, want 0.075 — at 2.5%% maintenance it is 7.5%%, not 9.5%%", got)
+	}
+	// The stop must still be reachable there, or the guard would block a symbol
+	// the desk can legitimately trade.
+	if !StopIsReachable(2.1, 2.1*(1-0.0098), PerpLeverage, p.MaintenanceMarginPct) {
+		t.Error("the widest stop was judged unreachable at 2.5% maintenance; it has 7.5% of room")
+	}
+}
+
+// A missing value must fall back to the WIDEST margin Delta uses, not the
+// narrowest. Guessing low overstates the liquidation distance and would approve
+// a stop the venue pre-empts — the failure this whole guard exists for.
+func TestPerpProduct_UnknownMaintenanceMarginFailsConservative(t *testing.T) {
+	for _, raw := range []string{"", "not-a-number", "0", "-1"} {
+		p, ok := perpFromRow(perpTickerRow{
+			Symbol: "X", ProductID: 1, ContractValue: "1", TickSize: "0.01",
+			MarkPrice: "10", MaintenanceMargin: raw,
+		}, time.Now())
+		if !ok {
+			t.Fatalf("row with maintenance %q was rejected entirely", raw)
+		}
+		if p.MaintenanceMarginPct != perpFallbackMaintenanceMarginPct {
+			t.Errorf("maintenance %q -> %.2f, want the conservative %.2f",
+				raw, p.MaintenanceMarginPct, perpFallbackMaintenanceMarginPct)
 		}
 	}
 }
