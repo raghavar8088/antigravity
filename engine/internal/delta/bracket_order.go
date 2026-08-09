@@ -96,3 +96,40 @@ func (c *Client) PlaceBracket(ctx context.Context, req BracketRequest) error {
 	}
 	return nil
 }
+
+// CancelBracketsForProduct removes every resting bracket leg on a product.
+//
+// Called once a position is flat. A bracket leg that outlives its position is
+// not inert: it is a reduce-only trigger sitting on the venue at a price chosen
+// for a trade that already ended, and Delta nets positions by symbol — so it can
+// arm against the NEXT position the desk opens in the same product.
+//
+// Delta exposes a batch cancel for exactly this. Using it rather than tracking
+// leg ids: the ids come back on the bracket response, and a bridge that must
+// remember them correctly across a restart has one more thing to get wrong at
+// the moment protection matters most.
+func (c *Client) CancelBracketsForProduct(ctx context.Context, productID int) error {
+	if productID <= 0 {
+		return fmt.Errorf("cancel brackets: no product id")
+	}
+	body, err := json.Marshal(map[string]any{
+		"product_id": productID,
+		// Only the trigger orders. A plain resting limit — if the desk ever
+		// places one — is a different instrument and must not be swept up by a
+		// cleanup that thinks it is tidying stops.
+		"cancel_limit_orders": "false",
+		"cancel_stop_orders":  "true",
+		"cancel_reduce_only":  "true",
+	})
+	if err != nil {
+		return err
+	}
+	data, status, err := c.doRequest(ctx, http.MethodDelete, "/v2/orders/all", body)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		return fmt.Errorf("cancel brackets rejected (HTTP %d): %s", status, truncate(string(data), 200))
+	}
+	return nil
+}

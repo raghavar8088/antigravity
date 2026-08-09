@@ -56,6 +56,16 @@ type PerpLiveTrade struct {
 	// and holds the other 91% indefinitely — positions the paper record shows as
 	// closed hours earlier, still open and still funded.
 	ExpiresAt time.Time `json:"expiresAt"`
+	// BracketsAttached is true when Delta holds a resting stop and target for
+	// this position.
+	//
+	// When it does, the 15-second monitor must NOT close on price. Both were
+	// running and the monitor kept winning: it polls MARK every 15s and closes
+	// at market, while the bracket waits for LAST TRADED to cross its trigger.
+	// Measured on TSTUSD — bracket limit 0.016308, monitor exited at 0.016330,
+	// a price a limit order could not have filled. The mechanism built to stop
+	// the overshoot was being front-run by the one causing it.
+	BracketsAttached bool `json:"bracketsAttached"`
 
 	EntryPrice float64 `json:"entryPrice"`
 	// MarkPrice and UnrealizedPnL are refreshed by the custody loop, which
@@ -359,7 +369,9 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	// desk's levels. Shadowing them here would make the two indistinguishable at
 	// a glance, and the whole point is that they are different numbers.
 	fillStop, fillTarget := perpLevelsFromFill(fill, plan)
+	bracketed := true
 	if err := b.attachBrackets(ctx, plan, fillStop, fillTarget); err != nil {
+		bracketed = false
 		// The position is open and unprotected. Log loudly rather than pretend:
 		// the Monitor still manages it, which is the behaviour that produced the
 		// overshoot, so this is a degraded state and must read as one.
@@ -369,20 +381,21 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	}
 
 	t := &PerpLiveTrade{
-		ID:          fmt.Sprintf("perp-%d-%s", time.Now().UnixNano(), plan.Symbol),
-		Strategy:    strategy,
-		Symbol:      plan.Symbol,
-		ProductID:   plan.ProductID,
-		Side:        plan.Side,
-		Contracts:   plan.Contracts,
-		StopPrice:   fillStop,
-		TargetPrice: fillTarget,
-		EntryPrice:  fill,
-		NotionalUSD: plan.NotionalUSD,
-		RiskUSD:     plan.RiskUSD,
-		OpenedAt:    time.Now().UTC(),
-		OrderID:     res.OrderID,
-		Status:      "OPEN",
+		ID:               fmt.Sprintf("perp-%d-%s", time.Now().UnixNano(), plan.Symbol),
+		Strategy:         strategy,
+		Symbol:           plan.Symbol,
+		ProductID:        plan.ProductID,
+		Side:             plan.Side,
+		Contracts:        plan.Contracts,
+		StopPrice:        fillStop,
+		TargetPrice:      fillTarget,
+		BracketsAttached: bracketed,
+		EntryPrice:       fill,
+		NotionalUSD:      plan.NotionalUSD,
+		RiskUSD:          plan.RiskUSD,
+		OpenedAt:         time.Now().UTC(),
+		OrderID:          res.OrderID,
+		Status:           "OPEN",
 	}
 	if ttl > 0 {
 		t.ExpiresAt = t.OpenedAt.Add(ttl)
@@ -490,16 +503,37 @@ func (b *PerpBridge) checkExits(ctx context.Context) {
 			b.markLive(t, mark)
 		}
 		if !ok || mark <= 0 {
-			// The venue no longer reports this position. It was closed by
-			// something other than this bridge — liquidation, a manual close, or
-			// an exchange action. Reconcile rather than keep managing a ghost.
-			b.finish(t, t.EntryPrice, "CLOSED_EXTERNALLY")
+			// The venue no longer reports this position — and with brackets
+			// live this is now the NORMAL exit, not an exception: Delta filled
+			// the stop or the target and the position is gone.
+			//
+			// This booked it at t.EntryPrice, which records exactly $0.00 for a
+			// trade that really made or lost money. That was tolerable when the
+			// branch only caught rare external closes; with the venue doing
+			// every price exit it would silently zero most of the record.
+			//
+			// So ask the venue what it actually filled at. Failing that, mark it
+			// UNRECONCILED rather than inventing a flat result — an unknown that
+			// is visible can be corrected, a loss disguised as zero cannot.
+			exit, reason := b.venueExitFor(ctx, t)
+			b.finish(t, exit, reason)
+			// Any surviving leg of the bracket must go. One side filled; the
+			// other is still resting, and a resting reduce-only order against a
+			// position that no longer exists can be left dangling or, worse,
+			// re-arm on the next position in the same symbol.
+			b.cancelBracketFor(ctx, t)
 			continue
 		}
 		if reason := perpExitReason(t, mark, time.Now().UTC()); reason != "" {
 			if err := b.closePosition(ctx, t, mark, reason); err != nil {
 				log.Printf("[PERP LIVE] close failed for %s %s: %v", t.Strategy, t.Symbol, err)
+				continue
 			}
+			// The position is flat, so its bracket must not outlive it. A
+			// leftover trigger would sit on the venue and could arm against a
+			// LATER position in the same symbol — opening exposure nobody asked
+			// for, at a price chosen for a trade that already closed.
+			b.cancelBracketFor(ctx, t)
 		}
 	}
 }
@@ -527,10 +561,23 @@ func (b *PerpBridge) markLive(t *PerpLiveTrade, mark float64) {
 // Stop is checked BEFORE target, the same conservative precedence the paper desk
 // uses: when a single mark could satisfy both, assume the adverse one happened.
 func perpExitReason(t *PerpLiveTrade, mark float64, now time.Time) string {
-	// Stop and target first: a position that reached a real level exited for
-	// that reason, not for running out of time on the same tick.
-	if r := perpPriceExit(t, mark); r != "" {
-		return r
+	// PRICE EXITS BELONG TO THE VENUE when it is holding a bracket.
+	//
+	// Both mechanisms were live and the monitor kept winning, because it polls
+	// mark every 15s and closes at market while the bracket waits for last
+	// traded to cross. That is strictly worse: a market close pays whatever the
+	// book offers after a 15-second delay, which is the overshoot the bracket
+	// exists to remove. Standing down here is the fix — not adding a third
+	// mechanism, but letting the correct one act.
+	//
+	// The TIME STOP still belongs to this process: Delta has no concept of it.
+	if !t.BracketsAttached {
+		// No venue protection, so the monitor is the only thing between this
+		// position and an unbounded loss. Worse than a bracket, better than
+		// nothing.
+		if r := perpPriceExit(t, mark); r != "" {
+			return r
+		}
 	}
 	// The time stop. Checked last so it never masks a price exit, but checked —
 	// it is how 9 in 10 of these trades end on the paper desk.
