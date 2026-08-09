@@ -413,6 +413,11 @@ function AccountBook({ d, updatedAt }: { d: PaperDesk; updatedAt: string }) {
 
 export default function LiveEnginePaperDeskPage() {
   const [books, setBooks] = useState<PaperDesk[]>([]);
+  // Which book is on screen. One at a time, deliberately: two accounts stacked
+  // on one page invites reading a number from the wrong one, and these books
+  // exist precisely to be compared — a comparison is only meaningful if you
+  // know which side you are looking at.
+  const [activeAccount, setActiveAccount] = useState<string>("01");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [updatedAt, setUpdatedAt] = useState<string>("");
@@ -442,7 +447,6 @@ export default function LiveEnginePaperDeskPage() {
   }, [refresh]);
 
   const status: DeskEngineStatus = error ? "degraded" : books.length ? "live" : "syncing";
-  const combined = books.reduce((a, b) => a + b.netUsd, 0);
 
   return (
     <div style={{ minHeight: "100%", background: "var(--desk-surface-dim)" }}>
@@ -470,7 +474,8 @@ export default function LiveEnginePaperDeskPage() {
           <p className="desk-body-md" style={{ marginTop: 6, maxWidth: 800, color: "var(--desk-on-surface-variant)" }}>
             Two independent books, each starting at $100, against real Delta prices with Delta&apos;s real taker fee
             on both legs. They are separate accounts, not one list split in two: a winner in one cannot fund a position
-            in the other, so the better set cannot subsidise the worse and hide it. Rows marked <strong>LIVE</strong>
+            in the other, so the better set cannot subsidise the worse and hide it. Shown one at a time — there is no
+            combined balance, because no such account exists. Rows marked <strong>LIVE</strong>
             are also on the real-money allow-list; rows marked <strong>candidate</strong> are watched on live terms
             BEFORE anyone decides they deserve money and cannot reach the venue. Only the money is simulated — the
             prices, fees, size caps and margin rules are the ones the real account runs under.
@@ -479,39 +484,52 @@ export default function LiveEnginePaperDeskPage() {
 
         {error && <DeskBanner variant="warning">{error} — retrying every 20s</DeskBanner>}
 
-        {books.length > 1 && (
-          <DeskCard>
-            <DeskSectionHeader
-              title="Both Accounts"
-              subtitle="Two competing sets of streams, each on its own $100. The comparison is the point."
-            />
-            <div className="desk-metrics-row">
-              {books.map((b) => (
-                <DeskMetricTile
+
+        {/* One account at a time. No combined totals and no side-by-side:
+            the books are separate capital, and a summed figure across them
+            describes an account nobody holds. */}
+        {books.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {books.map((b) => {
+              const on = b.account === activeAccount;
+              return (
+                <button
                   key={b.account}
-                  compact
-                  label={`Account ${b.account}`}
-                  value={`$${b.equityUsd.toFixed(2)}`}
-                  valueClassName={pnlTone(b.netUsd)}
-                  sub={`${b.roiPct >= 0 ? "+" : ""}${b.roiPct.toFixed(2)}% · ${
-                    (b.accounts ?? []).filter((a) => a.trades > 0).length
-                  } of ${(b.accounts ?? []).length} streams traded`}
-                />
-              ))}
-              <DeskMetricTile
-                compact
-                label="Combined"
-                value={fmtUSD(combined)}
-                valueClassName={pnlTone(combined)}
-                sub={`across $${(books.length * 100).toFixed(0)} of paper capital`}
-              />
-            </div>
-          </DeskCard>
+                  type="button"
+                  onClick={() => setActiveAccount(b.account)}
+                  className="desk-label-md"
+                  style={{
+                    cursor: "pointer",
+                    padding: "8px 18px",
+                    borderRadius: 8,
+                    border: `1px solid ${on ? "var(--desk-primary)" : "var(--desk-outline)"}`,
+                    background: on ? "var(--desk-primary)" : "transparent",
+                    color: on ? "var(--desk-on-primary)" : "var(--desk-on-surface-variant)",
+                    fontWeight: 700,
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  {`Account ${b.account}`}
+                  <span style={{ marginLeft: 8, opacity: 0.75, fontWeight: 400 }}>
+                    {`${(b.accounts ?? []).length} streams`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         )}
 
-        {books.map((b) => (
-          <AccountBook key={b.account} d={b} updatedAt={updatedAt} />
-        ))}
+        {books
+          .filter((b) => b.account === activeAccount)
+          .map((b) => (
+            <AccountBook key={b.account} d={b} updatedAt={updatedAt} />
+          ))}
+
+        {books.length > 0 && !books.some((b) => b.account === activeAccount) && (
+          <DeskBanner variant="warning">
+            Account {activeAccount} is not reporting. Pick another tab above.
+          </DeskBanner>
+        )}
 
       </main>
     </div>
