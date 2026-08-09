@@ -904,6 +904,7 @@ The content is organized as follows:
   delta/perp_bridge.go
   delta/perp_concentration_test.go
   delta/perp_dust_test.go
+  delta/perp_history_persist_test.go
   delta/perp_monitor_test.go
   delta/perp_outcome_test.go
   delta/perp_overshoot.go

@@ -1,1 +1,1 @@
-{"engine-delta":{"communities":[0,1],"files":2,"symbols":12,"top_files":[{"file":"engine/internal/delta/perp_sizing.go","symbols":8},{"file":"engine/internal/delta/perp_dust_test.go","symbols":4}]}}
+{"engine-delta":{"communities":[0,1,2],"files":2,"symbols":13,"top_files":[{"file":"engine/internal/delta/perp_persistence.go","symbols":10},{"file":"engine/internal/delta/perp_history_persist_test.go","symbols":3}]}}

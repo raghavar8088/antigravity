@@ -32,6 +32,19 @@ const perpStateFile = "perp_positions.json"
 type perpPersistedState struct {
 	SavedAt time.Time        `json:"savedAt"`
 	Open    []*PerpLiveTrade `json:"open"`
+	// History is the CLOSED trade record.
+	//
+	// It was memory-only, so every restart erased it. Open positions survived a
+	// redeploy and their results did not, which is the wrong way round: an open
+	// position is recoverable from the venue, but the closed record is the only
+	// place a fill is attributed to the strategy that produced it. Delta keeps
+	// the fills and the money; it has never heard of
+	// ANTI_Ornstein_Uhlenbeck_Reversion.
+	//
+	// That record is what the leaderboard ranks and what decides which streams
+	// get real capital, so losing it on deploy quietly resets the evidence the
+	// desk runs on.
+	History []PerpLiveTrade `json:"history,omitempty"`
 	// Strategies switched off by the owner. Persisted so a redeploy does not
 	// silently re-enable something that was deliberately turned off — the arm
 	// state is intentionally in-memory, but a per-strategy switch is a standing
@@ -70,6 +83,7 @@ func (b *PerpBridge) persistLocked() {
 	data, err := json.Marshal(perpPersistedState{
 		SavedAt: time.Now().UTC(), Open: open, EquityUSD: b.cfg.EquityUSD,
 		DisabledStrategies: off,
+		History:            b.history,
 	})
 	if err != nil {
 		log.Printf("[PERP LIVE] state marshal failed: %v", err)
@@ -124,7 +138,16 @@ func (b *PerpBridge) Restore(ctx context.Context) error {
 	b.mu.Lock()
 	b.setDisabledStrategiesLocked(st.DisabledStrategies)
 	nOff := len(st.DisabledStrategies)
+	// Restored before the monitor starts, so a close that happens moments after
+	// boot appends to the real record rather than to an empty one.
+	if len(st.History) > 0 {
+		b.history = st.History
+	}
+	nHist := len(b.history)
 	b.mu.Unlock()
+	if nHist > 0 {
+		log.Printf("[PERP LIVE] restored %d closed trade(s)", nHist)
+	}
 	if nOff > 0 {
 		log.Printf("[PERP LIVE] restored %d switched-off strateg(ies): %v", nOff, st.DisabledStrategies)
 	}
