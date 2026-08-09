@@ -1,1 +1,1 @@
-{"client-api":{"communities":[0,1],"files":2,"symbols":18,"top_files":[{"file":"client/src/app/api/scalp-demo/[...path]/route.ts","symbols":9},{"file":"client/src/app/api/scalp/[...path]/route.ts","symbols":9}]},"client-lib":{"communities":[2],"files":1,"symbols":5,"top_files":[{"file":"client/src/lib/scalpProxyReachability.test.ts","symbols":5}]}}
+{"engine-delta":{"communities":[0,1],"files":2,"symbols":12,"top_files":[{"file":"engine/internal/delta/perp_sizing.go","symbols":8},{"file":"engine/internal/delta/perp_dust_test.go","symbols":4}]}}

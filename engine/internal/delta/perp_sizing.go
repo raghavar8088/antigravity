@@ -132,6 +132,15 @@ var ErrAggregateExposureReached = fmt.Errorf("delta: aggregate perpetual exposur
 // ErrTooManyPositions means the concurrency cap is reached.
 var ErrTooManyPositions = fmt.Errorf("delta: max concurrent perpetual positions reached")
 
+// minNotionalFraction is the smallest share of a trade's intended notional that
+// is still worth opening.
+//
+// Below it the position is dust: full fees, a concurrency slot consumed, and a
+// record entry that looks like evidence while carrying none. 25% keeps a
+// genuinely partial position — the aggregate cap doing its job — while refusing
+// the 0.08%-of-intent fills that prompted this.
+const minNotionalFraction = 0.25
+
 // PlanPerpOrder turns a scalp signal into a sized order, or explains why it
 // cannot.
 //
@@ -190,6 +199,25 @@ func PlanPerpOrder(
 				ErrAggregateExposureReached, openNotionalUSD, cfg.EquityUSD*cfg.MaxAggregateLeverage)
 		}
 		if notional > room {
+			// Shrinking to fit is right down to a point and wrong past it.
+			//
+			// Measured live: SKYAIUSD opened at $299 of a $300 book ceiling,
+			// and the next two signals were sized into the remainder — 3
+			// contracts of COOKIEUSD ($0.44) and 1 of MUBARAKUSD ($0.25),
+			// against an intended $300. Those are not smaller versions of the
+			// trade. They pay full round-trip fees, occupy one of three
+			// concurrency slots, and write a "fill" into the strategy's record
+			// that measures nothing — a -$0.0023 result carries no information
+			// about the strategy but counts as evidence on the leaderboard.
+			//
+			// So a partial position is allowed while it is still a position,
+			// and refused once it is dust.
+			if room < notional*minNotionalFraction {
+				return PerpOrderPlan{}, fmt.Errorf(
+					"%w: only $%.2f of room left against a $%.2f ceiling, under %.0f%% of the $%.2f this trade needs",
+					ErrAggregateExposureReached, room, cfg.EquityUSD*cfg.MaxAggregateLeverage,
+					minNotionalFraction*100, notional)
+			}
 			notional = room
 		}
 	}
