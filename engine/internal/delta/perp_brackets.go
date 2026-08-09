@@ -23,13 +23,40 @@ import (
 // Two ticks minimum, so rounding cannot move a level onto or past the entry.
 const minStopTicks = 2.0
 
-// stopLimitSlippage is how far past the trigger a stop's LIMIT is placed, so
-// the order is marketable the moment it arms.
+// stopLimitSlippageOfRisk is how far past the trigger a stop's LIMIT sits,
+// as a fraction of the STOP DISTANCE rather than of price.
 //
-// 0.5% of the stop price. Wide enough that a gap through the level still fills —
-// the failure being fixed — and far narrower than the ~7.5% liquidation
-// distance, so a filled stop is always better than being closed by the venue.
-const stopLimitSlippage = 0.005
+// It was 0.5% of price, which fixed stops that could not fill and created the
+// opposite failure. On COOKIEUSD the whole stop distance is 0.64% of price, so
+// 0.5% of price was 0.78x the entire risk budget: the order filled reliably,
+// at up to 1.78x the intended loss. Measured live — planned stop 0.01259,
+// filled 0.012650 against a limit of 0.012653, i.e. at the worst price the
+// order allowed.
+//
+// Tying it to the stop distance bounds the damage: whatever the symbol, the
+// realised loss cannot exceed the planned loss by more than this fraction.
+// 20% caps a stop-out at 1.2x its intended size, which is a cost worth paying
+// for a fill; the previous constant admitted 1.78x on this symbol and more on
+// tighter ones.
+const stopLimitSlippageOfRisk = 0.20
+
+// stopLimitSlippageMinTicks keeps the limit marketable when the stop distance
+// is itself only a few ticks. A percentage of a tiny risk budget can round to
+// zero on a coarse grid, which puts the limit back ON the trigger — the exact
+// unfillable stop this whole mechanism exists to avoid.
+const stopLimitSlippageMinTicks = 2.0
+
+// stopLimitSlip is the price offset past the trigger for a stop's limit leg.
+func stopLimitSlip(entry, stop, tick float64) float64 {
+	risk := math.Abs(entry - stop)
+	slip := risk * stopLimitSlippageOfRisk
+	if tick > 0 {
+		if floor := tick * stopLimitSlippageMinTicks; slip < floor {
+			slip = floor
+		}
+	}
+	return slip
+}
 
 // StopHasTickResolution reports whether a stop can be expressed on this
 // contract's price grid.
@@ -119,7 +146,7 @@ func (b *PerpBridge) attachBrackets(ctx context.Context, plan PerpOrderPlan, sto
 	// Room for the stop's limit to be marketable when it triggers. Direction
 	// matters: closing a LONG sells, so the limit goes BELOW the trigger;
 	// closing a SHORT buys, so it goes ABOVE.
-	slip := stop * stopLimitSlippage
+	slip := stopLimitSlip(plan.LimitPrice, stop, tick)
 	slipRaw := stop + slip
 	if plan.Side == SideBuy {
 		slipRaw = stop - slip

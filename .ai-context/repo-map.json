@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[0,1,2,3,4,5,6],"files":2,"symbols":32,"top_files":[{"file":"engine/cmd/antigravity/liveengine_wiring.go","symbols":29},{"file":"engine/cmd/antigravity/roster_retired_test.go","symbols":3}]}}
+{"engine-delta":{"communities":[0,1,2],"files":2,"symbols":15,"top_files":[{"file":"engine/internal/delta/perp_brackets.go","symbols":11},{"file":"engine/internal/delta/perp_slippage_test.go","symbols":4}]}}
