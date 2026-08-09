@@ -59,3 +59,36 @@ func TestSymbolUniverse_FloorIsConfigurableAndSane(t *testing.T) {
 		t.Errorf("a malformed floor disturbed the explicit list: %v", got)
 	}
 }
+
+// A contract whose price grid cannot express the tightest stop must never enter
+// the universe, however liquid it looks.
+//
+// 1000SATSUSD marks at 0.00001055 against a 0.0000001 tick: the 0.35% stop is
+// 0.37 of ONE tick. It rounds up to a whole tick, 0.95%, so every position
+// carries ~3x the risk the strategy chose while every report shows the intended
+// figure.
+func TestStopFitsOnGrid_ExcludesCoarseContracts(t *testing.T) {
+	if stopFitsOnGrid(0.00001055, 0.0000001) {
+		t.Error("1000SATSUSD passed the grid check; a 0.35% stop there is under half a tick")
+	}
+	// The four symbols the live roster trades must all pass.
+	for _, tc := range []struct {
+		name       string
+		mark, tick float64
+	}{
+		{"ADAUSD", 0.19846, 0.00001},
+		{"AVAXUSD", 6.48312, 0.0001},
+		{"LIGHTUSD", 0.16131, 0.0001},
+		{"XAIUSD", 0.00723, 0.00001},
+	} {
+		if !stopFitsOnGrid(tc.mark, tc.tick) {
+			t.Errorf("%s failed the grid check; the filter is too strict for a symbol already traded", tc.name)
+		}
+	}
+	// Unknown fields must PERMIT — excluding a symbol because a field was
+	// missing would shrink the universe for a reason unrelated to tradeability,
+	// and the bracket guard still refuses the individual order.
+	if !stopFitsOnGrid(0, 0.0001) || !stopFitsOnGrid(1.0, 0) {
+		t.Error("a missing mark or tick excluded the symbol; this must fail open")
+	}
+}

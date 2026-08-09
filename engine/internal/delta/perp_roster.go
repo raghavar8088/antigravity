@@ -90,21 +90,23 @@ var defaultScalpLiveStreams = []PerpStream{
 // Selected 2026-08-09 from the scalp leaderboard restated on live terms. Every
 // one has 1-4 trades, so none is evidence of anything yet; that is precisely
 // why they belong on paper rather than on the wallet.
-var defaultScalpPaperStreams = []PerpStream{
-	// The LIGHTUSD and XAIUSD streams were PROMOTED to the live roster on
-	// 2026-08-09 and removed from here: a stream belongs to exactly one tier, or
-	// "candidate" stops meaning "cannot spend money". They still paper-trade,
-	// because ScalpPaperStreams is the union.
-	//
-	// These two symbols remain candidates for a mechanical reason rather than a
-	// judgement about the strategies — see the live roster above. Both keep
-	// accumulating a paper record; neither can reach the wallet.
-	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "MOVEUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "MOVEUSD"},
-	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "1000SATSUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "1000SATSUSD"},
-	{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "1000SATSUSD"},
-}
+// defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
+// Paper Desk but cannot reach the venue.
+//
+// A separate tier on purpose. Adding a stream to the live roster is a decision
+// to spend money on it; adding it here is a decision to WATCH it on live terms
+// first. Collapsing the two is how the previous roster was built - straight
+// from a leaderboard to real capital - and it lost $13.91 over 27 fills.
+//
+// EMPTY as of 2026-08-09. The LIGHTUSD and XAIUSD candidates were promoted to
+// the live roster; the MOVEUSD and 1000SATSUSD ones were removed outright
+// because those contracts cannot support the trade at all - see the tradeable
+// filter in cmd/scalp_prelive/symbols.go, which now excludes them from the
+// universe so no strategy can pick them up again.
+//
+// An empty candidate list is a valid state: it means everything being watched
+// has either graduated or been rejected.
+var defaultScalpPaperStreams = []PerpStream{}
 
 // ScalpPaperStreams is everything the Live Engine Paper Desk trades: the live
 // roster plus the candidates.

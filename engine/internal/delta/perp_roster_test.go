@@ -198,23 +198,41 @@ func TestPerpAllowList_ReportsNamesThatMatchNoRunningStrategy(t *testing.T) {
 	}
 }
 
-// Paper candidates must NOT reach the venue.
+// The candidate tier must never reach the venue.
 //
 // Adding a stream to the live roster is a decision to spend money on it; adding
 // it as a candidate is a decision to watch it on live terms first. Collapsing
-// the two is how the previous roster was built, and it lost $13.91 over 27
-// fills on strategies with single-digit trade counts.
+// the two is how the previous roster was built - straight from a leaderboard to
+// real capital - and it lost $13.91 over 27 fills.
+//
+// The list is currently EMPTY, which is a valid state: everything being watched
+// has either graduated or been rejected. So the MECHANISM is asserted rather
+// than the contents, or this test would quietly stop testing anything the next
+// time the list empties.
 func TestPerpPaperCandidates_TradeOnPaperButNotOnTheVenue(t *testing.T) {
-	candidates := defaultScalpPaperStreams
-	if len(candidates) == 0 {
-		t.Fatal("no candidates configured; this test would pass vacuously")
-	}
-	for _, c := range candidates {
+	for _, c := range defaultScalpPaperStreams {
 		if !PerpStreamPaperPermitted(c.Strategy, c.Symbol) {
 			t.Errorf("candidate %v cannot paper trade", c)
 		}
 		if PerpStreamPermitted(c.Strategy, c.Symbol) {
 			t.Errorf("candidate %v reached the VENUE gate — a candidate must not spend money", c)
+		}
+	}
+
+	// The gate itself, independent of what happens to be listed today: the paper
+	// set must be exactly live + candidates, never wider.
+	live := map[string]bool{}
+	for _, st := range ScalpLiveStreams() {
+		live[perpStreamKey(st.Strategy, st.Symbol)] = true
+	}
+	cand := map[string]bool{}
+	for _, st := range defaultScalpPaperStreams {
+		cand[perpStreamKey(st.Strategy, st.Symbol)] = true
+	}
+	for _, st := range ScalpPaperStreams() {
+		k := perpStreamKey(st.Strategy, st.Symbol)
+		if !live[k] && !cand[k] {
+			t.Errorf("%v paper-trades but is on neither the live roster nor the candidate list", st)
 		}
 	}
 }
@@ -266,15 +284,14 @@ func TestPerpRoster_ThinAndCoarseSymbolsStayOffTheVenue(t *testing.T) {
 				t.Errorf("%s is on the live roster; it was excluded because the venue cannot support the trade", sym)
 			}
 		}
-		// They must still PAPER trade — that is where the evidence accumulates.
-		found := false
+		// Removed from the paper desk as well on 2026-08-09. Watching a contract
+		// the desk can never trade produces a record that reads as evidence and
+		// is not: nine of eighteen paper trades came from these two, and they
+		// were the ones least able to survive a real order book.
 		for _, st := range ScalpPaperStreams() {
 			if st.Symbol == sym {
-				found = true
+				t.Errorf("%s still paper-trades; it was removed because the contract cannot support the trade", sym)
 			}
-		}
-		if !found {
-			t.Errorf("%s was dropped from the paper desk too; it should keep being watched", sym)
 		}
 	}
 }

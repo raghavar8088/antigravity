@@ -51,6 +51,8 @@ func deltaPerpUniverse(ctx context.Context, minTurnoverUSD float64) ([]string, e
 			Symbol       string `json:"symbol"`
 			ContractType string `json:"contract_type"`
 			TurnoverUSD  any    `json:"turnover_usd"`
+			MarkPrice    any    `json:"mark_price"`
+			TickSize     any    `json:"tick_size"`
 		} `json:"result"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
@@ -76,6 +78,20 @@ func deltaPerpUniverse(ctx context.Context, minTurnoverUSD float64) ([]string, e
 		if v < minTurnoverUSD {
 			continue
 		}
+		// A contract whose price grid cannot express the desk's stop is not
+		// tradeable, however liquid it looks.
+		//
+		// 1000SATSUSD marks at 0.00001055 against a 0.0000001 tick: the 0.35%
+		// stop is 0.37 of ONE tick. It rounds up to a whole tick, 0.95%, so
+		// every position carries ~3x the risk the strategy chose while the
+		// leaderboard reports the intended figure. Nine of the eighteen paper
+		// trades that made a desk look profitable came from contracts like this.
+		mark, tick := anyFloat(r.MarkPrice), anyFloat(r.TickSize)
+		if !stopFitsOnGrid(mark, tick) {
+			log.Printf("[SCALP] excluding %s — a %.2f%% stop is under %g ticks on its grid (mark %g, tick %g)",
+				r.Symbol, tightestStopFrac*100, minStopTicksForUniverse, mark, tick)
+			continue
+		}
 		rows = append(rows, row{sym: strings.ToUpper(r.Symbol), vol: v})
 	}
 	// Most liquid first, so a truncation keeps the tradeable end.
@@ -89,6 +105,38 @@ func deltaPerpUniverse(ctx context.Context, minTurnoverUSD float64) ([]string, e
 		return nil, fmt.Errorf("delta returned no perpetuals above the $%.0f turnover floor", minTurnoverUSD)
 	}
 	return out, nil
+}
+
+// tightestStopFrac is the smallest stop any profile uses, and therefore the one
+// a contract's price grid has to be able to express.
+const tightestStopFrac = 0.0035
+
+// minStopTicksForUniverse mirrors the bracket guard: under two ticks, rounding
+// can put the stop onto the entry.
+const minStopTicksForUniverse = 2.0
+
+// stopFitsOnGrid reports whether the tightest stop is expressible.
+//
+// Unknown mark or tick PERMITS. Excluding a symbol because a field was missing
+// would silently shrink the universe for a reason unrelated to tradeability,
+// and the bracket guard refuses the individual order anyway.
+func stopFitsOnGrid(mark, tick float64) bool {
+	if mark <= 0 || tick <= 0 {
+		return true
+	}
+	return mark*tightestStopFrac >= tick*minStopTicksForUniverse
+}
+
+// anyFloat reads a JSON number that Delta sometimes quotes and sometimes does not.
+func anyFloat(v any) float64 {
+	switch t := v.(type) {
+	case float64:
+		return t
+	case string:
+		f, _ := strconv.ParseFloat(t, 64)
+		return f
+	}
+	return 0
 }
 
 // resolveSymbols turns the -symbols flag into the desk's universe.
@@ -111,7 +159,14 @@ func resolveSymbols(spec string) []string {
 		return out
 	}
 
-	floor := 0.0
+	// Default floor raised from $0 on 2026-08-09.
+	//
+	// MOVEUSD turned over $1,985 in a day and a $100 position is 5% of that -
+	// entering and exiting moves the price against itself, which the desk's fill
+	// model cannot represent. $50k keeps every symbol the live roster trades
+	// (ADAUSD $243k, AVAXUSD $377k, LIGHTUSD $517k, XAIUSD $150k) and drops the
+	// tail where a fill is fiction. Override to 0 to hunt the whole board.
+	floor := 50000.0
 	if raw := strings.TrimSpace(os.Getenv("SCALP_MIN_TURNOVER_USD")); raw != "" {
 		if v, err := strconv.ParseFloat(raw, 64); err == nil && v >= 0 {
 			floor = v
