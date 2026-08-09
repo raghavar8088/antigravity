@@ -53,8 +53,18 @@ func TestLivePaper_OneSharedBalanceNotOnePerStrategy(t *testing.T) {
 
 	snap := d.snapshot()
 	accts := snap["accounts"].([]paperAccount)
-	if len(accts) != 2 {
-		t.Fatalf("expected 2 strategy rows, got %d", len(accts))
+
+	// Every watched stream is seeded at zero, so the board shows what is being
+	// tracked rather than only what has already fired. Assert on the TRADED
+	// rows; counting all of them would just re-count the roster.
+	traded := 0
+	for _, a := range accts {
+		if a.Trades > 0 {
+			traded++
+		}
+	}
+	if traded != 2 {
+		t.Fatalf("expected 2 traded rows, got %d of %d total", traded, len(accts))
 	}
 
 	// The desk reports ONE equity, and it is the sum of every contribution.
@@ -172,9 +182,20 @@ func TestLivePaper_ResetClearsAccountsAndOpenPositions(t *testing.T) {
 	if d.equity != livePaperStartingEquity {
 		t.Errorf("equity after reset $%.2f, want $%.2f", d.equity, livePaperStartingEquity)
 	}
-	if len(d.accounts) != 0 || len(d.open) != 0 || len(d.closed) != 0 {
-		t.Errorf("after reset: %d accounts, %d open, %d closed — all must be zero",
-			len(d.accounts), len(d.open), len(d.closed))
+	if len(d.open) != 0 || len(d.closed) != 0 {
+		t.Errorf("after reset: %d open, %d closed — both must be zero", len(d.open), len(d.closed))
+	}
+	// Accounts are RE-SEEDED, not emptied: a cleared desk still watches the same
+	// streams, and an empty board reads as "nothing configured" rather than
+	// "nothing has traded yet".
+	if len(d.accounts) != len(delta.ScalpPaperStreams()) {
+		t.Errorf("after reset: %d accounts, want the %d watched streams re-seeded",
+			len(d.accounts), len(delta.ScalpPaperStreams()))
+	}
+	for k, a := range d.accounts {
+		if a.Trades != 0 || a.NetUSD != 0 {
+			t.Errorf("%s survived the reset with %d trades / %+.4f net", k, a.Trades, a.NetUSD)
+		}
 	}
 }
 
@@ -271,5 +292,37 @@ func TestLivePaper_NormalStopOutIsNotALiquidation(t *testing.T) {
 	}
 	if got := d.closed[0].Reason; got != "SL" {
 		t.Errorf("exit %q; a routine 0.8%% adverse move must be a stop, not %q", got, got)
+	}
+}
+
+// Every watched stream must appear on the board before it has traded.
+//
+// Rows were created on first signal, so a desk watching 19 streams showed 1 —
+// which reads as "nothing is configured", not "nothing has fired yet". An
+// operator cannot confirm a promotion took effect from a board that hides idle
+// streams.
+func TestLivePaper_SeedsEveryWatchedStream(t *testing.T) {
+	d := newLivePaperDesk()
+	want := delta.ScalpPaperStreams()
+	if len(want) == 0 {
+		t.Skip("no streams configured")
+	}
+	if len(d.accounts) != len(want) {
+		t.Fatalf("seeded %d accounts, want %d watched streams", len(d.accounts), len(want))
+	}
+	for _, st := range want {
+		a, ok := d.accounts[paperKey(st.Strategy, st.Symbol)]
+		if !ok {
+			t.Errorf("watched stream %v has no row", st)
+			continue
+		}
+		if a.Symbol == "" {
+			t.Errorf("%v seeded without a symbol; the row cannot be told from another symbol's", st)
+		}
+		// The Route flag must match the venue gate, or a candidate reads as
+		// evidence about real money.
+		if a.Live != delta.PerpStreamPermitted(st.Strategy, st.Symbol) {
+			t.Errorf("%v Live=%v disagrees with the venue gate", st, a.Live)
+		}
 	}
 }

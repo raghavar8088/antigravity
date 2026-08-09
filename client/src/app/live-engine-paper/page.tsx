@@ -38,6 +38,9 @@ import {
 
 type PaperAccount = {
   strategy: string;
+  /** The unit watched is the STREAM — the same strategy on two symbols is two bets. */
+  symbol: string;
+  live: boolean;
   /** Contribution to the SHARED balance, not an account of its own. */
   shareOfEquityPct: number;
   trades: number;
@@ -162,6 +165,17 @@ export default function LiveEnginePaperDeskPage() {
           {r.strategy}
         </span>
       ),
+    },
+    { id: "symbol", header: "Symbol", cell: (r) => r.symbol },
+    {
+      id: "route",
+      header: "Route",
+      cell: (r) =>
+        r.live ? (
+          <DeskChip tone="primary" style={{ fontWeight: 700 }}>LIVE</DeskChip>
+        ) : (
+          <DeskChip tone="default">candidate</DeskChip>
+        ),
     },
     {
       id: "share",
@@ -441,7 +455,7 @@ export default function LiveEnginePaperDeskPage() {
             subtitle="Each strategy's contribution to the shared $100 — gross, minus taker fees, equals net."
             actions={
               <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
-                {accts.length} strateg{accts.length === 1 ? "y" : "ies"}
+                {accts.filter((a) => a.trades > 0).length} traded · {accts.length} watched
               </span>
             }
           />
@@ -449,7 +463,7 @@ export default function LiveEnginePaperDeskPage() {
             columns={accountColumns}
             rows={accts}
             getRowKey={(r) => r.strategy}
-            minWidth={980}
+            minWidth={1120}
             empty={
               <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
                 No strategy has traded yet. Rows appear on the first paper fill.

@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -87,7 +88,13 @@ type paperPos struct {
 // still tracked per strategy because promotion is a per-strategy decision — but
 // the balance those decisions spend from is single.
 type paperAccount struct {
-	Strategy string  `json:"strategy"`
+	Strategy string `json:"strategy"`
+	// Symbol, because the unit being watched is the STREAM. The same strategy
+	// runs on several symbols and they are different bets; collapsing them into
+	// one row averages a winner with a loser and hides both.
+	Symbol string `json:"symbol"`
+	// Live is true when this stream is also on the venue allow-list.
+	Live     bool    `json:"live"`
 	Trades   int     `json:"trades"`
 	Wins     int     `json:"wins"`
 	GrossUSD float64 `json:"grossUsd"`
@@ -138,12 +145,26 @@ const livePaperProductLeverage = delta.PerpLeverage
 const livePaperMaintenanceMarginPct = 0.5
 
 func newLivePaperDesk() *livePaperDesk {
-	return &livePaperDesk{
+	d := &livePaperDesk{
 		equity:   livePaperStartingEquity,
 		accounts: map[string]*paperAccount{},
 		open:     map[string]*paperPos{},
 		started:  time.Now().UTC(),
 	}
+	// Seed every watched stream at zero.
+	//
+	// Rows were created on first signal, so the board showed only what had
+	// already traded — 1 row out of 19 watched, which reads as "nothing is
+	// configured" rather than "nothing has fired yet". An operator cannot
+	// confirm a promotion took effect from a board that hides idle streams.
+	for _, st := range delta.ScalpPaperStreams() {
+		d.accounts[paperKey(st.Strategy, st.Symbol)] = &paperAccount{
+			Strategy: st.Strategy,
+			Symbol:   strings.ToUpper(st.Symbol),
+			Live:     delta.PerpStreamPermitted(st.Strategy, st.Symbol),
+		}
+	}
+	return d
 }
 
 func paperKey(strategy, symbol string) string { return strategy + "|" + symbol }
@@ -231,8 +252,11 @@ func (d *livePaperDesk) onSignal(strategy, symbol, dir string, entry, stop, targ
 	if notional <= 0 {
 		return
 	}
-	if _, ok := d.accounts[strategy]; !ok {
-		d.accounts[strategy] = &paperAccount{Strategy: strategy}
+	if _, ok := d.accounts[k]; !ok {
+		d.accounts[k] = &paperAccount{
+			Strategy: strategy, Symbol: strings.ToUpper(symbol),
+			Live: delta.PerpStreamPermitted(strategy, symbol),
+		}
 	}
 	p := &paperPos{
 		Live:     delta.PerpStreamPermitted(strategy, symbol),
@@ -325,10 +349,10 @@ func (d *livePaperDesk) closeLocked(k string, p *paperPos, exit float64, reason 
 	fees := (p.Entry + exit) * p.Contracts * delta.PerpTakerFeeRate
 	net := gross - fees
 
-	acct := d.accounts[p.Strategy]
+	acct := d.accounts[paperKey(p.Strategy, p.Symbol)]
 	if acct == nil {
-		acct = &paperAccount{Strategy: p.Strategy}
-		d.accounts[p.Strategy] = acct
+		acct = &paperAccount{Strategy: p.Strategy, Symbol: p.Symbol, Live: p.Live}
+		d.accounts[paperKey(p.Strategy, p.Symbol)] = acct
 	}
 	acct.Trades++
 	if net > 0 {
@@ -371,7 +395,16 @@ func (d *livePaperDesk) reset() int {
 	defer d.mu.Unlock()
 	n := len(d.closed)
 	d.equity = livePaperStartingEquity
+	// Re-seed rather than empty: a cleared desk still watches the same streams,
+	// and an empty board would again read as "nothing configured".
 	d.accounts = map[string]*paperAccount{}
+	for _, st := range delta.ScalpPaperStreams() {
+		d.accounts[paperKey(st.Strategy, st.Symbol)] = &paperAccount{
+			Strategy: st.Strategy,
+			Symbol:   strings.ToUpper(st.Symbol),
+			Live:     delta.PerpStreamPermitted(st.Strategy, st.Symbol),
+		}
+	}
 	d.open = map[string]*paperPos{}
 	d.closed = nil
 	d.started = time.Now().UTC()
@@ -392,7 +425,23 @@ func (d *livePaperDesk) snapshot() map[string]any {
 		c.ShareOfEquityPct = math.Round(c.NetUSD/livePaperStartingEquity*10000) / 100
 		accts = append(accts, c)
 	}
-	sort.Slice(accts, func(i, j int) bool { return accts[i].NetUSD > accts[j].NetUSD })
+	sort.Slice(accts, func(i, j int) bool {
+		// Traded streams first, then the live-routed, then alphabetical. Sorting
+		// purely by net would scatter 19 zero rows through the ranking.
+		if (accts[i].Trades > 0) != (accts[j].Trades > 0) {
+			return accts[i].Trades > 0
+		}
+		if accts[i].Trades > 0 && accts[i].NetUSD != accts[j].NetUSD {
+			return accts[i].NetUSD > accts[j].NetUSD
+		}
+		if accts[i].Live != accts[j].Live {
+			return accts[i].Live
+		}
+		if accts[i].Strategy != accts[j].Strategy {
+			return accts[i].Strategy < accts[j].Strategy
+		}
+		return accts[i].Symbol < accts[j].Symbol
+	})
 
 	open := make([]paperPos, 0, len(d.open))
 	for _, p := range d.open {
