@@ -479,7 +479,7 @@ func (d *desk) processBar(ss *symbolState, ctx scalers.MarketContext, bar scaler
 	// Done BEFORE the strategy loop so a position opened on this bar cannot also
 	// be closed by it — an entry and exit on one price is a round trip that pays
 	// two fees for no move, and it would flatter nothing but the trade count.
-	livePaper.onBar(ss.sym, bar.High, bar.Low, bar.Close)
+	paperOnBar(ss.sym, bar.High, bar.Low, bar.Close)
 	for _, e := range d.entries {
 		key := comboKey(e.Name, ss.sym)
 		cs := d.combos[key]

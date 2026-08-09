@@ -128,6 +128,97 @@ var defaultScalpPaperStreams = []PerpStream{
 	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
 }
 
+// PaperAccount01 and PaperAccount02 are the two independent paper books.
+//
+// Separate accounts, not one list with a tag. Each starts at its own $100 and
+// spends from its own balance, so a winner in one cannot fund a position in the
+// other — which is the whole point of running two: they are competing
+// hypotheses about which streams deserve capital, and a shared balance would
+// let the better one subsidise the worse and hide it.
+const (
+	PaperAccount01 = "01"
+	PaperAccount02 = "02"
+)
+
+// PaperAccountIDs is every book, in display order.
+func PaperAccountIDs() []string { return []string{PaperAccount01, PaperAccount02} }
+
+// defaultScalpPaperStreams02 is Account 02's watch list.
+//
+// Added 2026-08-09 from the scalp leaderboard. Trade counts run 1-14, so every
+// row reads "too few" — which is why this is a paper book and not a promotion.
+//
+// It overlaps Account 01 on several streams by design: the same stream in two
+// books with different neighbours shows how much of a result is the stream and
+// how much is the company it keeps. Three concurrent positions is a real
+// constraint, so which OTHER streams are competing for those slots changes what
+// any one of them gets to trade.
+var defaultScalpPaperStreams02 = []PerpStream{
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_D20_HeikinAshi_Flip", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_D20_VWAP_Reversion", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_D20_HeikinAshi_Flip", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1X_VWAP_TrendPull_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "MUBARAKUSD"},
+	{Strategy: "M1_MACD_Align_Long", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_D20_Momentum_ROC", Symbol: "AIOUSD"},
+	{Strategy: "ANTI_D20_Stoch_Cross", Symbol: "AIOUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Long", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "BANKUSD"},
+}
+
+// ScalpPaperStreamsFor returns one account's watch list.
+//
+// Account 01 carries the LIVE roster plus its candidates, so it stays a faithful
+// mirror of what real money is doing. Account 02 is candidates only — nothing in
+// it can reach the venue, whatever it shows.
+func ScalpPaperStreamsFor(account string) []PerpStream {
+	if account == PaperAccount02 {
+		out := make([]PerpStream, 0, len(defaultScalpPaperStreams02))
+		seen := map[string]bool{}
+		for _, st := range defaultScalpPaperStreams02 {
+			k := perpStreamKey(st.Strategy, st.Symbol)
+			if !seen[k] {
+				seen[k] = true
+				out = append(out, st)
+			}
+		}
+		return out
+	}
+	return ScalpPaperStreams()
+}
+
+// PerpStreamPaperPermittedFor reports whether a stream may trade in an account.
+func PerpStreamPaperPermittedFor(account, strategy, symbol string) bool {
+	key := perpStreamKey(strategy, symbol)
+	for _, st := range ScalpPaperStreamsFor(account) {
+		if perpStreamKey(st.Strategy, st.Symbol) == key {
+			return true
+		}
+	}
+	return false
+}
+
 // ScalpPaperStreams is everything the Live Engine Paper Desk trades: the live
 // roster plus the candidates.
 //

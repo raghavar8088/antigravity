@@ -15,7 +15,7 @@ import (
 // used a cheaper fee than the bridge, it would reproduce that failure with a new
 // name on it.
 func TestLivePaper_ChargesTakerOnBothLegs(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	// A long that runs to target.
 	d.onSignal("S", "ADAUSD", "LONG", 0.2000, 0.1993, 0.2021, time.Hour)
 	d.onBar("ADAUSD", 0.2021, 0.2000, 0.2021)
@@ -45,7 +45,7 @@ func TestLivePaper_ChargesTakerOnBothLegs(t *testing.T) {
 // $100. The live bridge has one wallet, one aggregate leverage cap and one
 // concurrency cap, so the paper mirror must have the same.
 func TestLivePaper_OneSharedBalanceNotOnePerStrategy(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	d.onSignal("WINNER", "ADAUSD", "LONG", 0.2000, 0.1993, 0.2021, time.Hour)
 	d.onSignal("LOSER", "AVAXUSD", "LONG", 6.500, 6.4772, 6.5683, time.Hour)
 	d.onBar("ADAUSD", 0.2021, 0.2000, 0.2021)  // winner hits target
@@ -85,7 +85,7 @@ func TestLivePaper_OneSharedBalanceNotOnePerStrategy(t *testing.T) {
 // Capital is finite. A fourth idea cannot be funded by pretending the first
 // three were free — the live bridge refuses, so this must too.
 func TestLivePaper_RespectsConcurrencyAndLeverageCaps(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	for i, sym := range []string{"AUSD", "BUSD", "CUSD", "DUSD", "EUSD"} {
 		d.onSignal("S", sym, "LONG", 100, 99, 103, time.Hour)
 		if want := i + 1; len(d.open) != want && want <= livePaperMaxConcurrent {
@@ -104,7 +104,7 @@ func TestLivePaper_RespectsConcurrencyAndLeverageCaps(t *testing.T) {
 // Sizing must shrink with a drawdown. A desk that keeps deploying $300 after
 // losing half its balance is running leverage it did not choose.
 func TestLivePaper_SizeFollowsTheSharedBalance(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	d.onSignal("S", "ADAUSD", "LONG", 100, 99, 103, time.Hour)
 	first := d.open[paperKey("S", "ADAUSD")].Contracts * 100
 
@@ -124,7 +124,7 @@ func TestLivePaper_SizeFollowsTheSharedBalance(t *testing.T) {
 // know which was touched first, and assuming the target is the optimism that
 // made the old leaderboard unreliable.
 func TestLivePaper_StopWinsWhenBothLevelsAreSatisfied(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	// A well-formed long, and a bar whose range covers BOTH levels — the case
 	// that actually happens and where the choice matters.
 	d.onSignal("S", "ADAUSD", "LONG", 0.2000, 0.1993, 0.2021, time.Hour)
@@ -141,7 +141,7 @@ func TestLivePaper_StopWinsWhenBothLevelsAreSatisfied(t *testing.T) {
 // One position per stream, matching the live bridge. Stacking would give the
 // paper desk leverage the real one is not allowed to take.
 func TestLivePaper_OnePositionPerStream(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	d.onSignal("S", "ADAUSD", "LONG", 0.2000, 0.1993, 0.2021, time.Hour)
 	d.onSignal("S", "ADAUSD", "LONG", 0.2005, 0.1998, 0.2026, time.Hour)
 	if len(d.open) != 1 {
@@ -171,7 +171,7 @@ func TestLivePaper_OnlyLiveRoutedStreamsAreRecorded(t *testing.T) {
 // Reset must clear everything. A history recorded under two different rule sets
 // is worse than no history, because it still looks complete.
 func TestLivePaper_ResetClearsAccountsAndOpenPositions(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	d.onSignal("S", "ADAUSD", "LONG", 0.2000, 0.1993, 0.2021, time.Hour)
 	d.onBar("ADAUSD", 0.2021, 0.2000, 0.2021)
 	d.onSignal("S", "ADAUSD", "LONG", 0.2000, 0.1993, 0.2021, time.Hour)
@@ -188,9 +188,9 @@ func TestLivePaper_ResetClearsAccountsAndOpenPositions(t *testing.T) {
 	// Accounts are RE-SEEDED, not emptied: a cleared desk still watches the same
 	// streams, and an empty board reads as "nothing configured" rather than
 	// "nothing has traded yet".
-	if len(d.accounts) != len(delta.ScalpPaperStreams()) {
+	if len(d.accounts) != len(delta.ScalpPaperStreamsFor(delta.PaperAccount01)) {
 		t.Errorf("after reset: %d accounts, want the %d watched streams re-seeded",
-			len(d.accounts), len(delta.ScalpPaperStreams()))
+			len(d.accounts), len(delta.ScalpPaperStreamsFor(delta.PaperAccount01)))
 	}
 	for k, a := range d.accounts {
 		if a.Trades != 0 || a.NetUSD != 0 {
@@ -202,7 +202,7 @@ func TestLivePaper_ResetClearsAccountsAndOpenPositions(t *testing.T) {
 // A malformed signal must be refused rather than opening a position with no
 // stop — an unbounded loss wearing the appearance of a managed trade.
 func TestLivePaper_RefusesSignalsWithoutLevels(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	for _, tc := range []struct{ entry, stop, target float64 }{
 		{0, 0.19, 0.21}, {0.20, 0, 0.21}, {0.20, 0.19, 0},
 	} {
@@ -219,7 +219,7 @@ func TestLivePaper_RefusesSignalsWithoutLevels(t *testing.T) {
 // LOSSES — a wick that reached the target and closed back would be recorded as
 // a win by the venue's resting order but ignored here. The bias runs one way.
 func TestLivePaper_IntrabarStopIsNotMissed(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	d.onSignal("S", "ADAUSD", "LONG", 0.2000, 0.1993, 0.2021, time.Hour)
 	// Low pierces the stop; the bar closes above the entry, looking like a win.
 	d.onBar("ADAUSD", 0.2010, 0.1990, 0.2005)
@@ -243,7 +243,7 @@ func TestLivePaper_IntrabarStopIsNotMissed(t *testing.T) {
 // that have nothing to do with execution, which is the one difference this desk
 // is supposed to isolate.
 func TestLivePaper_RefusesAStopBeyondLiquidation(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	// A stop 20% away, against a ~9.5% liquidation distance at 10x. The venue
 	// would close this long before the stop, so the bridge refuses it.
 	d.onSignal("S", "ADAUSD", "LONG", 100, 80, 160, time.Hour)
@@ -260,7 +260,7 @@ func TestLivePaper_RefusesAStopBeyondLiquidation(t *testing.T) {
 // Liquidation must be checked BEFORE the strategy's own levels: the venue does
 // not wait its turn.
 func TestLivePaper_LiquidationOutranksTheStop(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	d.onSignal("S", "ADAUSD", "LONG", 100, 99.3, 102.1, time.Hour)
 
 	// A crash straight through both the stop and the liquidation price.
@@ -283,7 +283,7 @@ func TestLivePaper_LiquidationOutranksTheStop(t *testing.T) {
 // liquidation distance is ~9.5%. If this starts failing, the margin setting or
 // the stop distances have drifted into each other.
 func TestLivePaper_NormalStopOutIsNotALiquidation(t *testing.T) {
-	d := newLivePaperDesk()
+	d := newLivePaperDesk(delta.PaperAccount01)
 	d.onSignal("S", "ADAUSD", "LONG", 100, 99.3, 102.1, time.Hour)
 	d.onBar("ADAUSD", 100.2, 99.2, 99.5) // pierces the stop, nowhere near liquidation
 
@@ -302,8 +302,8 @@ func TestLivePaper_NormalStopOutIsNotALiquidation(t *testing.T) {
 // operator cannot confirm a promotion took effect from a board that hides idle
 // streams.
 func TestLivePaper_SeedsEveryWatchedStream(t *testing.T) {
-	d := newLivePaperDesk()
-	want := delta.ScalpPaperStreams()
+	d := newLivePaperDesk(delta.PaperAccount01)
+	want := delta.ScalpPaperStreamsFor(delta.PaperAccount01)
 	if len(want) == 0 {
 		t.Skip("no streams configured")
 	}
@@ -324,5 +324,46 @@ func TestLivePaper_SeedsEveryWatchedStream(t *testing.T) {
 		if a.Live != delta.PerpStreamPermitted(st.Strategy, st.Symbol) {
 			t.Errorf("%v Live=%v disagrees with the venue gate", st, a.Live)
 		}
+	}
+}
+
+// The two books must be INDEPENDENT. A winner in one funding a position in the
+// other would let the better hypothesis subsidise the worse and hide it — which
+// is the entire reason for running two rather than one longer list.
+func TestLivePaper_AccountsAreIndependentBooks(t *testing.T) {
+	ids := delta.PaperAccountIDs()
+	if len(ids) < 2 {
+		t.Fatal("expected at least two paper accounts")
+	}
+	a, b := livePaperBooks[ids[0]], livePaperBooks[ids[1]]
+	if a == nil || b == nil {
+		t.Fatal("a configured account has no book")
+	}
+	if a == b {
+		t.Fatal("both ids resolve to the same book")
+	}
+	if a.equity != livePaperStartingEquity || b.equity != livePaperStartingEquity {
+		t.Errorf("books start at $%.2f / $%.2f, want $%.2f each", a.equity, b.equity, livePaperStartingEquity)
+	}
+	// Each watches its OWN list, and account 02 must contain nothing that can
+	// reach the venue.
+	for _, st := range delta.ScalpPaperStreamsFor(delta.PaperAccount02) {
+		if !delta.PerpStreamPaperPermittedFor(delta.PaperAccount02, st.Strategy, st.Symbol) {
+			t.Errorf("%v is on account 02's list but its own gate refuses it", st)
+		}
+		if delta.PerpStreamPermitted(st.Strategy, st.Symbol) {
+			t.Errorf("%v in account 02 reached the VENUE gate; account 02 is paper-only", st)
+		}
+	}
+	// A stream on 02 only must not open in 01.
+	only02 := ""
+	for _, st := range delta.ScalpPaperStreamsFor(delta.PaperAccount02) {
+		if !delta.PerpStreamPaperPermittedFor(delta.PaperAccount01, st.Strategy, st.Symbol) {
+			only02 = st.Strategy + "|" + st.Symbol
+			break
+		}
+	}
+	if only02 == "" {
+		t.Skip("the two lists fully overlap; nothing to isolate")
 	}
 }

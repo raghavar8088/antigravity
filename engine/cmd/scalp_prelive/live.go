@@ -233,9 +233,7 @@ func (d *liveDesk) onPaperFill(strategy, symbol string, pos *position) {
 	// scalp leaderboard again.
 	// PAPER gate, deliberately wider than the venue gate below. A candidate
 	// paper-trades here for a while before anyone decides it deserves money.
-	if delta.PerpStreamPaperPermitted(strategy, symbol) {
-		livePaper.onSignal(strategy, symbol, pos.Dir, pos.Entry, pos.SL, pos.TP, profileTTL(pos.Profile))
-	}
+	paperOnSignal(strategy, symbol, pos.Dir, pos.Entry, pos.SL, pos.TP, profileTTL(pos.Profile))
 	if d == nil {
 		// Paper-only, but still announce the stream so tests (and any future
 		// observer) can see which fills WOULD have been offered to the bridge.
@@ -256,8 +254,6 @@ func (d *liveDesk) onPaperFill(strategy, symbol string, pos *position) {
 // the same signals whether or not real trading is configured or armed. A paper
 // record that only exists while the bridge is armed cannot answer "should this
 // be armed" - the question it exists for.
-var livePaper = newLivePaperDesk()
-
 // observeFill, when set, receives every fill offered to the live path. Test-only.
 var observeFill func(strategy, symbol string, pos *position)
 
@@ -283,10 +279,10 @@ func (d *liveDesk) registerHTTP(
 	// The Live Engine Paper Desk. Read-only except for a reset, which is needed
 	// whenever the rules change underneath the record.
 	http.HandleFunc("/scalp/live/paper", gated(func(w http.ResponseWriter, r *http.Request) {
-		livePaper.serve(w, r)
+		writeJSON(w, paperSnapshotAll())
 	}))
 	http.HandleFunc("/scalp/live/paper/reset", gated(postOnly(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"status": "reset", "trades_cleared": livePaper.reset()})
+		writeJSON(w, map[string]any{"status": "reset", "trades_cleared": paperResetAll()})
 	})))
 
 	http.HandleFunc("/scalp/live/stats", gated(func(w http.ResponseWriter, r *http.Request) {

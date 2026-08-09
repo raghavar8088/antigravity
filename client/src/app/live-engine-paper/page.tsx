@@ -80,6 +80,8 @@ type PaperTrade = {
   live: boolean;
 };
 type PaperDesk = {
+  /** Which book this is — "01" or "02". Two independent $100 accounts. */
+  account: string;
   startingEquityUsd: number;
   equityUsd: number;
   netUsd: number;
@@ -120,41 +122,17 @@ function ageLabel(iso?: string): string {
   return s < 60 ? `${s}s ago` : `${Math.round(s / 60)}m ago`;
 }
 
-export default function LiveEnginePaperDeskPage() {
-  const [paper, setPaper] = useState<PaperDesk | null>(null);
-  const [error, setError] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
-  const [updatedAt, setUpdatedAt] = useState<string>("");
-
-  const refresh = useCallback(async () => {
-    try {
-      const r = await fetch("/api/scalp/scalp/live/paper", { cache: "no-store" });
-      if (!r.ok) {
-        setError(`desk unreachable (HTTP ${r.status})`);
-        return;
-      }
-      setPaper((await r.json()) as PaperDesk);
-      setError("");
-      setUpdatedAt(new Date().toLocaleTimeString());
-    } catch {
-      setError("desk unreachable");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-    const t = setInterval(() => void refresh(), 20_000);
-    return () => clearInterval(t);
-  }, [refresh]);
-
-  const accts = paper?.accounts ?? [];
+/**
+ * One paper book. Account 01 and 02 render identically — same columns, same
+ * ordering, same wording — so a difference between them is a difference in the
+ * strategies, never in how they are presented.
+ */
+function AccountBook({ d, updatedAt }: { d: PaperDesk; updatedAt: string }) {
+  const accts = d.accounts ?? [];
   const trades = accts.reduce((a, x) => a + x.trades, 0);
   const wins = accts.reduce((a, x) => a + x.wins, 0);
   const gross = accts.reduce((a, x) => a + x.grossUsd, 0);
   const fees = accts.reduce((a, x) => a + x.feesUsd, 0);
-  const status: DeskEngineStatus = error ? "degraded" : paper ? "live" : "syncing";
 
   const accountColumns: DeskColumn<PaperAccount>[] = [
     {
@@ -342,6 +320,130 @@ export default function LiveEnginePaperDeskPage() {
     },
   ];
 
+
+  return (
+    <>
+      <DeskCard>
+        <DeskSectionHeader
+          title={`Account ${d.account}`}
+          subtitle="One shared balance within this book — separate from the other account, so neither can fund the other."
+          actions={
+            <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+              {updatedAt ? `updated ${updatedAt}` : "—"}
+            </span>
+          }
+        />
+        <div className="desk-metrics-row">
+          <DeskMetricTile
+            label="Account Balance"
+            value={`$${d.equityUsd.toFixed(2)}`}
+            valueClassName={pnlTone(d.netUsd)}
+            sub={`started at $${d.startingEquityUsd.toFixed(0)} · ${accts.length} streams watched`}
+            highlight
+          />
+          <DeskMetricTile compact label="Net P&L" value={fmtUSD(d.netUsd)} valueClassName={pnlTone(d.netUsd)}
+            sub={`${d.roiPct >= 0 ? "+" : ""}${d.roiPct.toFixed(2)}% · gross ${fmtUSD(gross)}`} />
+          <DeskMetricTile compact label="Taker Fees" value={fees ? fmtUSD(-fees) : "—"}
+            valueClassName={fees > 0 ? "desk-pnl-negative" : undefined}
+            sub={gross > 0 ? `${((fees / gross) * 100).toFixed(0)}% of gross` : "both legs"} />
+          <DeskMetricTile compact label="Deployed" value={fmtUSD(d.openNotionalUsd)}
+            sub={`of ${fmtUSD(d.maxNotionalUsd)} max · ${d.maxConcurrent} at once`} />
+          <DeskMetricTile compact label="Open P&L" value={fmtUSD(d.openUnrealisedUsd)}
+            valueClassName={pnlTone(d.openUnrealisedUsd)} sub="unrealised, net of exit fee" />
+          <DeskMetricTile compact label="Trades" value={trades ? String(trades) : "—"}
+            sub={trades ? `win rate ${((100 * wins) / trades).toFixed(1)}%` : "waiting for signals"} />
+        </div>
+        <p className="desk-body-md" style={{ marginTop: 14, maxWidth: 820, color: "var(--desk-on-surface-variant)" }}>
+          <strong>{d.maxLeverage}× limits SIZE</strong> — at most {fmtUSD(d.maxNotionalUsd)} of positions across{" "}
+          {d.maxConcurrent} at a time. <strong>{d.productLeverage}× is the MARGIN setting</strong> — it decides how much
+          cash Delta freezes, and therefore that the venue would not force-close until price moved{" "}
+          {d.liquidationDistPct.toFixed(1)}% against the position. Stops sit near 0.7%, so the strategy closes the trade
+          rather than the venue.
+        </p>
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title={`Account ${d.account} — Strategy Leaderboard`}
+          subtitle="Each stream's contribution to this book's $100 — gross, minus taker fees, equals net."
+          actions={
+            <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+              {accts.filter((a) => a.trades > 0).length} traded · {accts.length} watched
+            </span>
+          }
+        />
+        <DeskDataTable columns={accountColumns} rows={accts} getRowKey={(r) => `${r.strategy}|${r.symbol}`}
+          minWidth={1120}
+          empty={<p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>No streams configured for this account.</p>} />
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title={`Account ${d.account} — Open Positions`}
+          subtitle="Marked against the latest real Delta price. Unrealised is NET of the fee the exit will pay."
+          actions={
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                {d.openPositions?.length ?? 0} open · {fmtUSD(d.openNotionalUsd)} deployed
+              </span>
+              <span className={`desk-mono desk-label-md ${pnlTone(d.openUnrealisedUsd)}`} style={{ fontWeight: 700 }}>
+                {fmtUSD(d.openUnrealisedUsd)}
+              </span>
+            </div>
+          }
+        />
+        <DeskDataTable columns={openColumns} rows={d.openPositions ?? []}
+          getRowKey={(r) => `${r.strategy}|${r.symbol}`} minWidth={1320}
+          empty={<p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>No open paper positions.</p>} />
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title={`Account ${d.account} — Closed Trades`}
+          subtitle="Every paper round trip, newest first — with the exit that closed it and the fee it paid."
+          actions={<span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>{d.recentTrades?.length ?? 0} closed</span>}
+        />
+        <DeskDataTable columns={tradeColumns} rows={d.recentTrades ?? []}
+          getRowKey={(r, i) => `${r.strategy}-${r.closedAt}-${i}`} minWidth={1220}
+          empty={<p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>No closed paper trades yet.</p>} />
+      </DeskCard>
+    </>
+  );
+}
+
+export default function LiveEnginePaperDeskPage() {
+  const [books, setBooks] = useState<PaperDesk[]>([]);
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [updatedAt, setUpdatedAt] = useState<string>("");
+
+  const refresh = useCallback(async () => {
+    try {
+      const r = await fetch("/api/scalp/scalp/live/paper", { cache: "no-store" });
+      if (!r.ok) {
+        setError(`desk unreachable (HTTP ${r.status})`);
+        return;
+      }
+      const body = (await r.json()) as { accounts?: PaperDesk[] };
+      setBooks(body.accounts ?? []);
+      setError("");
+      setUpdatedAt(new Date().toLocaleTimeString());
+    } catch {
+      setError("desk unreachable");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    const t = setInterval(() => void refresh(), 20_000);
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  const status: DeskEngineStatus = error ? "degraded" : books.length ? "live" : "syncing";
+  const combined = books.reduce((a, b) => a + b.netUsd, 0);
+
   return (
     <div style={{ minHeight: "100%", background: "var(--desk-surface-dim)" }}>
       <DeskLinearProgress visible={loading} />
@@ -366,171 +468,50 @@ export default function LiveEnginePaperDeskPage() {
             </DeskChip>
           </div>
           <p className="desk-body-md" style={{ marginTop: 6, maxWidth: 800, color: "var(--desk-on-surface-variant)" }}>
-            Two tiers on one shared $100 of paper money, against real Delta prices with Delta&apos;s real taker fee on
-            both legs. Rows marked <strong>LIVE</strong> are also on the real-money allow-list, so this desk mirrors what
-            actual capital is doing; rows marked <strong>candidate</strong> are being watched on live terms BEFORE anyone
-            decides they deserve money — they cannot reach the venue. Only the money is simulated; the prices, fees, size
-            caps and margin rules are the ones the real account runs under. Where a LIVE row disagrees with the live
-            record, the difference is <strong>execution</strong>.
+            Two independent books, each starting at $100, against real Delta prices with Delta&apos;s real taker fee
+            on both legs. They are separate accounts, not one list split in two: a winner in one cannot fund a position
+            in the other, so the better set cannot subsidise the worse and hide it. Rows marked <strong>LIVE</strong>
+            are also on the real-money allow-list; rows marked <strong>candidate</strong> are watched on live terms
+            BEFORE anyone decides they deserve money and cannot reach the venue. Only the money is simulated — the
+            prices, fees, size caps and margin rules are the ones the real account runs under.
           </p>
         </div>
 
         {error && <DeskBanner variant="warning">{error} — retrying every 20s</DeskBanner>}
 
-        <DeskCard>
-          <DeskSectionHeader
-            title="Account"
-            subtitle="One shared balance, not one per strategy — the live bridge has one Delta wallet and so does this."
-            actions={
-              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
-                {updatedAt ? `updated ${updatedAt}` : "—"}
-              </span>
-            }
-          />
-          <div className="desk-metrics-row">
-            <DeskMetricTile
-              label="Account Balance"
-              value={paper ? `$${paper.equityUsd.toFixed(2)}` : "—"}
-              valueClassName={paper ? pnlTone(paper.netUsd) : undefined}
-              sub={`started at $${paper?.startingEquityUsd.toFixed(0) ?? 100} · ${accts.length} strategies drawing from it`}
-              highlight
+        {books.length > 1 && (
+          <DeskCard>
+            <DeskSectionHeader
+              title="Both Accounts"
+              subtitle="Two competing sets of streams, each on its own $100. The comparison is the point."
             />
-            <DeskMetricTile
-              compact
-              label="Net P&L"
-              value={paper ? fmtUSD(paper.netUsd) : "—"}
-              valueClassName={paper ? pnlTone(paper.netUsd) : undefined}
-              sub={paper ? `${paper.roiPct >= 0 ? "+" : ""}${paper.roiPct.toFixed(2)}% · gross ${fmtUSD(gross)}` : "—"}
-            />
-            <DeskMetricTile
-              compact
-              label="Taker Fees"
-              value={fees ? fmtUSD(-fees) : "—"}
-              valueClassName={fees > 0 ? "desk-pnl-negative" : undefined}
-              sub={gross > 0 ? `${((fees / gross) * 100).toFixed(0)}% of gross` : "both legs"}
-            />
-            <DeskMetricTile
-              compact
-              label="Deployed"
-              value={paper ? fmtUSD(paper.openNotionalUsd) : "—"}
-              sub={paper ? `of ${fmtUSD(paper.maxNotionalUsd)} max · ${paper.maxConcurrent} at once` : "—"}
-            />
-            <DeskMetricTile
-              compact
-              label="Open P&L"
-              value={paper ? fmtUSD(paper.openUnrealisedUsd) : "—"}
-              valueClassName={paper ? pnlTone(paper.openUnrealisedUsd) : undefined}
-              sub="unrealised, net of exit fee"
-            />
-            <DeskMetricTile
-              compact
-              label="Trades"
-              value={trades ? String(trades) : "—"}
-              sub={trades ? `win rate ${((100 * wins) / trades).toFixed(1)}%` : "waiting for signals"}
-            />
-          </div>
+            <div className="desk-metrics-row">
+              {books.map((b) => (
+                <DeskMetricTile
+                  key={b.account}
+                  compact
+                  label={`Account ${b.account}`}
+                  value={`$${b.equityUsd.toFixed(2)}`}
+                  valueClassName={pnlTone(b.netUsd)}
+                  sub={`${b.roiPct >= 0 ? "+" : ""}${b.roiPct.toFixed(2)}% · ${
+                    (b.accounts ?? []).filter((a) => a.trades > 0).length
+                  } of ${(b.accounts ?? []).length} streams traded`}
+                />
+              ))}
+              <DeskMetricTile
+                compact
+                label="Combined"
+                value={fmtUSD(combined)}
+                valueClassName={pnlTone(combined)}
+                sub={`across $${(books.length * 100).toFixed(0)} of paper capital`}
+              />
+            </div>
+          </DeskCard>
+        )}
 
-          {/* The two leverage numbers, named. They sound alike and do different
-              jobs, and confusing them is how an operator reads 3x exposure as
-              10x exposure. */}
-          <p className="desk-body-md" style={{ marginTop: 14, maxWidth: 820, color: "var(--desk-on-surface-variant)" }}>
-            <strong>{paper?.maxLeverage ?? 3}× limits SIZE</strong> — at most $
-            {(paper?.maxNotionalUsd ?? 300).toFixed(0)} of positions across {paper?.maxConcurrent ?? 3} at a time.{" "}
-            <strong>{paper?.productLeverage ?? 10}× is the MARGIN setting</strong> — it decides how much cash Delta
-            freezes, and therefore that the venue would not force-close until price moved{" "}
-            {paper?.liquidationDistPct?.toFixed(1) ?? "9.5"}% against the position. Stops sit near 0.7%, so the strategy
-            closes the trade rather than the venue. This desk refuses any signal whose stop sits past that line, exactly
-            as the live bridge does.
-          </p>
-        </DeskCard>
-
-        {/* Three sections, not three tabs.
-            A tab hides two thirds of the picture, and the three answer
-            different questions: which strategies are worth funding, what is
-            exposed right now, and what actually happened. An operator checking
-            a live desk wants all three without clicking. */}
-        <DeskCard padding="md">
-          <DeskSectionHeader
-            title="Strategy Leaderboard"
-            subtitle="Each strategy's contribution to the shared $100 — gross, minus taker fees, equals net."
-            actions={
-              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
-                {accts.filter((a) => a.trades > 0).length} traded · {accts.length} watched
-              </span>
-            }
-          />
-          <DeskDataTable
-            columns={accountColumns}
-            rows={accts}
-            getRowKey={(r) => r.strategy}
-            minWidth={1120}
-            empty={
-              <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
-                No strategy has traded yet. Rows appear on the first paper fill.
-              </p>
-            }
-          />
-          <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 820, color: "var(--desk-on-surface-variant)" }}>
-            &ldquo;Worth real money?&rdquo; is a question, not a verdict. Positive net is necessary and nowhere near
-            sufficient: the pre-registered gate wants 200 trades per stream, and a profit over 30 is still mostly noise.
-            A taker round trip costs {((paper?.feeRatePerSide ?? 0.00059) * 200).toFixed(3)}% of notional — larger than
-            the move most of these strategies target.
-          </p>
-        </DeskCard>
-
-        <DeskCard padding="md">
-          <DeskSectionHeader
-            title="Open Positions"
-            subtitle="Marked against the latest real Delta price. Unrealised is NET of the fee the exit will pay."
-            actions={
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
-                  {paper?.openPositions?.length ?? 0} open · {fmtUSD(paper?.openNotionalUsd)} deployed
-                </span>
-                <span
-                  className={`desk-mono desk-label-md ${pnlTone(paper?.openUnrealisedUsd ?? 0)}`}
-                  style={{ fontWeight: 700 }}
-                >
-                  {fmtUSD(paper?.openUnrealisedUsd)}
-                </span>
-              </div>
-            }
-          />
-          <DeskDataTable
-            columns={openColumns}
-            rows={paper?.openPositions ?? []}
-            getRowKey={(r) => `${r.strategy}|${r.symbol}`}
-            minWidth={1320}
-            empty={
-              <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
-                No open paper positions.
-              </p>
-            }
-          />
-        </DeskCard>
-
-        <DeskCard padding="md">
-          <DeskSectionHeader
-            title="Closed Trades"
-            subtitle="Every paper round trip, newest first — with the exit that closed it and the fee it paid."
-            actions={
-              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
-                {paper?.recentTrades?.length ?? 0} closed
-              </span>
-            }
-          />
-          <DeskDataTable
-            columns={tradeColumns}
-            rows={paper?.recentTrades ?? []}
-            getRowKey={(r, i) => `${r.strategy}-${r.closedAt}-${i}`}
-            minWidth={1220}
-            empty={
-              <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
-                No closed paper trades yet.
-              </p>
-            }
-          />
-        </DeskCard>
+        {books.map((b) => (
+          <AccountBook key={b.account} d={b} updatedAt={updatedAt} />
+        ))}
 
       </main>
     </div>

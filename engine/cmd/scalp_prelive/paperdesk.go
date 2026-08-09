@@ -108,7 +108,11 @@ type paperAccount struct {
 
 // livePaperDesk mirrors every live-routed signal onto paper.
 type livePaperDesk struct {
-	mu sync.Mutex
+	// account is which book this is. Two independent $100 books run side by
+	// side; a winner in one must never fund a position in the other, or the
+	// better hypothesis subsidises the worse and hides it.
+	account string
+	mu      sync.Mutex
 	// equity is THE account. One balance, shared by every strategy, exactly as
 	// the live bridge shares one Delta wallet.
 	equity   float64
@@ -144,8 +148,9 @@ const livePaperProductLeverage = delta.PerpLeverage
 // half of the liquidation distance. At 10x this leaves ~9.5%.
 const livePaperMaintenanceMarginPct = 0.5
 
-func newLivePaperDesk() *livePaperDesk {
+func newLivePaperDesk(account string) *livePaperDesk {
 	d := &livePaperDesk{
+		account:  account,
 		equity:   livePaperStartingEquity,
 		accounts: map[string]*paperAccount{},
 		open:     map[string]*paperPos{},
@@ -157,7 +162,7 @@ func newLivePaperDesk() *livePaperDesk {
 	// already traded — 1 row out of 19 watched, which reads as "nothing is
 	// configured" rather than "nothing has fired yet". An operator cannot
 	// confirm a promotion took effect from a board that hides idle streams.
-	for _, st := range delta.ScalpPaperStreams() {
+	for _, st := range delta.ScalpPaperStreamsFor(account) {
 		d.accounts[paperKey(st.Strategy, st.Symbol)] = &paperAccount{
 			Strategy: st.Strategy,
 			Symbol:   strings.ToUpper(st.Symbol),
@@ -165,6 +170,58 @@ func newLivePaperDesk() *livePaperDesk {
 		}
 	}
 	return d
+}
+
+// livePaperBooks are the accounts, keyed by id.
+//
+// Package level and built once, so a signal reaches every book that watches it
+// in the same instant. Feeding them from separate call sites would let the two
+// see slightly different prices, and then a difference between them would mean
+// nothing.
+var livePaperBooks = func() map[string]*livePaperDesk {
+	m := map[string]*livePaperDesk{}
+	for _, id := range delta.PaperAccountIDs() {
+		m[id] = newLivePaperDesk(id)
+	}
+	return m
+}()
+
+// paperOnSignal offers a fill to every book that watches the stream.
+func paperOnSignal(strategy, symbol, dir string, entry, stop, target float64, ttl time.Duration) {
+	for id, d := range livePaperBooks {
+		if delta.PerpStreamPaperPermittedFor(id, strategy, symbol) {
+			d.onSignal(strategy, symbol, dir, entry, stop, target, ttl)
+		}
+	}
+}
+
+// paperOnBar advances every book on the same real Delta bar.
+func paperOnBar(symbol string, high, low, close float64) {
+	for _, d := range livePaperBooks {
+		d.onBar(symbol, high, low, close)
+	}
+}
+
+// paperSnapshotAll returns every book, in display order.
+func paperSnapshotAll() map[string]any {
+	books := make([]map[string]any, 0, len(livePaperBooks))
+	for _, id := range delta.PaperAccountIDs() {
+		if d := livePaperBooks[id]; d != nil {
+			snap := d.snapshot()
+			snap["account"] = id
+			books = append(books, snap)
+		}
+	}
+	return map[string]any{"accounts": books}
+}
+
+// paperResetAll clears every book.
+func paperResetAll() int {
+	n := 0
+	for _, d := range livePaperBooks {
+		n += d.reset()
+	}
+	return n
 }
 
 func paperKey(strategy, symbol string) string { return strategy + "|" + symbol }
@@ -382,8 +439,8 @@ func (d *livePaperDesk) closeLocked(k string, p *paperPos, exit float64, reason 
 	}
 	delete(d.open, k)
 
-	log.Printf("[LIVE PAPER] %s %s %s CLOSE @ %.6f | %s | gross $%+.4f fees $%.4f net $%+.4f | equity $%.2f",
-		p.Strategy, p.Symbol, p.Dir, exit, reason, gross, fees, net, d.equity)
+	log.Printf("[LIVE PAPER %s] %s %s %s CLOSE @ %.6f | %s | gross $%+.4f fees $%.4f net $%+.4f | equity $%.2f",
+		d.account, p.Strategy, p.Symbol, p.Dir, exit, reason, gross, fees, net, d.equity)
 }
 
 // reset clears every account and trade.
@@ -398,7 +455,7 @@ func (d *livePaperDesk) reset() int {
 	// Re-seed rather than empty: a cleared desk still watches the same streams,
 	// and an empty board would again read as "nothing configured".
 	d.accounts = map[string]*paperAccount{}
-	for _, st := range delta.ScalpPaperStreams() {
+	for _, st := range delta.ScalpPaperStreamsFor(d.account) {
 		d.accounts[paperKey(st.Strategy, st.Symbol)] = &paperAccount{
 			Strategy: st.Strategy,
 			Symbol:   strings.ToUpper(st.Symbol),
@@ -408,7 +465,7 @@ func (d *livePaperDesk) reset() int {
 	d.open = map[string]*paperPos{}
 	d.closed = nil
 	d.started = time.Now().UTC()
-	log.Printf("[LIVE PAPER] reset - %d closed trades and every account cleared", n)
+	log.Printf("[LIVE PAPER %s] reset - %d closed trades cleared", d.account, n)
 	return n
 }
 
