@@ -98,15 +98,35 @@ var defaultScalpLiveStreams = []PerpStream{
 // first. Collapsing the two is how the previous roster was built - straight
 // from a leaderboard to real capital - and it lost $13.91 over 27 fills.
 //
-// EMPTY as of 2026-08-09. The LIGHTUSD and XAIUSD candidates were promoted to
-// the live roster; the MOVEUSD and 1000SATSUSD ones were removed outright
-// because those contracts cannot support the trade at all - see the tradeable
-// filter in cmd/scalp_prelive/symbols.go, which now excludes them from the
-// universe so no strategy can pick them up again.
-//
-// An empty candidate list is a valid state: it means everything being watched
-// has either graduated or been rejected.
-var defaultScalpPaperStreams = []PerpStream{}
+// History: the LIGHTUSD and XAIUSD candidates were promoted to the live roster;
+// the MOVEUSD and 1000SATSUSD ones were removed outright because those
+// contracts cannot support the trade at all - see the tradeable filter in
+// cmd/scalp_prelive/symbols.go, which now excludes them from the universe so no
+// strategy can pick them up again.
+var defaultScalpPaperStreams = []PerpStream{
+	// Added 2026-08-09 from the scalp leaderboard. Trade counts run 2-9, so the
+	// Qualified column reads "too few" on every one — which is the reason they
+	// are here rather than on the live roster.
+	//
+	// Symbol liquidity, checked before adding: SKYAIUSD $18.3M/day, TSTUSD
+	// $7.5M, COOKIEUSD $3.0M, SAGAUSD $3.0M, AVAAIUSD $93k. All clear the tick
+	// grid for a 0.35% stop. AVAAIUSD is the thin one and is worth watching for
+	// that reason as much as any other — paper cannot show slippage, so a
+	// result there will look better than a live one would.
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "Ornstein_Uhlenbeck_Reversion", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "M1X_VWAP_TrendPull_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "SAGAUSD"},
+	{Strategy: "Ornstein_Uhlenbeck_Reversion", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
+}
 
 // ScalpPaperStreams is everything the Live Engine Paper Desk trades: the live
 // roster plus the candidates.
