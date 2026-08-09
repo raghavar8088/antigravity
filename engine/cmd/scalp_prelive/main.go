@@ -1281,6 +1281,11 @@ func main() {
 	log.Println(gateDesc)
 	d.load()
 
+	// Restore the paper books before any bar is processed, so a trade closing on
+	// the first tick lands on the real balance rather than a fresh $100.
+	loadPaperBooks(*stateDir)
+	go persistPaperBooks(*stateDir, 30*time.Second)
+
 	for _, s := range resolveSymbols(*symbolsCSV) {
 		d.symbols = append(d.symbols, &symbolState{sym: s})
 	}
