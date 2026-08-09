@@ -146,3 +146,35 @@ func oppositeSide(s OrderSide) OrderSide {
 	}
 	return SideBuy
 }
+
+// perpOutcomeUSD is what a position pays at its target and costs at its stop,
+// both NET of the round-trip taker fee.
+//
+// The fee is charged on entry and exit whichever way the trade goes, so it
+// SHRINKS the win and DEEPENS the loss — it does not cancel between them. A
+// table showing gross outcomes would overstate the reward and understate the
+// risk at the same time, on a desk where the round trip is comparable to the
+// move being targeted.
+func perpOutcomeUSD(t *PerpLiveTrade, contractValue float64) (ifTarget, ifStop float64) {
+	if t == nil || contractValue <= 0 || t.EntryPrice <= 0 || t.Contracts == 0 {
+		return 0, 0
+	}
+	n := float64(t.Contracts)
+	if n < 0 {
+		n = -n
+	}
+	qty := n * contractValue
+
+	if t.TargetPrice > 0 {
+		gross := math.Abs(t.TargetPrice-t.EntryPrice) * qty
+		fees := (t.EntryPrice + t.TargetPrice) * qty * PerpTakerFeeRate
+		ifTarget = gross - fees
+	}
+	if t.StopPrice > 0 {
+		gross := math.Abs(t.StopPrice-t.EntryPrice) * qty
+		fees := (t.EntryPrice + t.StopPrice) * qty * PerpTakerFeeRate
+		// Negative: this is what the position COSTS.
+		ifStop = -(gross + fees)
+	}
+	return ifTarget, ifStop
+}

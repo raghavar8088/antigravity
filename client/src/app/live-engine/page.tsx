@@ -169,6 +169,9 @@ type UnifiedPosition = {
   marginUsd: number;
   stopPrice?: number;
   targetPrice?: number;
+  /** What this position pays at target / costs at stop, NET of the round trip. */
+  ifTargetUsd?: number;
+  ifStopUsd?: number;
   strategy: string;
 };
 
@@ -183,6 +186,8 @@ type PerpTrade = {
   unrealizedPnl?: number;
   stopPrice?: number;
   targetPrice?: number;
+  ifTargetUsd?: number;
+  ifStopUsd?: number;
   exitPrice?: number;
   openedAt?: string;
   closedAt?: string;
@@ -582,6 +587,8 @@ export default function LiveEnginePage() {
         marginUsd: 0,
         stopPrice: t.stopPrice,
         targetPrice: t.targetPrice,
+        ifTargetUsd: t.ifTargetUsd,
+        ifStopUsd: t.ifStopUsd,
         strategy: t.strategy,
       });
     }
@@ -615,6 +622,31 @@ export default function LiveEnginePage() {
         align: "right",
         header: "Target",
         cell: (p) => (p.targetPrice ? fmtPrice(p.targetPrice) : "—"),
+      },
+      {
+        id: "iftarget",
+        align: "right",
+        header: "If TP",
+        // NET of the round-trip fee, like every other figure here. The fee is
+        // charged whichever way the trade goes, so it shrinks this AND deepens
+        // "If SL" — it does not cancel between them.
+        cell: (p) =>
+          p.ifTargetUsd ? <span className="desk-pnl-positive">{fmtUSD(p.ifTargetUsd)}</span> : "—",
+      },
+      {
+        id: "ifstop",
+        align: "right",
+        header: "If SL",
+        cell: (p) => (p.ifStopUsd ? <span className="desk-pnl-negative">{fmtUSD(p.ifStopUsd)}</span> : "—"),
+      },
+      {
+        id: "rr",
+        align: "right",
+        header: "R:R",
+        // The ratio AFTER fees, which is the one that decides the trade. A 1:3
+        // position on paper is nearer 1:2.5 once the round trip is paid.
+        cell: (p) =>
+          p.ifTargetUsd && p.ifStopUsd ? `1:${(p.ifTargetUsd / Math.abs(p.ifStopUsd)).toFixed(2)}` : "—",
       },
       {
         id: "upnl",

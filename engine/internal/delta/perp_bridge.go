@@ -66,6 +66,15 @@ type PerpLiveTrade struct {
 	// a price a limit order could not have filled. The mechanism built to stop
 	// the overshoot was being front-run by the one causing it.
 	BracketsAttached bool `json:"bracketsAttached"`
+	// IfTargetUSD and IfStopUSD are what this position pays or costs if it
+	// reaches its target or its stop, NET of the round-trip taker fee.
+	//
+	// Net rather than gross, for the same reason every other figure on this desk
+	// is: a target 0.3% away on a 0.118% round trip keeps less than half of what
+	// the gross move suggests, and an operator reading the gross would think the
+	// trade was worth twice what it is.
+	IfTargetUSD float64 `json:"ifTargetUsd"`
+	IfStopUSD   float64 `json:"ifStopUsd"`
 
 	EntryPrice float64 `json:"entryPrice"`
 	// MarkPrice and UnrealizedPnL are refreshed by the custody loop, which
@@ -396,6 +405,10 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		OpenedAt:         time.Now().UTC(),
 		OrderID:          res.OrderID,
 		Status:           "OPEN",
+	}
+	// What each outcome is worth, priced at the fill.
+	if pr, ok := b.reg.Lookup(plan.Symbol); ok {
+		t.IfTargetUSD, t.IfStopUSD = perpOutcomeUSD(t, pr.ContractValue)
 	}
 	if ttl > 0 {
 		t.ExpiresAt = t.OpenedAt.Add(ttl)
