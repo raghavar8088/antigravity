@@ -60,23 +60,12 @@ type PlaceOrderRequest struct {
 	ReduceOnly           bool      `json:"reduce_only,omitempty"`            // required for closing positions
 	CancelOrdersAccepted string    `json:"cancel_orders_accepted,omitempty"` // "true" to cancel conflicting open orders
 
-	// Bracket legs, submitted WITH the entry so protection exists from the
-	// moment the position does.
+// Bracket legs are NOT fields on this struct.
 	//
-	// Without these the desk polled a 15-second timer and closed at market when
-	// it noticed. Price runs between checks: measured stop-outs exited at
-	// 0.805%, 1.018% and 1.054% against a 0.700% stop, and one 0.754% adverse
-	// move never triggered the stop at all and left on the time stop instead.
-	// A stop that only exists inside this process is not a stop — it is an
-	// intention, and it stops existing when the process does.
-	BracketStopLossPrice   string `json:"bracket_stop_loss_price,omitempty"`
-	BracketTakeProfitPrice string `json:"bracket_take_profit_price,omitempty"`
-	// Delta requires a limit price alongside each trigger. Set equal to the
-	// trigger for a market-like fill on touch.
-	BracketStopLossLimitPrice   string `json:"bracket_stop_loss_limit_price,omitempty"`
-	BracketTakeProfitLimitPrice string `json:"bracket_take_profit_limit_price,omitempty"`
+	// They were, and Delta rejected every order: the bracket parameters belong
+	// to POST /v2/orders/bracket, which attaches protection to an EXISTING
+	// position, not to the entry order. See PlaceBracket.
 }
-
 // PlaceOrderResult is a simplified view of Delta's order response.
 type PlaceOrderResult struct {
 	OrderID   string    `json:"order_id"`

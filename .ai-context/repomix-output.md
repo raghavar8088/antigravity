@@ -866,6 +866,8 @@ The content is organized as follows:
   dataquality/validator_test.go
   dataquality/validator.go
   delta/adoption_scope_test.go
+  delta/bracket_order_test.go
+  delta/bracket_order.go
   delta/bridge_buy_sizing_test.go
   delta/bridge_buy_sizing.go
   delta/chain_list.go

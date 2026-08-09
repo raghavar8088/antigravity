@@ -1,1 +1,1 @@
-{}
+{"engine/internal/delta/bracket_order.go::.PlaceBracket()":["engine/internal/delta/client.go::truncate()"],"engine/internal/delta/perp_brackets.go::StopHasTickResolution()":["engine/internal/delta/client.go::abs()"],"engine/internal/delta/perp_brackets.go::perpLevelsFromFill()":["engine/internal/delta/client.go::abs()"]}

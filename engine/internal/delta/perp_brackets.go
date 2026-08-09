@@ -107,23 +107,34 @@ func (b *PerpBridge) attachBrackets(ctx context.Context, plan PerpOrderPlan, sto
 	sp := strconv.FormatFloat(roundToTick(stop, tick), 'f', -1, 64)
 	tp := strconv.FormatFloat(roundToTick(target, tick), 'f', -1, 64)
 
-	_, err := b.client.PlaceOrder(ctx, PlaceOrderRequest{
-		ProductID: plan.ProductID,
-		Size:      plan.Contracts,
-		// The bracket closes the position, so it sits on the opposite side.
-		Side:      oppositeSide(plan.Side),
-		OrderType: TypeLimit,
-		// Reduce-only: a bracket must never be able to open exposure.
-		ReduceOnly:                  true,
-		TimeInForce:                 "gtc",
-		BracketStopLossPrice:        sp,
-		BracketStopLossLimitPrice:   sp,
-		BracketTakeProfitPrice:      tp,
-		BracketTakeProfitLimitPrice: tp,
+	// The dedicated bracket endpoint, not the entry order.
+	//
+	// Putting these parameters on PlaceOrder produced HTTP 400 bad_schema on
+	// every attempt for three hours: "Limit price required for limit orders"
+	// and "invalid value" on bracket_take_profit_limit_price. Both legs need a
+	// trigger AND a limit, and they belong to the position, not the fill.
+	return b.client.PlaceBracket(ctx, BracketRequest{
+		ProductID:     plan.ProductID,
+		ProductSymbol: plan.Symbol,
+		StopLoss: &BracketLeg{
+			OrderType: TypeLimit,
+			StopPrice: sp,
+			// Limit equal to the trigger: on touch this behaves like a market
+			// close. A wider limit would fill further away, which is the
+			// overshoot being fixed; a tighter one might not fill at all.
+			LimitPrice: sp,
+		},
+		TakeProfit: &BracketLeg{
+			OrderType:  TypeLimit,
+			StopPrice:  tp,
+			LimitPrice: tp,
+		},
+		// Last traded price, not mark. The mark is an index and can sit away
+		// from where an order would actually fill — the same gap that let the
+		// polling monitor exit at 0.830% against a 0.580% stop.
+		TriggerMethod: "last_traded_price",
 	})
-	return err
 }
-
 func oppositeSide(s OrderSide) OrderSide {
 	if s == SideBuy {
 		return SideSell
