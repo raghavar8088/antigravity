@@ -340,14 +340,18 @@ func (d *liveDesk) registerHTTP(
 		}
 		var req struct {
 			Strategy string `json:"strategy"`
+			Symbol   string `json:"symbol"`
 			Enabled  *bool  `json:"enabled"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "bad request body", http.StatusBadRequest)
 			return
 		}
-		if strings.TrimSpace(req.Strategy) == "" {
-			http.Error(w, "strategy is required", http.StatusBadRequest)
+		if strings.TrimSpace(req.Strategy) == "" || strings.TrimSpace(req.Symbol) == "" {
+			// Both are required. Accepting a bare strategy would have to mean
+			// "every symbol it runs on", and silently switching off three
+			// streams when one was named is not a thing a control should do.
+			http.Error(w, "strategy and symbol are both required", http.StatusBadRequest)
 			return
 		}
 		// A pointer, so a missing field is rejected rather than read as false.
@@ -357,9 +361,10 @@ func (d *liveDesk) registerHTTP(
 			http.Error(w, "enabled is required (true or false)", http.StatusBadRequest)
 			return
 		}
-		d.bridge.SetStrategyEnabled(req.Strategy, *req.Enabled)
+		d.bridge.SetStrategyEnabled(req.Strategy, req.Symbol, *req.Enabled)
 		writeJSON(w, map[string]any{
 			"strategy":           req.Strategy,
+			"symbol":             req.Symbol,
 			"enabled":            *req.Enabled,
 			"disabledStrategies": d.bridge.DisabledStrategies(),
 		})

@@ -334,7 +334,7 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		log.Printf("[PERP LIVE] kill switch active — refusing %s %s", strategy, symbol)
 		return nil
 	}
-	if !b.StrategyEnabled(strategy) {
+	if !b.StrategyEnabled(strategy, symbol) {
 		// Switched off by the owner. Checked here, on the engine's open path,
 		// because a toggle enforced only in the UI is decoration: the signal
 		// loop does not read the browser.
@@ -915,6 +915,11 @@ type PerpBridgeStats struct {
 	MaxLeverage   float64  `json:"maxLeverage"`
 	MaxConcurrent int      `json:"maxConcurrent"`
 	Strategies    []string `json:"strategies"`
+	// LiveStreams is the roster at its real granularity: (strategy, symbol)
+	// pairs. One strategy commonly runs on several symbols as independent
+	// positions, so a board keyed on strategy alone merges records that belong
+	// to different instruments.
+	LiveStreams []PerpStreamView `json:"liveStreams"`
 	// Strategies switched off by the owner. Reported so the board can render
 	// the switch from engine truth rather than from browser state, which would
 	// drift the moment anything changed it from elsewhere or a restart happened.
@@ -988,7 +993,19 @@ func (b *PerpBridge) Stats() PerpBridgeStats {
 			sort.Strings(out)
 			return out
 		}(),
-		Strategies:      strategies,
+		Strategies: strategies,
+		LiveStreams: func() []PerpStreamView {
+			pairs := b.allow.Pairs()
+			out := make([]PerpStreamView, 0, len(pairs))
+			for _, st := range pairs {
+				out = append(out, PerpStreamView{
+					Strategy: st.Strategy,
+					Symbol:   st.Symbol,
+					Enabled:  !b.strategyOff[perpStreamKey(st.Strategy, st.Symbol)],
+				})
+			}
+			return out
+		}(),
 		OpenPositions:   open,
 		Submitted:       b.submitted.Load(),
 		Rejected:        b.rejected.Load(),

@@ -7,7 +7,7 @@ import "testing"
 // silently sitting out because it was missing from a saved enable-list.
 func TestStrategySwitch_UnknownStrategyTrades(t *testing.T) {
 	b := &PerpBridge{}
-	if !b.StrategyEnabled("ANTI_M1_NR7_Expand_T20_Long") {
+	if !b.StrategyEnabled("ANTI_M1_NR7_Expand_T20_Long", "LABUSD") {
 		t.Error("an unseen strategy is switched off; the desk would quietly stop trading new roster entries")
 	}
 }
@@ -16,17 +16,17 @@ func TestStrategySwitch_OffThenOnIsReversible(t *testing.T) {
 	b := &PerpBridge{}
 	const name = "ANTI_D20_VWAP_Reversion"
 
-	b.SetStrategyEnabled(name, false)
-	if b.StrategyEnabled(name) {
+	b.SetStrategyEnabled(name, "COOKIEUSD", false)
+	if b.StrategyEnabled(name, "COOKIEUSD") {
 		t.Fatal("strategy still enabled after being switched off")
 	}
 	// Only that one.
-	if !b.StrategyEnabled("ANTI_D20_MACD_Cross") {
+	if !b.StrategyEnabled("ANTI_D20_MACD_Cross", "COOKIEUSD") {
 		t.Error("switching one strategy off disabled another")
 	}
 
-	b.SetStrategyEnabled(name, true)
-	if !b.StrategyEnabled(name) {
+	b.SetStrategyEnabled(name, "COOKIEUSD", true)
+	if !b.StrategyEnabled(name, "COOKIEUSD") {
 		t.Error("strategy did not come back on; a switch that cannot be reversed is a one-way door")
 	}
 	if len(b.DisabledStrategies()) != 0 {
@@ -38,8 +38,8 @@ func TestStrategySwitch_OffThenOnIsReversible(t *testing.T) {
 // switched-off strategy nobody can turn back on.
 func TestStrategySwitch_IgnoresBlankNames(t *testing.T) {
 	b := &PerpBridge{}
-	b.SetStrategyEnabled("", false)
-	b.SetStrategyEnabled("   ", false)
+	b.SetStrategyEnabled("", "COOKIEUSD", false)
+	b.SetStrategyEnabled("   ", "COOKIEUSD", false)
 	if got := b.DisabledStrategies(); len(got) != 0 {
 		t.Errorf("blank name produced entries: %v", got)
 	}
@@ -49,12 +49,12 @@ func TestStrategySwitch_IgnoresBlankNames(t *testing.T) {
 // deliberately forgotten, turning a strategy off is a standing decision.
 func TestStrategySwitch_RestoresFromDisk(t *testing.T) {
 	b := &PerpBridge{}
-	b.setDisabledStrategiesLocked([]string{"ANTI_D20_MACD_Cross", " ", "ANTI_M1_HMA21_Flip_Short"})
+	b.setDisabledStrategiesLocked([]string{"ANTI_D20_MACD_Cross|COOKIEUSD", " ", "ANTI_M1_HMA21_Flip_Short|SKYAIUSD"})
 
-	if b.StrategyEnabled("ANTI_D20_MACD_Cross") {
+	if b.StrategyEnabled("ANTI_D20_MACD_Cross", "COOKIEUSD") {
 		t.Error("restored disable did not apply")
 	}
-	if !b.StrategyEnabled("ANTI_M1_NR7_Expand_T20_Long") {
+	if !b.StrategyEnabled("ANTI_M1_NR7_Expand_T20_Long", "LABUSD") {
 		t.Error("restore disabled a strategy that was never switched off")
 	}
 	if got := len(b.DisabledStrategies()); got != 2 {

@@ -6,18 +6,26 @@ import (
 	"strings"
 )
 
-// SetStrategyEnabled switches one strategy on or off for the live desk.
+// SetStrategyEnabled switches one STREAM on or off for the live desk.
+//
+// Keyed on (strategy, symbol) rather than the strategy name, because that is
+// what the desk actually trades: ANTI_Recurrence_Quantification_Signal runs on
+// COOKIEUSD, MUBARAKUSD and BLESSUSD as three independent positions. Switching
+// it off because one instrument misbehaved should not silently stop the other
+// two, and the usual reason to stop a stream is the instrument, not the logic.
 //
 // Reversible and immediate: an OFF strategy places no new orders from the next
 // signal onward. Positions it already holds are deliberately left alone — the
 // switch governs ENTRY, not custody. Closing a live position is a separate,
 // louder action (close-all), and having a toggle silently market-close real
 // positions would make it far more dangerous than it looks.
-func (b *PerpBridge) SetStrategyEnabled(name string, enabled bool) {
-	name = strings.TrimSpace(name)
-	if name == "" {
+func (b *PerpBridge) SetStrategyEnabled(strategy, symbol string, enabled bool) {
+	strategy = strings.TrimSpace(strategy)
+	symbol = strings.TrimSpace(symbol)
+	if strategy == "" || symbol == "" {
 		return
 	}
+	name := perpStreamKey(strategy, symbol)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.strategyOff == nil {
@@ -29,16 +37,17 @@ func (b *PerpBridge) SetStrategyEnabled(name string, enabled bool) {
 		b.strategyOff[name] = true
 	}
 	b.persistLocked()
-	log.Printf("[PERP LIVE] strategy %s switched %s by owner", name, map[bool]string{true: "ON", false: "OFF"}[enabled])
+	log.Printf("[PERP LIVE] %s on %s switched %s by owner", strategy, strings.ToUpper(symbol),
+		map[bool]string{true: "ON", false: "OFF"}[enabled])
 }
 
-// StrategyEnabled reports whether a strategy may open new live positions.
+// StrategyEnabled reports whether a stream may open new live positions.
 //
 // Unknown names are enabled: see strategyOff on the Bridge.
-func (b *PerpBridge) StrategyEnabled(name string) bool {
+func (b *PerpBridge) StrategyEnabled(strategy, symbol string) bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	return !b.strategyOff[strings.TrimSpace(name)]
+	return !b.strategyOff[perpStreamKey(strategy, symbol)]
 }
 
 // DisabledStrategies lists the switched-off strategies, sorted.

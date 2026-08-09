@@ -220,6 +220,8 @@ type PerpStats = {
   strategies: string[];
   /** Switched off by the owner — engine truth, not browser state. */
   disabledStrategies?: string[];
+  /** The roster at its real granularity: (strategy, symbol) streams. */
+  liveStreams?: { strategy: string; symbol: string; enabled: boolean }[];
   openPositions: PerpTrade[];
   submitted: number;
   rejected: number;
@@ -231,6 +233,8 @@ type LeaderRow = {
   /** Which live desk this strategy trades on. Both spend the same wallet. */
   desk: "options" | "scalp";
   strategy: string;
+  /** The instrument this stream trades. One strategy runs several. */
+  symbol: string;
   trades: number;
   wins: number;
   winRatePct: number;
@@ -520,22 +524,22 @@ export default function LiveEnginePage() {
    * the worst possible lie for this particular switch.
    */
   const toggleStrategy = useCallback(
-    async (strategy: string, enabled: boolean) => {
+    async (strategy: string, symbol: string, enabled: boolean) => {
       setBusy(true);
       setActionMsg("");
       try {
         const res = await fetch("/api/scalp-demo/scalp/live/strategy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ strategy, enabled }),
+          body: JSON.stringify({ strategy, symbol, enabled }),
         });
         if (!res.ok) {
-          setActionMsg(`${strategy}: HTTP ${res.status} — switch NOT applied`);
+          setActionMsg(`${strategy} on ${symbol}: HTTP ${res.status} — switch NOT applied`);
         } else {
-          setActionMsg(`${strategy} switched ${enabled ? "ON" : "OFF"}`);
+          setActionMsg(`${strategy} on ${symbol} switched ${enabled ? "ON" : "OFF"}`);
         }
       } catch (e) {
-        setActionMsg(`${strategy}: ${e instanceof Error ? e.message : String(e)} — switch NOT applied`);
+        setActionMsg(`${strategy} on ${symbol}: ${e instanceof Error ? e.message : String(e)} — switch NOT applied`);
       } finally {
         await refresh();
         setBusy(false);
@@ -902,9 +906,10 @@ export default function LiveEnginePage() {
     // appear as an unexplained "Delta reports 1 position" mismatch.
     if (perp) {
       const perpRows = new Map<string, LeaderRow>();
-      const blankPerp = (name: string): LeaderRow => ({
+      const blankPerp = (name: string, symbol: string): LeaderRow => ({
         desk: "scalp",
         strategy: name,
+        symbol,
         trades: 0,
         wins: 0,
         winRatePct: 0,
@@ -915,7 +920,7 @@ export default function LiveEnginePage() {
         stopOuts: 0,
         // Rendered from the engine's disabled set, so the switch shows what the
         // engine will actually do rather than what this tab last clicked.
-        enabled: !(perp.disabledStrategies ?? []).includes(name),
+        enabled: !(perp.disabledStrategies ?? []).includes(`${name}|${symbol.toUpperCase()}`),
         allowed: true,
         // The scalp desk's promotion gate passes none of these; the bridge
         // trades them on owner instruction, not on a gate verdict.
@@ -923,10 +928,18 @@ export default function LiveEnginePage() {
         reason: "scalp perpetual — owner-selected, gate not passed",
       });
 
-      for (const name of perp.strategies ?? []) perpRows.set(name, blankPerp(name));
+      // Seeded from the STREAM roster, not the strategy list. A strategy that
+      // runs on three symbols is three positions with three records; merging
+      // them into one row hides which instrument a result came from, which is
+      // what decides whether the result means anything.
+      const streamKey = (strategy: string, symbol: string) => `${strategy}|${(symbol || "").toUpperCase()}`;
+      for (const st of perp.liveStreams ?? []) {
+        perpRows.set(streamKey(st.strategy, st.symbol), blankPerp(st.strategy, st.symbol));
+      }
       for (const t of perpTrades) {
         if (t.status !== "CLOSED") continue;
-        const row = perpRows.get(t.strategy) ?? blankPerp(t.strategy);
+        const k = streamKey(t.strategy, t.symbol);
+        const row = perpRows.get(k) ?? blankPerp(t.strategy, t.symbol);
         row.trades += 1;
         const net = t.realisedPnl ?? 0;
         if (net > 0) row.wins += 1;
@@ -949,7 +962,7 @@ export default function LiveEnginePage() {
         }
         row.netUsd += net;
         row.grossUsd += net + fees;
-        perpRows.set(t.strategy, row);
+        perpRows.set(k, row);
       }
       // Fee drag: what share of gross the venue took. Computed against the
       // MAGNITUDE of gross so a losing strategy reports a meaningful ratio —
@@ -1023,6 +1036,18 @@ export default function LiveEnginePage() {
         cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.netUsd)}>{fmtUSD(r.netUsd)}</span> : "—"),
       },
       {
+        id: "symbol",
+        header: "Symbol",
+        // The desk trades streams, so the instrument belongs next to the name.
+        // Without it, one strategy's three symbols read as three identical rows
+        // and there is no way to tell which instrument produced a result.
+        cell: (r) => (
+          <span style={{ fontFamily: "var(--desk-font-mono, monospace)", fontSize: "0.85em" }}>
+            {r.symbol || "—"}
+          </span>
+        ),
+      },
+      {
         id: "switch",
         header: "Live",
         // The same DeskSwitch used for the desk arm, not a coloured pill.
@@ -1038,17 +1063,17 @@ export default function LiveEnginePage() {
         // exits normally. Flattening is close-all, deliberately louder.
         cell: (r) => (
           <DeskSwitch
-            id={`strategy-switch-${r.strategy}`}
+            id={`strategy-switch-${r.strategy}-${r.symbol}`}
             checked={r.enabled}
             disabled={busy}
-            ariaLabel={`${r.strategy} live trading`}
+            ariaLabel={`${r.strategy} on ${r.symbol} live trading`}
             // Short label so a 31-row table stays readable; the strategy name
             // is already the row, and ariaLabel carries the full context for
             // screen readers.
             label={r.enabled ? "on" : "off"}
             onColor="var(--desk-success)"
             offColor="var(--desk-error)"
-            onChange={(next) => void toggleStrategy(r.strategy, next)}
+            onChange={(next) => void toggleStrategy(r.strategy, r.symbol, next)}
           />
         ),
       },

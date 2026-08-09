@@ -3,6 +3,7 @@ package delta
 import (
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -584,6 +585,33 @@ func NewPerpAllowList() *PerpAllowList {
 //
 // Preferred over Set: it cannot enable a pairing that was not chosen. Set
 // remains for callers that genuinely mean "these strategies on these symbols".
+// Pairs returns the exact (strategy, symbol) streams this list permits, sorted.
+//
+// The desk trades STREAMS, not strategies: ANTI_Recurrence_Quantification_
+// Signal runs on COOKIEUSD, MUBARAKUSD and BLESSUSD as three independent
+// positions with three independent records. Reporting only the strategy names
+// collapses those into one row and hides which instrument a result came from,
+// which is the thing that decides whether a result means anything.
+func (a *PerpAllowList) Pairs() []PerpStream {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	out := make([]PerpStream, 0, len(a.pairs))
+	for k := range a.pairs {
+		parts := strings.SplitN(k, "|", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		out = append(out, PerpStream{Strategy: parts[0], Symbol: parts[1]})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Strategy != out[j].Strategy {
+			return out[i].Strategy < out[j].Strategy
+		}
+		return out[i].Symbol < out[j].Symbol
+	})
+	return out
+}
+
 func (a *PerpAllowList) SetPairs(streams []PerpStream) {
 	pm := make(map[string]bool, len(streams))
 	sm := make(map[string]bool, len(streams))

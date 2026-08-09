@@ -917,6 +917,8 @@ The content is organized as follows:
   delta/perp_slippage_test.go
   delta/perp_strategy_switch_test.go
   delta/perp_strategy_switch.go
+  delta/perp_stream_switch_test.go
+  delta/perp_stream_view.go
   delta/tickformat_test.go
   delta/trade_status_test.go
   derivatives/derivatives_test.go
