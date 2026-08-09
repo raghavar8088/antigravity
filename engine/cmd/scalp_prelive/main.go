@@ -49,6 +49,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"antigravity-engine/internal/delta"
@@ -1284,7 +1285,7 @@ func main() {
 	// Restore the paper books before any bar is processed, so a trade closing on
 	// the first tick lands on the real balance rather than a fresh $100.
 	loadPaperBooks(*stateDir)
-	go persistPaperBooks(*stateDir, 30*time.Second)
+	go persistPaperBooks(*stateDir, 10*time.Second)
 
 	for _, s := range resolveSymbols(*symbolsCSV) {
 		d.symbols = append(d.symbols, &symbolState{sym: s})
@@ -1365,7 +1366,13 @@ func main() {
 	go d.serve(*port)
 
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
+	// SIGTERM as well as SIGINT.
+	//
+	// Docker sends SIGTERM on `docker stop` and `docker restart`, and it was not
+	// caught — so every deploy killed the process before the shutdown save ran,
+	// and up to a full save interval of trades went with it. Interrupt alone
+	// only covers Ctrl-C, which is not how this ever restarts in production.
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	pollT := time.NewTicker(15 * time.Second)
 	saveT := time.NewTicker(5 * time.Minute)
 	log.Printf("desk live: %d strategies (%d signal + %d mirror) x %d symbols = %d paper streams",
@@ -1380,6 +1387,13 @@ func main() {
 		case <-sig:
 			log.Println("shutdown: saving snapshot")
 			d.save()
+			// The paper books too. They were absent from this path, so even a
+			// caught signal left them to the next timer tick that never came.
+			if err := savePaperBooks(*stateDir); err != nil {
+				log.Printf("shutdown: paper books NOT saved: %v", err)
+			} else {
+				log.Println("shutdown: paper books saved")
+			}
 			tradesF.Close()
 			return
 		}

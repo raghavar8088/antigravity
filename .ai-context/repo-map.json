@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[0,1,2,3,4,5,6],"files":3,"symbols":53,"top_files":[{"file":"engine/cmd/scalp_prelive/main.go","symbols":39},{"file":"engine/cmd/scalp_prelive/paperpersist.go","symbols":10},{"file":"engine/cmd/scalp_prelive/paperpersist_test.go","symbols":4}]}}
+{"engine-cmd":{"communities":[0,1,2,3,4,5,6,7,8],"files":2,"symbols":49,"top_files":[{"file":"engine/cmd/scalp_prelive/main.go","symbols":39},{"file":"engine/cmd/scalp_prelive/paperpersist.go","symbols":10}]}}

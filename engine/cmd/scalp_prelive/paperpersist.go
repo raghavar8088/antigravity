@@ -120,12 +120,13 @@ func loadPaperBooks(dir string) {
 
 // persistPaperBooks saves on a timer and once more on shutdown.
 //
-// Every 30s rather than on every close: a book can close several trades in one
-// bar, and rewriting the file per trade would turn a bounded cost into one that
-// scales with activity.
+// Every 10s rather than on every close: a book can close several trades in one
+// bar, and rewriting per trade turns a bounded cost into one that scales with
+// activity. The interval is the exposure window for an UNGRACEFUL kill only —
+// a normal stop or restart saves via the SIGTERM path and loses nothing.
 func persistPaperBooks(dir string, every time.Duration) {
 	if every <= 0 {
-		every = 30 * time.Second
+		every = 10 * time.Second
 	}
 	t := time.NewTicker(every)
 	defer t.Stop()
