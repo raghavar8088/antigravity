@@ -341,11 +341,17 @@ function AccountBook({ d, updatedAt }: { d: PaperDesk; updatedAt: string }) {
             sub={`started at $${d.startingEquityUsd.toFixed(0)} · ${accts.length} streams watched`}
             highlight
           />
-          <DeskMetricTile compact label="Net P&L" value={fmtUSD(d.netUsd)} valueClassName={pnlTone(d.netUsd)}
-            sub={`${d.roiPct >= 0 ? "+" : ""}${d.roiPct.toFixed(2)}% · gross ${fmtUSD(gross)}`} />
-          <DeskMetricTile compact label="Taker Fees" value={fees ? fmtUSD(-fees) : "—"}
+          {/* Gross → − Taker Fees → = Net, in that order, so the strip reads as
+              the same equation the table columns do. Gross was buried in the Net
+              tile's subtitle, which made the fee bill look like an aside rather
+              than the term that decides most of these strategies. */}
+          <DeskMetricTile compact label="Gross P&L" value={fmtUSD(gross)} valueClassName={pnlTone(gross)}
+            sub="before fees" />
+          <DeskMetricTile compact label="− Taker Fees" value={fees ? fmtUSD(-fees) : "—"}
             valueClassName={fees > 0 ? "desk-pnl-negative" : undefined}
             sub={gross > 0 ? `${((fees / gross) * 100).toFixed(0)}% of gross` : "both legs"} />
+          <DeskMetricTile compact label="= Net P&L" value={fmtUSD(d.netUsd)} valueClassName={pnlTone(d.netUsd)}
+            sub={`${d.roiPct >= 0 ? "+" : ""}${d.roiPct.toFixed(2)}% return`} />
           <DeskMetricTile compact label="Deployed" value={fmtUSD(d.openNotionalUsd)}
             sub={`of ${fmtUSD(d.maxNotionalUsd)} max · ${d.maxConcurrent} at once`} />
           <DeskMetricTile compact label="Open P&L" value={fmtUSD(d.openUnrealisedUsd)}
