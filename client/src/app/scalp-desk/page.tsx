@@ -128,6 +128,33 @@ type OpenPos = {
   pnlAt1000: number;
 };
 
+/**
+ * How close a stream is to the pre-registered go-live gate, as a percentage.
+ *
+ * The gate is >=200 trades AND PF >= 1.2 AND maxDD <= 25% AND net positive.
+ * Progress is the mean of the four, each capped at 100% so a stream cannot
+ * offset a missing sample with a flattering profit factor — exactly the trade
+ * one lucky fill would otherwise make on its behalf.
+ *
+ * The trade-count term dominates on purpose. Across 27,784 streams a few days
+ * produces lucky leaders by variance alone, and sample size is the only one of
+ * the four that variance cannot fake.
+ *
+ * MODULE level, not inside the component. As a const inside it, the filter
+ * useMemo above called it before its initialiser had run — a temporal dead
+ * zone crash that TypeScript cannot see, because a closure referencing a
+ * later const is legal until it executes. The page compiled, built, and threw
+ * on load.
+ */
+function qualPct(r: LbRow): number {
+    if (!r.n) return 0;
+    const trades = Math.min(r.n / 200, 1);
+    const pf = Math.min((r.pf || 0) / 1.2, 1);
+    const dd = r.max_dd_pct <= 25 ? 1 : Math.max(0, 25 / r.max_dd_pct);
+    const net = (r.live_net_usd ?? 0) > 0 ? 1 : 0;
+    return ((trades + pf + dd + net) / 4) * 100;
+}
+
 export default function ScalpDeskPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -292,31 +319,6 @@ export default function ScalpDeskPage() {
   const liveStrategyNames = useMemo(() => new Set(liveRoster), [liveRoster]);
   const liveStreamSet = useMemo(() => new Set(liveStreams), [liveStreams]);
 
-  /**
-   * How close a stream is to the pre-registered go-live gate, as a percentage.
-   *
-   * The gate is >=200 trades AND PF >= 1.2 AND maxDD <= 25% AND net positive.
-   * Progress is the mean of the four, each capped at 100% so a strategy cannot
-   * offset a missing sample with a flattering profit factor — which is exactly
-   * the trade a single lucky trade would otherwise make for it.
-   *
-   * The trade-count term dominates on purpose. With 2,416 streams running, a
-   * few days produces lucky leaders by variance alone, and sample size is the
-   * only one of the four that variance cannot fake.
-   *
-   * The gate's fourth real condition - net positive in BOTH calendar halves of
-   * the live window - is not computable from a leaderboard row, so this is
-   * progress toward the gate, not a verdict on it. gate_pass from the engine
-   * remains the verdict.
-   */
-  const qualPct = (r: LbRow): number => {
-    if (!r.n) return 0;
-    const trades = Math.min(r.n / 200, 1);
-    const pf = Math.min((r.pf || 0) / 1.2, 1);
-    const dd = r.max_dd_pct <= 25 ? 1 : Math.max(0, 25 / r.max_dd_pct);
-    const net = (r.live_net_usd ?? 0) > 0 ? 1 : 0;
-    return ((trades + pf + dd + net) / 4) * 100;
-  };
 
 
   const positionColumns: DeskColumn<OpenPos>[] = [
