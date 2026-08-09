@@ -44,6 +44,22 @@ type PerpRiskConfig struct {
 	// The paper desk's hundreds are not fundable here, and each open position
 	// consumes margin that the next one then cannot have.
 	MaxConcurrentPositions int
+
+	// MaxPositionsPerSymbol caps how many live positions may share one
+	// instrument.
+	//
+	// Without it, "3 concurrent positions" was three bets on the same coin.
+	// Measured live: ANTI_Recurrence_Quantification_Signal, ANTI_D20_VWAP_
+	// Reversion and ANTI_Recurrence again all opened COOKIEUSD SHORTS inside
+	// 13 minutes and all three stopped out. Nominally three strategies
+	// diversifying; actually one position in three pieces, and the symbol's
+	// coarse tick grid — the thing that made those stops overshoot — applied
+	// to every piece at once.
+	//
+	// Strategy names are not a diversification guarantee. Correlated entries
+	// are the normal case for signals reading the same bars, so the cap is on
+	// the instrument, which is what the risk is actually denominated in.
+	MaxPositionsPerSymbol int
 	// MaxNotionalUSD is a hard per-order ceiling, independent of the above.
 	MaxNotionalUSD float64
 	// MaxAggregateLeverage caps notional across ALL open positions at once.
@@ -75,7 +91,11 @@ func DefaultPerpRiskConfig(equityUSD float64) PerpRiskConfig {
 		// account with room for the options engine, which shares this wallet.
 		MaxAggregateLeverage:   3.0,
 		MaxConcurrentPositions: 3,
-		MaxNotionalUSD:         equityUSD * 3.0,
+		// One per symbol: the concentration observed was same-symbol AND
+		// same-direction, so anything above 1 re-admits the failure in smaller
+		// form.
+		MaxPositionsPerSymbol: 1,
+		MaxNotionalUSD:        equityUSD * 3.0,
 		// 10x on the order keeps margin at a tenth of notional, so a 3x book
 		// consumes ~30% of equity as margin rather than all of it. The 0.35%
 		// stop sits far inside the liquidation distance this implies.

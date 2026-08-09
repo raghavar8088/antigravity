@@ -195,6 +195,8 @@ type PerpTrade = {
   realisedPnl?: number;
   /** Round-trip taker fees, booked by the bridge. */
   feesUsd?: number;
+  /** Realised risk / planned risk on a stop-out. 1.00 = closed on the stop. */
+  stopOvershoot?: number;
   exitReason?: string;
   status: string;
 };
@@ -223,6 +225,9 @@ type LeaderRow = {
   netUsd: number;
   /** Fees as a share of gross profit — the figure that decided the options desk. */
   feeDragPct: number;
+  /** Mean stop overshoot across this strategy's stop-outs, and its sample size. */
+  stopOvershoot?: number;
+  stopOuts: number;
   allowed: boolean;
   live: boolean;
   reason: string;
@@ -858,6 +863,7 @@ export default function LiveEnginePage() {
         feesUsd: 0,
         netUsd: 0,
         feeDragPct: 0,
+        stopOuts: 0,
         allowed: true,
         // The scalp desk's promotion gate passes none of these; the bridge
         // trades them on owner instruction, not on a gate verdict.
@@ -883,6 +889,12 @@ export default function LiveEnginePage() {
         // back rather than by inventing a pre-fee figure.
         const fees = t.feesUsd ?? 0;
         row.feesUsd += fees;
+        // Accumulated as a sum here and divided at the end — averaging an
+        // average as trades arrive would weight the earliest stop-out most.
+        if (t.stopOvershoot && t.stopOvershoot > 0) {
+          row.stopOvershoot = (row.stopOvershoot ?? 0) + t.stopOvershoot;
+          row.stopOuts += 1;
+        }
         row.netUsd += net;
         row.grossUsd += net + fees;
         perpRows.set(t.strategy, row);
@@ -896,6 +908,9 @@ export default function LiveEnginePage() {
       for (const v of perpRows.values()) {
         v.winRatePct = v.trades > 0 ? (v.wins / v.trades) * 100 : 0;
         v.feeDragPct = Math.abs(v.grossUsd) > 1e-9 ? (v.feesUsd / Math.abs(v.grossUsd)) * 100 : 0;
+        // Undefined rather than 0 when nothing has stopped out: "0.00x" would
+        // read as a perfect stop record on a strategy that has never had one.
+        v.stopOvershoot = v.stopOuts > 0 ? (v.stopOvershoot ?? 0) / v.stopOuts : undefined;
       }
       // Positions still open are not counted — this board is realised results.
       for (const [k, v] of perpRows) byStrategy.set("scalp:" + k, v);
@@ -954,6 +969,30 @@ export default function LiveEnginePage() {
         header: "Net $",
         align: "right",
         cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.netUsd)}>{fmtUSD(r.netUsd)}</span> : "—"),
+      },
+      {
+        id: "overshoot",
+        header: "Stop overshoot",
+        align: "right",
+        // Realised risk over planned risk on stop-outs. 1.00x is a stop that
+        // closed where it was placed.
+        //
+        // On the board rather than in a detail view because stops have failed
+        // here five distinct ways and each fix looked complete when shipped.
+        // The sample size is shown next to it: one clean stop-out cannot
+        // distinguish a fix from a quiet market.
+        cell: (r) =>
+          r.stopOvershoot === undefined ? (
+            <span title="no stop-outs yet — nothing to measure">—</span>
+          ) : (
+            <span
+              className={r.stopOvershoot > 1.25 ? "desk-pnl-negative" : undefined}
+              title={`mean across ${r.stopOuts} stop-out(s); 1.00x closed on the stop, above 1.25x exceeds the slippage cap`}
+            >
+              {r.stopOvershoot.toFixed(2)}×
+              <span style={{ opacity: 0.6 }}> (n={r.stopOuts})</span>
+            </span>
+          ),
       },
       {
         id: "drag",

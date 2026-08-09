@@ -96,6 +96,19 @@ type PerpLiveTrade struct {
 	// fees here are comparable to the entire per-trade edge.
 	GrossPnL    float64 `json:"grossPnl,omitempty"`
 	FeesUSD     float64 `json:"feesUsd,omitempty"`
+
+	// StopOvershoot is realised risk divided by planned risk on a stop-out.
+	//
+	// 1.00 means the stop closed exactly where it was placed. Above 1.00 is the
+	// stop costing more than it was meant to, which is the failure this desk
+	// has now hit five separate ways: params on the wrong endpoint, off-grid
+	// prices, the monitor front-running the venue, a limit that could not fill,
+	// and a limit so wide it filled at the worst permitted price.
+	//
+	// Recorded because each of those fixes looked complete when shipped. A
+	// single clean stop-out cannot distinguish a fix from a quiet market, so
+	// the ratio is stored per trade and can be read across many.
+	StopOvershoot float64 `json:"stopOvershoot,omitempty"`
 	RealisedPnL float64 `json:"realisedPnl,omitempty"`
 	Status      string  `json:"status"` // OPEN | CLOSED | REJECTED
 	Failure     string  `json:"failure,omitempty"`
@@ -291,8 +304,16 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	// Notional already committed. The aggregate cap is measured against this, so
 	// a book at its ceiling stops adding rather than stacking per-order caps.
 	openNotional := 0.0
+	// Positions already held in THIS instrument. Counted here under the same
+	// lock as the rest of the snapshot so the check cannot race a concurrent
+	// open — two signals arriving in the same tick is exactly the case this
+	// guards.
+	sameSymbol := 0
 	for _, t := range b.open {
 		openNotional += t.NotionalUSD
+		if strings.EqualFold(t.Symbol, symbol) {
+			sameSymbol++
+		}
 	}
 	b.mu.RUnlock()
 
@@ -302,6 +323,14 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	}
 	if kill != nil && kill() {
 		log.Printf("[PERP LIVE] kill switch active — refusing %s %s", strategy, symbol)
+		return nil
+	}
+	if cap := cfg.MaxPositionsPerSymbol; cap > 0 && sameSymbol >= cap {
+		// Refused loudly. A silently skipped signal here looks identical to a
+		// strategy that never fired, and the whole point of this cap is that
+		// concentration was invisible until it had already cost three stop-outs.
+		log.Printf("[PERP LIVE] %s %s: refused — %d position(s) already open on this symbol (cap %d)",
+			strategy, symbol, sameSymbol, cap)
 		return nil
 	}
 
@@ -722,6 +751,7 @@ func (b *PerpBridge) finish(t *PerpLiveTrade, exit float64, reason string) {
 	t.GrossPnL = res.Gross
 	t.FeesUSD = res.EntryFee + res.ExitFee
 	t.RealisedPnL = pnl
+	t.StopOvershoot = perpStopOvershoot(t, exit)
 	t.Status = "CLOSED"
 	b.history = append(b.history, *t)
 	if len(b.history) > 500 {
