@@ -330,6 +330,41 @@ func (d *liveDesk) registerHTTP(
 		writeJSON(w, map[string]any{"armed": false})
 	})))
 
+	// Per-strategy switch. Governs ENTRY only: an OFF strategy opens nothing
+	// from the next signal, and anything it already holds keeps its stop and
+	// target. Flattening is close-all, deliberately a separate and louder act.
+	http.HandleFunc("/scalp/live/strategy", gated(postOnly(func(w http.ResponseWriter, r *http.Request) {
+		if d == nil {
+			http.Error(w, "live trading not configured", http.StatusPreconditionFailed)
+			return
+		}
+		var req struct {
+			Strategy string `json:"strategy"`
+			Enabled  *bool  `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request body", http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(req.Strategy) == "" {
+			http.Error(w, "strategy is required", http.StatusBadRequest)
+			return
+		}
+		// A pointer, so a missing field is rejected rather than read as false.
+		// Defaulting to false here would let a malformed request silently
+		// switch a strategy off.
+		if req.Enabled == nil {
+			http.Error(w, "enabled is required (true or false)", http.StatusBadRequest)
+			return
+		}
+		d.bridge.SetStrategyEnabled(req.Strategy, *req.Enabled)
+		writeJSON(w, map[string]any{
+			"strategy":           req.Strategy,
+			"enabled":            *req.Enabled,
+			"disabledStrategies": d.bridge.DisabledStrategies(),
+		})
+	})))
+
 	// Flattening must always be reachable, even when nothing else is.
 	http.HandleFunc("/scalp/live/close-all", gated(postOnly(func(w http.ResponseWriter, r *http.Request) {
 		if d == nil {

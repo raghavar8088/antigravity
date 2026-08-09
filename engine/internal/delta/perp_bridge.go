@@ -94,8 +94,8 @@ type PerpLiveTrade struct {
 	// Gross, fees and net are reported SEPARATELY. Collapsing them into one
 	// number is how a desk looks profitable gross while shrinking net — and
 	// fees here are comparable to the entire per-trade edge.
-	GrossPnL    float64 `json:"grossPnl,omitempty"`
-	FeesUSD     float64 `json:"feesUsd,omitempty"`
+	GrossPnL float64 `json:"grossPnl,omitempty"`
+	FeesUSD  float64 `json:"feesUsd,omitempty"`
 
 	// StopOvershoot is realised risk divided by planned risk on a stop-out.
 	//
@@ -109,9 +109,9 @@ type PerpLiveTrade struct {
 	// single clean stop-out cannot distinguish a fix from a quiet market, so
 	// the ratio is stored per trade and can be read across many.
 	StopOvershoot float64 `json:"stopOvershoot,omitempty"`
-	RealisedPnL float64 `json:"realisedPnl,omitempty"`
-	Status      string  `json:"status"` // OPEN | CLOSED | REJECTED
-	Failure     string  `json:"failure,omitempty"`
+	RealisedPnL   float64 `json:"realisedPnl,omitempty"`
+	Status        string  `json:"status"` // OPEN | CLOSED | REJECTED
+	Failure       string  `json:"failure,omitempty"`
 }
 
 func (t PerpLiveTrade) long() bool { return t.Side == "buy" }
@@ -122,11 +122,20 @@ type PerpBridge struct {
 	reg    *PerpRegistry
 	allow  *PerpAllowList
 
-	mu        sync.RWMutex
-	cfg       PerpRiskConfig
-	open      map[string]*PerpLiveTrade // key: strategy|symbol
-	history   []PerpLiveTrade
-	lastError string
+	mu      sync.RWMutex
+	cfg     PerpRiskConfig
+	open    map[string]*PerpLiveTrade // key: strategy|symbol
+	history []PerpLiveTrade
+
+	// strategyOff names strategies the owner has switched off from the desk.
+	//
+	// Stored as the set of DISABLED names, not enabled ones, so the default for
+	// an unknown name is "trades". A strategy added to the roster later must
+	// behave as the roster says rather than silently sitting out because it was
+	// missing from a saved enable-list — a switch whose failure mode is a
+	// desk that quietly stops trading is worse than one that keeps going.
+	strategyOff map[string]bool
+	lastError   string
 
 	armed atomic.Bool
 	// fundingUSD is the venue's settled funding total, refreshed from the
@@ -323,6 +332,12 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	}
 	if kill != nil && kill() {
 		log.Printf("[PERP LIVE] kill switch active — refusing %s %s", strategy, symbol)
+		return nil
+	}
+	if !b.StrategyEnabled(strategy) {
+		// Switched off by the owner. Checked here, on the engine's open path,
+		// because a toggle enforced only in the UI is decoration: the signal
+		// loop does not read the browser.
 		return nil
 	}
 	if cap := cfg.MaxPositionsPerSymbol; cap > 0 && sameSymbol >= cap {
@@ -894,17 +909,21 @@ func (b *PerpBridge) noteError(msg string) {
 
 // PerpBridgeStats is the operator view.
 type PerpBridgeStats struct {
-	Armed         bool            `json:"armed"`
-	EquityUSD     float64         `json:"equityUsd"`
-	RiskPerTrade  float64         `json:"riskPerTradeUsd"`
-	MaxLeverage   float64         `json:"maxLeverage"`
-	MaxConcurrent int             `json:"maxConcurrent"`
-	Strategies    []string        `json:"strategies"`
-	OpenPositions []PerpLiveTrade `json:"openPositions"`
-	Submitted     int64           `json:"submitted"`
-	Rejected      int64           `json:"rejected"`
-	Closed        int64           `json:"closed"`
-	RealisedPnL   float64         `json:"realisedPnlUsd"`
+	Armed         bool     `json:"armed"`
+	EquityUSD     float64  `json:"equityUsd"`
+	RiskPerTrade  float64  `json:"riskPerTradeUsd"`
+	MaxLeverage   float64  `json:"maxLeverage"`
+	MaxConcurrent int      `json:"maxConcurrent"`
+	Strategies    []string `json:"strategies"`
+	// Strategies switched off by the owner. Reported so the board can render
+	// the switch from engine truth rather than from browser state, which would
+	// drift the moment anything changed it from elsewhere or a restart happened.
+	DisabledStrategies []string        `json:"disabledStrategies"`
+	OpenPositions      []PerpLiveTrade `json:"openPositions"`
+	Submitted          int64           `json:"submitted"`
+	Rejected           int64           `json:"rejected"`
+	Closed             int64           `json:"closed"`
+	RealisedPnL        float64         `json:"realisedPnlUsd"`
 	// FundingUSD is perpetual funding settled on this account, taken from the
 	// venue ledger.
 	//
@@ -956,11 +975,19 @@ func (b *PerpBridge) Stats() PerpBridgeStats {
 	funding := b.fundingUSD.Load().(float64)
 
 	return PerpBridgeStats{
-		Armed:           b.armed.Load(),
-		EquityUSD:       b.cfg.EquityUSD,
-		RiskPerTrade:    b.cfg.EquityUSD * b.cfg.RiskPerTradeFraction,
-		MaxLeverage:     b.cfg.MaxLeverage,
-		MaxConcurrent:   b.cfg.MaxConcurrentPositions,
+		Armed:         b.armed.Load(),
+		EquityUSD:     b.cfg.EquityUSD,
+		RiskPerTrade:  b.cfg.EquityUSD * b.cfg.RiskPerTradeFraction,
+		MaxLeverage:   b.cfg.MaxLeverage,
+		MaxConcurrent: b.cfg.MaxConcurrentPositions,
+		DisabledStrategies: func() []string {
+			out := make([]string, 0, len(b.strategyOff))
+			for n := range b.strategyOff {
+				out = append(out, n)
+			}
+			sort.Strings(out)
+			return out
+		}(),
 		Strategies:      strategies,
 		OpenPositions:   open,
 		Submitted:       b.submitted.Load(),

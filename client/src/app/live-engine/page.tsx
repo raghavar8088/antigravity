@@ -206,6 +206,8 @@ type PerpStats = {
   equityUsd: number;
   riskPerTradeUsd: number;
   strategies: string[];
+  /** Switched off by the owner — engine truth, not browser state. */
+  disabledStrategies?: string[];
   openPositions: PerpTrade[];
   submitted: number;
   rejected: number;
@@ -228,6 +230,8 @@ type LeaderRow = {
   /** Mean stop overshoot across this strategy's stop-outs, and its sample size. */
   stopOvershoot?: number;
   stopOuts: number;
+  /** Whether this strategy may open new live positions. */
+  enabled: boolean;
   allowed: boolean;
   live: boolean;
   reason: string;
@@ -494,6 +498,39 @@ export default function LiveEnginePage() {
     const t = setInterval(() => void refresh(), 15_000);
     return () => clearInterval(t);
   }, [refresh]);
+
+  /**
+   * Switch one strategy on or off for the live desk.
+   *
+   * Posts to the perpetual engine and then refetches rather than flipping local
+   * state optimistically. An optimistic toggle on a REAL-MONEY control shows
+   * "off" the instant it is clicked whether or not the engine agreed, which is
+   * the worst possible lie for this particular switch.
+   */
+  const toggleStrategy = useCallback(
+    async (strategy: string, enabled: boolean) => {
+      setBusy(true);
+      setActionMsg("");
+      try {
+        const res = await fetch("/api/scalp/scalp/live/strategy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strategy, enabled }),
+        });
+        if (!res.ok) {
+          setActionMsg(`${strategy}: HTTP ${res.status} — switch NOT applied`);
+        } else {
+          setActionMsg(`${strategy} switched ${enabled ? "ON" : "OFF"}`);
+        }
+      } catch (e) {
+        setActionMsg(`${strategy}: ${e instanceof Error ? e.message : String(e)} — switch NOT applied`);
+      } finally {
+        await refresh();
+        setBusy(false);
+      }
+    },
+    [refresh],
+  );
 
   const mutate = useCallback(
     async (action: string, body: Record<string, unknown>) => {
@@ -864,6 +901,9 @@ export default function LiveEnginePage() {
         netUsd: 0,
         feeDragPct: 0,
         stopOuts: 0,
+        // Rendered from the engine's disabled set, so the switch shows what the
+        // engine will actually do rather than what this tab last clicked.
+        enabled: !(perp.disabledStrategies ?? []).includes(name),
         allowed: true,
         // The scalp desk's promotion gate passes none of these; the bridge
         // trades them on owner instruction, not on a gate verdict.
@@ -969,6 +1009,41 @@ export default function LiveEnginePage() {
         header: "Net $",
         align: "right",
         cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.netUsd)}>{fmtUSD(r.netUsd)}</span> : "—"),
+      },
+      {
+        id: "switch",
+        header: "Live",
+        // Governs ENTRY only. A strategy switched off opens nothing from the
+        // next signal; anything it already holds keeps its stop and target and
+        // is closed by the normal exit path. Flattening is close-all, which is
+        // deliberately a separate and louder action than a row toggle.
+        cell: (r) => (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => toggleStrategy(r.strategy, !r.enabled)}
+            title={
+              r.enabled
+                ? "Trading. Click to switch off — it will open no new positions; any it already holds keep their stop and target."
+                : "Switched off. Click to let it open new positions again."
+            }
+            style={{
+              cursor: busy ? "wait" : "pointer",
+              border: "1px solid",
+              borderColor: r.enabled ? "var(--desk-success)" : "var(--desk-outline)",
+              background: r.enabled ? "var(--desk-success)" : "transparent",
+              color: r.enabled ? "#fff" : "var(--desk-on-surface-variant)",
+              borderRadius: 999,
+              padding: "2px 10px",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              minWidth: 52,
+            }}
+          >
+            {r.enabled ? "ON" : "OFF"}
+          </button>
+        ),
       },
       {
         id: "overshoot",

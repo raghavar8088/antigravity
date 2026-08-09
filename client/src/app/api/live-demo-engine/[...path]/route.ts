@@ -19,36 +19,85 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 
-/** Actions the demo venue genuinely has no counterpart for. */
-const OPTIONS_ONLY = new Set(["closed-positions", "orders", "daily-pnl", "roster"]);
+/**
+ * Actions the demo venue genuinely has no counterpart for.
+ *
+ * Every entry here was checked against the routes cmd/scalp_prelive actually
+ * mounts (live.go registerHTTP + main.go), not against the live engine's API.
+ * The two are different programs: the live page talks to cmd/antigravity, which
+ * serves the option desk's account, positions, orders and audit; the demo talks
+ * to a perpetual desk that serves none of them. Proxying those names anyway
+ * returned Go's 404 page, which the browser dropped on the floor — the panels
+ * then rendered as empty tables, i.e. as "this desk did nothing".
+ */
+const NOT_APPLICABLE = new Set([
+  // Option desk tables — no options desk on the demo venue at all.
+  "closed-positions",
+  "orders",
+  "daily-pnl",
+  "roster",
+  // Option positions. The perpetual desk's own open book is a different
+  // endpoint (/api/scalp-demo/scalp/live/stats) and the page already reads it.
+  "positions",
+  // The wallet strip and the audit log live in the options engine.
+  "account",
+  "audit",
+  // Venue Truth reads six private Delta endpoints from cmd/antigravity. The
+  // demo engine's own venue check is `reconciliation`, below.
+  "venue",
+]);
+
+/**
+ * Action name → the route the demo engine actually serves.
+ *
+ * `reconcile` is not `reconciliation`. The name was carried over from the live
+ * engine's API and would have 404'd forever, silently: the page's mismatch
+ * banner keys off this payload, so the one control that shouts when engine
+ * state and venue truth disagree would have stayed quiet by construction.
+ */
+const UPSTREAM_PATH: Record<string, string> = {
+  state: "/scalp/live/stats",
+  reconciliation: "/scalp/live/reconcile",
+  trades: "/scalp/live/trades",
+  paper: "/scalp/live/paper",
+};
 
 function demoEngineBase(): string {
+  // `||`, not `??`: an env var set to an empty string is a misconfiguration,
+  // not a choice. With `??` it survived as "", the fetch target collapsed to a
+  // relative path, and the thrown URL error surfaced as the same 502 the page
+  // shows when the box is down — two very different faults, one message.
   return (
-    process.env.SCALP_DEMO_ENGINE_URL?.trim().replace(/\/+$/, "") ?? "http://13.233.8.80:8095"
+    process.env.SCALP_DEMO_ENGINE_URL?.trim().replace(/\/+$/, "") || "http://13.233.8.80:8095"
   );
 }
 
 function demoToken(): string {
-  return process.env.SCALP_DEMO_API_TOKEN?.trim() ?? process.env.BTC_PRE_LIVE_API_TOKEN?.trim() ?? "";
+  return process.env.SCALP_DEMO_API_TOKEN?.trim() || process.env.BTC_PRE_LIVE_API_TOKEN?.trim() || "";
+}
+
+function notApplicable(reason: string) {
+  return NextResponse.json({ items: [], notApplicable: true, reason });
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
   const action = (path ?? []).join("/");
 
-  if (OPTIONS_ONLY.has(action)) {
-    return NextResponse.json({
-      items: [],
-      notApplicable: true,
-      reason:
-        "The demo venue runs perpetuals only — there is no demo options desk, so this table has no source rather than no rows.",
-    });
+  if (NOT_APPLICABLE.has(action)) {
+    return notApplicable(
+      "The demo venue runs perpetuals only — there is no demo options desk, so this panel has no source rather than no rows.",
+    );
   }
 
   // Everything else is answered by the demo perpetual engine.
   const base = demoEngineBase();
   const token = demoToken();
-  const upstream = `${base}/scalp/live/${action === "state" ? "stats" : action}`;
+  const route = UPSTREAM_PATH[action];
+  if (!route) {
+    return NextResponse.json({ error: `unknown demo read: ${action}` }, { status: 404 });
+  }
+  const upstream = `${base}${route}`;
 
   try {
     const res = await fetch(upstream, {
@@ -69,4 +118,32 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
       { status: 502 },
     );
   }
+}
+
+/**
+ * There are no option-desk mutations on the demo venue, and this route refuses
+ * them out loud rather than not existing.
+ *
+ * The demo page was cloned from the live one and kept its `mutate` helper
+ * pointed at /api/live-engine/* — the REAL-money options control plane. A page
+ * badged "DEMO — NOT REAL MONEY" therefore had an arm switch, a kill switch and
+ * a "Panic — CLOSE ALL" button that all reached the live wallet. Handling POST
+ * here means the demo page has a demo-side endpoint to talk to, and one that
+ * cannot route an order anywhere: it has no upstream call in it.
+ *
+ * The perpetual desk — the only thing the demo venue can actually trade — is
+ * armed through /api/scalp-demo/scalp/live/{arm,disarm}, which carries the demo
+ * credentials and the demo port.
+ */
+export async function POST(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
+  const action = (path ?? []).join("/");
+  return NextResponse.json(
+    {
+      ok: false,
+      notApplicable: true,
+      error: `${action || "this action"} is an options-engine control, and the demo venue has no options desk. Arm the perpetual desk instead — it is the only thing this venue trades.`,
+    },
+    { status: 501 },
+  );
 }

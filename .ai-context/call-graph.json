@@ -1,1 +1,1 @@
-{}
+{"engine/internal/delta/perp_persistence.go::.Restore()":["engine/internal/delta/perp_bridge.go::perpKey()"],"engine/internal/delta/perp_persistence.go::.closeOrphan()":["engine/internal/delta/perp_bridge.go::OrderSide"]}

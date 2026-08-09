@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -31,6 +32,11 @@ const perpStateFile = "perp_positions.json"
 type perpPersistedState struct {
 	SavedAt time.Time        `json:"savedAt"`
 	Open    []*PerpLiveTrade `json:"open"`
+	// Strategies switched off by the owner. Persisted so a redeploy does not
+	// silently re-enable something that was deliberately turned off — the arm
+	// state is intentionally in-memory, but a per-strategy switch is a standing
+	// decision, not a session one.
+	DisabledStrategies []string `json:"disabledStrategies,omitempty"`
 	// EquityUSD is recorded so a restore can tell whether the account it is
 	// resuming into is the one the positions were sized against.
 	EquityUSD float64 `json:"equityUsd"`
@@ -56,8 +62,14 @@ func (b *PerpBridge) persistLocked() {
 	for _, t := range b.open {
 		open = append(open, t)
 	}
+	off := make([]string, 0, len(b.strategyOff))
+	for n := range b.strategyOff {
+		off = append(off, n)
+	}
+	sort.Strings(off)
 	data, err := json.Marshal(perpPersistedState{
 		SavedAt: time.Now().UTC(), Open: open, EquityUSD: b.cfg.EquityUSD,
+		DisabledStrategies: off,
 	})
 	if err != nil {
 		log.Printf("[PERP LIVE] state marshal failed: %v", err)
@@ -104,6 +116,17 @@ func (b *PerpBridge) Restore(ctx context.Context) error {
 		if err := json.Unmarshal(raw, &st); err != nil {
 			log.Printf("[PERP LIVE] state file unreadable (%v) — starting with an empty book", err)
 		}
+	}
+
+	// The per-strategy switches are restored before anything can trade. They
+	// are a standing decision, unlike the arm state, which is deliberately
+	// forgotten on restart.
+	b.mu.Lock()
+	b.setDisabledStrategiesLocked(st.DisabledStrategies)
+	nOff := len(st.DisabledStrategies)
+	b.mu.Unlock()
+	if nOff > 0 {
+		log.Printf("[PERP LIVE] restored %d switched-off strateg(ies): %v", nOff, st.DisabledStrategies)
 	}
 
 	// No client means the venue cannot be consulted AT ALL. That is not the same

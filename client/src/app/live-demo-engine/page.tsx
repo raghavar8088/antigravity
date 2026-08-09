@@ -3,25 +3,24 @@
 /**
  * Live DEMO Engine — demo.delta.exchange, NOT real money.
  *
- * A clone of the Live Engine page pointed at the demo venue. Same layout, same
- * columns, same controls, so that what is rehearsed here is what runs there.
+ * GENERATED from the live page. Do not hand-edit: run the clone script, so a
+ * fix to the live desk reaches this one instead of the two drifting apart.
  *
- * Two things are deliberately NOT shared with the live page:
+ * Two things are deliberately not shared with the live page:
  *
  *   The venue. This reads a separate engine process on port 8095 holding demo
  *   credentials. A single process with a mode flag would be one misread
  *   environment variable away from routing a demo order to the real wallet.
  *
- *   The roster. The demo venue lists 16 perpetuals and NONE of the ten the
- *   live engine trades, so the streams are re-pointed onto demo majors
- *   (BTC/ETH/SOL/XRP/DOGE/ADA/ONDO/1000SHIB). Strategy logic and pairing
- *   structure are identical; only the symbol differs. An exact roster would
- *   have placed zero orders forever.
+ *   The roster. The demo venue lists none of the symbols the live engine
+ *   trades, so the streams are re-pointed onto demo majors. Strategy logic is
+ *   identical; only the symbol differs. An exact roster would have placed zero
+ *   orders forever.
  *
- * Results here therefore rehearse the PLUMBING - arming, sizing, bracket
- * placement, fee accounting, reconciliation - not the edge. Demo fills come
- * from a different book with different liquidity, so a profitable demo record
- * is not evidence that the same streams profit live.
+ * Results here rehearse the PLUMBING — arming, sizing, bracket placement, fee
+ * accounting, reconciliation — not the edge. Signals are driven by Binance bars
+ * while fills come from Delta demo, so a profitable record here is not evidence
+ * that the same streams profit live.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -206,6 +205,10 @@ type PerpTrade = {
   openedAt?: string;
   closedAt?: string;
   realisedPnl?: number;
+  /** Round-trip taker fees, booked by the bridge. */
+  feesUsd?: number;
+  /** Realised risk / planned risk on a stop-out. 1.00 = closed on the stop. */
+  stopOvershoot?: number;
   exitReason?: string;
   status: string;
 };
@@ -215,6 +218,8 @@ type PerpStats = {
   equityUsd: number;
   riskPerTradeUsd: number;
   strategies: string[];
+  /** Switched off by the owner — engine truth, not browser state. */
+  disabledStrategies?: string[];
   openPositions: PerpTrade[];
   submitted: number;
   rejected: number;
@@ -234,6 +239,11 @@ type LeaderRow = {
   netUsd: number;
   /** Fees as a share of gross profit — the figure that decided the options desk. */
   feeDragPct: number;
+  /** Mean stop overshoot across this strategy's stop-outs, and its sample size. */
+  stopOvershoot?: number;
+  stopOuts: number;
+  /** Whether this strategy may open new live positions. */
+  enabled: boolean;
   allowed: boolean;
   live: boolean;
   reason: string;
@@ -501,12 +511,45 @@ export default function LiveEnginePage() {
     return () => clearInterval(t);
   }, [refresh]);
 
+  /**
+   * Switch one strategy on or off for the live desk.
+   *
+   * Posts to the perpetual engine and then refetches rather than flipping local
+   * state optimistically. An optimistic toggle on a REAL-MONEY control shows
+   * "off" the instant it is clicked whether or not the engine agreed, which is
+   * the worst possible lie for this particular switch.
+   */
+  const toggleStrategy = useCallback(
+    async (strategy: string, enabled: boolean) => {
+      setBusy(true);
+      setActionMsg("");
+      try {
+        const res = await fetch("/api/scalp-demo/scalp/live/strategy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strategy, enabled }),
+        });
+        if (!res.ok) {
+          setActionMsg(`${strategy}: HTTP ${res.status} — switch NOT applied`);
+        } else {
+          setActionMsg(`${strategy} switched ${enabled ? "ON" : "OFF"}`);
+        }
+      } catch (e) {
+        setActionMsg(`${strategy}: ${e instanceof Error ? e.message : String(e)} — switch NOT applied`);
+      } finally {
+        await refresh();
+        setBusy(false);
+      }
+    },
+    [refresh],
+  );
+
   const mutate = useCallback(
     async (action: string, body: Record<string, unknown>) => {
       setBusy(true);
       setActionMsg("");
       try {
-        const res = await fetch(`/api/live-engine/${action}`, {
+        const res = await fetch(`/api/live-demo-engine/${action}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -543,7 +586,7 @@ export default function LiveEnginePage() {
     async (action: "arm" | "disarm") => {
       setPerpBusy(true);
       try {
-        const res = await fetch(`/api/scalp/scalp/live/${action}`, {
+        const res = await fetch(`/api/scalp-demo/scalp/live/${action}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           // The engine's field is `confirm`, not `confirmation` — a mismatch
@@ -869,6 +912,10 @@ export default function LiveEnginePage() {
         feesUsd: 0,
         netUsd: 0,
         feeDragPct: 0,
+        stopOuts: 0,
+        // Rendered from the engine's disabled set, so the switch shows what the
+        // engine will actually do rather than what this tab last clicked.
+        enabled: !(perp.disabledStrategies ?? []).includes(name),
         allowed: true,
         // The scalp desk's promotion gate passes none of these; the bridge
         // trades them on owner instruction, not on a gate verdict.
@@ -883,11 +930,39 @@ export default function LiveEnginePage() {
         row.trades += 1;
         const net = t.realisedPnl ?? 0;
         if (net > 0) row.wins += 1;
-        // The perpetual bridge books P&L net; it does not split out fees, so
-        // gross is reported as net rather than invented.
+
+        // The bridge DOES split out fees — it has since brackets were added,
+        // and this board went on reporting $0.00 against trades that each paid
+        // ~$0.35. On a planned risk of ~$1.92 a trade, that is a fifth of the
+        // intended loss displayed as nothing, which is how a desk looks
+        // survivable when it is not.
+        //
+        // realisedPnl is already NET, so gross is recovered by adding the fee
+        // back rather than by inventing a pre-fee figure.
+        const fees = t.feesUsd ?? 0;
+        row.feesUsd += fees;
+        // Accumulated as a sum here and divided at the end — averaging an
+        // average as trades arrive would weight the earliest stop-out most.
+        if (t.stopOvershoot && t.stopOvershoot > 0) {
+          row.stopOvershoot = (row.stopOvershoot ?? 0) + t.stopOvershoot;
+          row.stopOuts += 1;
+        }
         row.netUsd += net;
-        row.grossUsd += net;
+        row.grossUsd += net + fees;
         perpRows.set(t.strategy, row);
+      }
+      // Fee drag: what share of gross the venue took. Computed against the
+      // MAGNITUDE of gross so a losing strategy reports a meaningful ratio —
+      // signed division would flip it negative and read as a rebate.
+      //
+      // Left undefined at zero trades rather than shown as 0%, because "0% fee
+      // drag" claims the venue is free.
+      for (const v of perpRows.values()) {
+        v.winRatePct = v.trades > 0 ? (v.wins / v.trades) * 100 : 0;
+        v.feeDragPct = Math.abs(v.grossUsd) > 1e-9 ? (v.feesUsd / Math.abs(v.grossUsd)) * 100 : 0;
+        // Undefined rather than 0 when nothing has stopped out: "0.00x" would
+        // read as a perfect stop record on a strategy that has never had one.
+        v.stopOvershoot = v.stopOuts > 0 ? (v.stopOvershoot ?? 0) / v.stopOuts : undefined;
       }
       // Positions still open are not counted — this board is realised results.
       for (const [k, v] of perpRows) byStrategy.set("scalp:" + k, v);
@@ -946,6 +1021,65 @@ export default function LiveEnginePage() {
         header: "Net $",
         align: "right",
         cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.netUsd)}>{fmtUSD(r.netUsd)}</span> : "—"),
+      },
+      {
+        id: "switch",
+        header: "Live",
+        // Governs ENTRY only. A strategy switched off opens nothing from the
+        // next signal; anything it already holds keeps its stop and target and
+        // is closed by the normal exit path. Flattening is close-all, which is
+        // deliberately a separate and louder action than a row toggle.
+        cell: (r) => (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => toggleStrategy(r.strategy, !r.enabled)}
+            title={
+              r.enabled
+                ? "Trading. Click to switch off — it will open no new positions; any it already holds keep their stop and target."
+                : "Switched off. Click to let it open new positions again."
+            }
+            style={{
+              cursor: busy ? "wait" : "pointer",
+              border: "1px solid",
+              borderColor: r.enabled ? "var(--desk-success)" : "var(--desk-outline)",
+              background: r.enabled ? "var(--desk-success)" : "transparent",
+              color: r.enabled ? "#fff" : "var(--desk-on-surface-variant)",
+              borderRadius: 999,
+              padding: "2px 10px",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              minWidth: 52,
+            }}
+          >
+            {r.enabled ? "ON" : "OFF"}
+          </button>
+        ),
+      },
+      {
+        id: "overshoot",
+        header: "Stop overshoot",
+        align: "right",
+        // Realised risk over planned risk on stop-outs. 1.00x is a stop that
+        // closed where it was placed.
+        //
+        // On the board rather than in a detail view because stops have failed
+        // here five distinct ways and each fix looked complete when shipped.
+        // The sample size is shown next to it: one clean stop-out cannot
+        // distinguish a fix from a quiet market.
+        cell: (r) =>
+          r.stopOvershoot === undefined ? (
+            <span title="no stop-outs yet — nothing to measure">—</span>
+          ) : (
+            <span
+              className={r.stopOvershoot > 1.25 ? "desk-pnl-negative" : undefined}
+              title={`mean across ${r.stopOuts} stop-out(s); 1.00x closed on the stop, above 1.25x exceeds the slippage cap`}
+            >
+              {r.stopOvershoot.toFixed(2)}×
+              <span style={{ opacity: 0.6 }}> (n={r.stopOuts})</span>
+            </span>
+          ),
       },
       {
         id: "drag",
@@ -1053,9 +1187,8 @@ export default function LiveEnginePage() {
                 borderRadius: 6,
                 color: "#fff",
                 // Purple in every state, never the live page's green/red. The
-                // badge answers "which wallet is this?" before it answers
-                // "is it armed?" — the armed state is shown by the arm control
-                // itself, and a demo page that can flash the same green as the
+                // badge answers "which wallet is this?" before it answers "is
+                // it armed?" — a demo page that can flash the same green as the
                 // real-money one is a page you can misread at a glance.
                 background: "#7c5cff",
               }}
@@ -1066,11 +1199,10 @@ export default function LiveEnginePage() {
           <p className="desk-body-md" style={{ marginTop: 6, maxWidth: 760, color: "var(--desk-on-surface-variant)" }}>
             Paper-equivalent trading on <strong>demo.delta.exchange</strong> — the demo wallet, never the real one.
             Same engine, same sizing, same taker fees and bracket placement as the Live Engine, so what is rehearsed
-            here is what runs there. The demo venue lists 16 perpetuals and <strong>none</strong> of the ten the live
-            engine trades, so the 31 streams are re-pointed onto demo majors (BTC, ETH, SOL, XRP, DOGE, ADA, ONDO,
-            1000SHIB) — identical strategy logic, different symbols. That makes this a rehearsal of the plumbing, not
-            of the edge: demo fills come from a different book, so a profitable record here is not evidence the same
-            streams profit live.
+            here is what runs there. The demo venue lists none of the symbols the live engine trades, so the streams
+            are re-pointed onto demo majors — identical strategy logic, different symbols. That makes this a rehearsal
+            of the plumbing, not of the edge: signals come from Binance bars while fills come from Delta demo, so a
+            profitable record here is not evidence the same streams profit live.
           </p>
         </div>
 
