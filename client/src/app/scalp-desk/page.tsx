@@ -28,6 +28,7 @@ import {
   type DeskEngineStatus,
 } from "@/components/desk/ui";
 import { DeskAdminControls } from "@/components/desk/DeskAdminControls";
+import { fmtIST } from "@/lib/istTime";
 
 type Stats = {
   trades: number;
@@ -512,7 +513,7 @@ export default function ScalpDeskPage() {
   ];
 
   const tradeColumns: DeskColumn<Trade>[] = [
-    { id: "time", header: "Time (UTC)", cell: (t) => new Date(t.time).toISOString().slice(5, 16).replace("T", " ") },
+    { id: "time", header: "Time (IST)", cell: (t) => fmtIST(t.time) },
     { id: "symbol", header: "Symbol", cell: (t) => t.symbol.replace("USDT", "") },
     { id: "strategy", header: "Strategy", cell: (t) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{t.strategy}</span> },
     {

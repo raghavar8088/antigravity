@@ -38,6 +38,7 @@ import {
   DeskSwitch,
   type DeskColumn,
 } from "@/components/desk/ui";
+import { fmtIST, fmtISTSeconds, fmtISTDayLabel } from "@/lib/istTime";
 
 const ARM_PHRASE = "ARM LIVE $100";
 const CEILING = 100;
@@ -673,7 +674,7 @@ export default function LiveEnginePage() {
 
   const dailyColumns: DeskColumn<DailyPnl>[] = useMemo(
     () => [
-      { id: "date", header: "Date (UTC)", cell: (d) => d.date },
+      { id: "date", header: "Date (IST)", cell: (d) => fmtISTDayLabel(d.date) },
       { id: "cap", align: "right", header: "Capital used", cell: (d) => fmtUSD(d.capitalUsd) },
       {
         id: "roi", align: "right", header: "ROI",
@@ -765,8 +766,8 @@ export default function LiveEnginePage() {
     () => [
       {
         id: "closedAt",
-        header: "Closed (UTC)",
-        cell: (c) => (c.closedAt ? new Date(c.closedAt).toISOString().slice(5, 16).replace("T", " ") : "—"),
+        header: "Closed (IST)",
+        cell: (c) => fmtIST(c.closedAt),
       },
       { id: "sym", header: "Symbol", cell: (c) => c.symbol || "—" },
       { id: "strat", header: "Strategy", cell: (c) => c.strategy || "—" },
@@ -1013,7 +1014,7 @@ export default function LiveEnginePage() {
 
   const auditColumns: DeskColumn<AuditEntry>[] = useMemo(
     () => [
-      { id: "at", header: "Time (UTC)", cell: (a) => new Date(a.at).toISOString().slice(5, 19).replace("T", " ") },
+      { id: "at", header: "Time (IST)", cell: (a) => fmtISTSeconds(a.at) },
       { id: "actor", header: "Actor", cell: (a) => a.actor },
       { id: "action", header: "Action", cell: (a) => <DeskChip tone={a.action.includes("DISARM") ? "warning" : a.action === "ARM" ? "error" : "default"}>{a.action}</DeskChip> },
       { id: "reason", header: "Reason", cell: (a) => a.reason ?? "" },
@@ -1334,14 +1335,14 @@ export default function LiveEnginePage() {
           />
         </DeskCard>
 
-        {/* Daily P&L — realised results per UTC day */}
+        {/* Daily P&L — realised results per IST day */}
         <DeskCard padding="md">
           <DeskSectionHeader
             title="Daily P&L"
             subtitle={
               daily.length
                 ? `${daily.length} day(s) · total realized ${fmtUSD(daily.reduce((s2, d) => s2 + (d.pnlUsd || 0), 0))}`
-                : "realised results per UTC day, from closed positions"
+                : "realised results per IST day, from closed positions"
             }
           />
           <DeskDataTable

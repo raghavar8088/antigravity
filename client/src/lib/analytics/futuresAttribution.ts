@@ -9,6 +9,9 @@
 import { isProbeOrBootstrapTrade } from "./futuresSessionMetrics";
 import type { PaperTradeDbRow } from "../portfolio/paperTradesTypes";
 
+/** IST is UTC+05:30 year-round — India has kept no DST since 1945. */
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+
 export interface AttributionBucket {
   label: string;
   trades: number;
@@ -89,7 +92,11 @@ export function computeAttribution(trades: PaperTradeDbRow[]): AttributionReport
   for (let h = 0; h < 24; h++) hourGroups.set(String(h), []);
   for (const t of prod) {
     if (!t.opened_at) continue;
-    const h = new Date(t.opened_at).getUTCHours();
+    // IST hour, not UTC. This bucket exists to answer "what time of day should I
+    // be trading", and the answer is only actionable in the operator's own
+    // clock. Shift the instant by +05:30 and read it with the UTC getter, which
+    // keeps the result independent of the machine's local zone.
+    const h = new Date(new Date(t.opened_at).getTime() + IST_OFFSET_MS).getUTCHours();
     hourGroups.get(String(h))!.push(t);
   }
   const byHourOfDay = buildBuckets(hourGroups).filter((b) => b.trades > 0);

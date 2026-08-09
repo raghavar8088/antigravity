@@ -46,7 +46,7 @@ type DataProviders struct {
 	// ClosedPositions returns positions this engine opened and has since closed
 	// (SL/TP/expiry), with their realised outcome.
 	ClosedPositions func(ctx context.Context) ([]map[string]any, error)
-	// DailyPnl aggregates closed positions by UTC day: capital deployed, realised
+	// DailyPnl aggregates closed positions by IST day: capital deployed, realised
 	// PnL, ROI on that capital, trade count and win rate.
 	DailyPnl func(ctx context.Context) ([]map[string]any, error)
 	// AllowList returns the current live-enabled strategy names; SetAllowList

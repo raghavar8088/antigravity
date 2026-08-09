@@ -529,9 +529,24 @@ func liveEngineClosedProvider(bridge *delta.Bridge) func(context.Context) ([]map
 	}
 }
 
-// liveEngineDailyPnlProvider aggregates closed live positions by UTC day:
+// istZone is UTC+05:30, the timezone every desk here is operated from.
+//
+// A fixed zone rather than time.LoadLocation("Asia/Kolkata"): India has kept no
+// DST since 1945 so the offset is exact, and LoadLocation needs tzdata that a
+// slim container image may not carry. On a miss it returns an error and the
+// caller is one ignored error away from silently bucketing in UTC again.
+var istZone = time.FixedZone("IST", 5*60*60+30*60)
+
+// liveEngineDailyPnlProvider aggregates closed live positions by IST day:
 // capital actually deployed (premium paid), realised PnL, ROI on that capital,
 // trade count and win rate. Newest day first.
+//
+// IST rather than UTC because the operator reads these rows as "what did today
+// make". A UTC day ends at 05:30 IST, so on a 24/7 crypto desk every trade
+// closed between midnight and 05:30 IST landed in the previous row — the one
+// stretch where a tired operator is least able to spot that the totals moved.
+// Relabelling the column would not have fixed that; the grouping is what was
+// wrong.
 func liveEngineDailyPnlProvider(bridge *delta.Bridge) func(context.Context) ([]map[string]any, error) {
 	return func(ctx context.Context) ([]map[string]any, error) {
 		type agg struct {
@@ -547,7 +562,7 @@ func liveEngineDailyPnlProvider(bridge *delta.Bridge) func(context.Context) ([]m
 			if t.Status != "CLOSED" || t.ClosedAt == nil {
 				continue
 			}
-			day := t.ClosedAt.UTC().Format("2006-01-02")
+			day := t.ClosedAt.In(istZone).Format("2006-01-02")
 			a := byDay[day]
 			if a == nil {
 				a = &agg{}

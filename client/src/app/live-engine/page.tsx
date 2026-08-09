@@ -25,6 +25,7 @@ import {
   DeskSwitch,
   type DeskColumn,
 } from "@/components/desk/ui";
+import { fmtIST, fmtISTSeconds, fmtISTDayLabel } from "@/lib/istTime";
 
 const ARM_PHRASE = "ARM LIVE $100";
 const CEILING = 100;
@@ -192,6 +193,8 @@ type PerpTrade = {
   openedAt?: string;
   closedAt?: string;
   realisedPnl?: number;
+  /** Round-trip taker fees, booked by the bridge. */
+  feesUsd?: number;
   exitReason?: string;
   status: string;
 };
@@ -660,7 +663,7 @@ export default function LiveEnginePage() {
 
   const dailyColumns: DeskColumn<DailyPnl>[] = useMemo(
     () => [
-      { id: "date", header: "Date (UTC)", cell: (d) => d.date },
+      { id: "date", header: "Date (IST)", cell: (d) => fmtISTDayLabel(d.date) },
       { id: "cap", align: "right", header: "Capital used", cell: (d) => fmtUSD(d.capitalUsd) },
       {
         id: "roi", align: "right", header: "ROI",
@@ -752,8 +755,8 @@ export default function LiveEnginePage() {
     () => [
       {
         id: "closedAt",
-        header: "Closed (UTC)",
-        cell: (c) => (c.closedAt ? new Date(c.closedAt).toISOString().slice(5, 16).replace("T", " ") : "—"),
+        header: "Closed (IST)",
+        cell: (c) => fmtIST(c.closedAt),
       },
       { id: "sym", header: "Symbol", cell: (c) => c.symbol || "—" },
       { id: "strat", header: "Strategy", cell: (c) => c.strategy || "—" },
@@ -869,11 +872,30 @@ export default function LiveEnginePage() {
         row.trades += 1;
         const net = t.realisedPnl ?? 0;
         if (net > 0) row.wins += 1;
-        // The perpetual bridge books P&L net; it does not split out fees, so
-        // gross is reported as net rather than invented.
+
+        // The bridge DOES split out fees — it has since brackets were added,
+        // and this board went on reporting $0.00 against trades that each paid
+        // ~$0.35. On a planned risk of ~$1.92 a trade, that is a fifth of the
+        // intended loss displayed as nothing, which is how a desk looks
+        // survivable when it is not.
+        //
+        // realisedPnl is already NET, so gross is recovered by adding the fee
+        // back rather than by inventing a pre-fee figure.
+        const fees = t.feesUsd ?? 0;
+        row.feesUsd += fees;
         row.netUsd += net;
-        row.grossUsd += net;
+        row.grossUsd += net + fees;
         perpRows.set(t.strategy, row);
+      }
+      // Fee drag: what share of gross the venue took. Computed against the
+      // MAGNITUDE of gross so a losing strategy reports a meaningful ratio —
+      // signed division would flip it negative and read as a rebate.
+      //
+      // Left undefined at zero trades rather than shown as 0%, because "0% fee
+      // drag" claims the venue is free.
+      for (const v of perpRows.values()) {
+        v.winRatePct = v.trades > 0 ? (v.wins / v.trades) * 100 : 0;
+        v.feeDragPct = Math.abs(v.grossUsd) > 1e-9 ? (v.feesUsd / Math.abs(v.grossUsd)) * 100 : 0;
       }
       // Positions still open are not counted — this board is realised results.
       for (const [k, v] of perpRows) byStrategy.set("scalp:" + k, v);
@@ -1000,7 +1022,7 @@ export default function LiveEnginePage() {
 
   const auditColumns: DeskColumn<AuditEntry>[] = useMemo(
     () => [
-      { id: "at", header: "Time (UTC)", cell: (a) => new Date(a.at).toISOString().slice(5, 19).replace("T", " ") },
+      { id: "at", header: "Time (IST)", cell: (a) => fmtISTSeconds(a.at) },
       { id: "actor", header: "Actor", cell: (a) => a.actor },
       { id: "action", header: "Action", cell: (a) => <DeskChip tone={a.action.includes("DISARM") ? "warning" : a.action === "ARM" ? "error" : "default"}>{a.action}</DeskChip> },
       { id: "reason", header: "Reason", cell: (a) => a.reason ?? "" },
@@ -1314,14 +1336,14 @@ export default function LiveEnginePage() {
           />
         </DeskCard>
 
-        {/* Daily P&L — realised results per UTC day */}
+        {/* Daily P&L — realised results per IST day */}
         <DeskCard padding="md">
           <DeskSectionHeader
             title="Daily P&L"
             subtitle={
               daily.length
                 ? `${daily.length} day(s) · total realized ${fmtUSD(daily.reduce((s2, d) => s2 + (d.pnlUsd || 0), 0))}`
-                : "realised results per UTC day, from closed positions"
+                : "realised results per IST day, from closed positions"
             }
           />
           <DeskDataTable

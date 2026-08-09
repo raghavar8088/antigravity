@@ -154,7 +154,7 @@ export function AttributionPanel({ report }: Props) {
         <div style={{ color: "#8b949e", marginTop: 2, fontSize: 10 }}>
           Best hold: {report.bestHoldBucket ?? "N/A"}
           {" · "}
-          Best hour: {report.bestHour != null ? `${report.bestHour}:00 UTC` : "N/A"}
+          Best hour: {report.bestHour != null ? `${report.bestHour}:00 IST` : "N/A"}
         </div>
       ) : null}
 
@@ -169,7 +169,7 @@ export function AttributionPanel({ report }: Props) {
           />
           <BucketTable title="By Exit Reason" buckets={report.byExitReason} maxAbs={maxAbs} />
           <BucketTable
-            title="By Hour (UTC, min 3 trades)"
+            title="By Hour (IST, min 3 trades)"
             buckets={report.byHourOfDay.filter((b) => b.trades >= 3)}
             maxAbs={maxAbs}
           />

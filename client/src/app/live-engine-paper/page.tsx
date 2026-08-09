@@ -35,6 +35,7 @@ import {
   type DeskColumn,
   type DeskEngineStatus,
 } from "@/components/desk/ui";
+import { fmtIST } from "@/lib/istTime";
 
 type PaperAccount = {
   strategy: string;
@@ -276,7 +277,7 @@ function AccountBook({ d, updatedAt }: { d: PaperDesk; updatedAt: string }) {
   ];
 
   const tradeColumns: DeskColumn<PaperTrade>[] = [
-    { id: "at", header: "Closed", cell: (r) => r.closedAt?.slice(5, 16).replace("T", " ") },
+    { id: "at", header: "Closed (IST)", cell: (r) => fmtIST(r.closedAt) },
     { id: "strategy", header: "Strategy", cell: (r) => r.strategy },
     { id: "symbol", header: "Symbol", cell: (r) => r.symbol },
     {

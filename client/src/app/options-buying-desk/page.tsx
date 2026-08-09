@@ -28,6 +28,7 @@ import {
   type DeskEngineStatus,
 } from "@/components/desk/ui";
 import { DeskAdminControls } from "@/components/desk/DeskAdminControls";
+import { fmtIST } from "@/lib/istTime";
 
 type StrategyStatus = {
   strategyId: number;
@@ -290,7 +291,7 @@ export default function OptionsBuyingDeskPage() {
   ];
 
   const tradeColumns: DeskColumn<OptionTrade>[] = [
-    { id: "time", header: "Exit Time (UTC)", cell: (t) => new Date(t.exitTime).toISOString().slice(5, 16).replace("T", " ") },
+    { id: "time", header: "Exit Time (IST)", cell: (t) => fmtIST(t.exitTime) },
     { id: "strategy", header: "Strategy", cell: (t) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{t.strategyName}</span> },
     {
       id: "type", header: "Type",
