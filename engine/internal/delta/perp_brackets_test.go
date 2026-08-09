@@ -95,3 +95,38 @@ func TestPerpRewardRisk_MatchesTheHouseRatio(t *testing.T) {
 		t.Errorf("breakeven win rate is %.1f%%; the ratio is not doing its job", be)
 	}
 }
+
+// A stop closer than two ticks cannot be expressed on the price grid.
+//
+// The real case: 1000SATSUSD marks at 0.00001055 with a 0.0000001 tick. The
+// desk's 0.35% stop is 0.0000000369 — 0.37 of one tick. It rounds to a whole
+// tick, 0.95%, so the position carries ~3x the risk the strategy chose while
+// every report shows the intended figure.
+func TestStopHasTickResolution_RefusesSubTickStops(t *testing.T) {
+	const mark, tick = 0.00001055, 0.0000001
+	stop := mark * (1 - 0.0035) // the desk's 0.35% stop
+	if StopHasTickResolution(mark, stop, tick) {
+		t.Errorf("a %.4f-tick stop was accepted; it cannot be expressed on this grid",
+			(mark-stop)/tick)
+	}
+
+	// ADAUSD: mark 0.19846, tick 0.00001. The same 0.35% stop is ~69 ticks.
+	adaStop := 0.19846 * (1 - 0.0035)
+	if !StopHasTickResolution(0.19846, adaStop, 0.00001) {
+		t.Error("a 69-tick stop on ADAUSD was refused; the guard is too strict")
+	}
+
+	// Exactly two ticks is the boundary and must pass.
+	if !StopHasTickResolution(1.0, 1.0-2*0.001, 0.001) {
+		t.Error("a stop exactly two ticks away was refused")
+	}
+	if StopHasTickResolution(1.0, 1.0-0.001, 0.001) {
+		t.Error("a one-tick stop was accepted; rounding could put it on the entry")
+	}
+
+	// An unknown tick must PERMIT. Refusing every order on a missing registry
+	// field would be a worse failure than the one being prevented.
+	if !StopHasTickResolution(1.0, 0.99, 0) {
+		t.Error("a missing tick size blocked the order; it should fail open here")
+	}
+}

@@ -13,6 +13,28 @@ import (
 // only inside this process, on a 15-second poll, and its targets were measured
 // from a price the live order never traded at.
 
+// minStopTicks is how many price ticks a stop must sit away from entry.
+//
+// On a contract whose tick is coarse relative to its price, a percentage stop
+// can be smaller than one tick and therefore unrepresentable. 1000SATSUSD marks
+// at 0.00001055 against a 0.0000001 tick, so the desk's 0.35% stop is 0.37 of a
+// tick: it rounds to a whole tick, 0.95%, and the position carries ~3x the risk
+// the strategy chose while the leaderboard reports the intended figure.
+//
+// Two ticks minimum, so rounding cannot move a level onto or past the entry.
+const minStopTicks = 2.0
+
+// StopHasTickResolution reports whether a stop can be expressed on this
+// contract's price grid.
+func StopHasTickResolution(entry, stop, tick float64) bool {
+	if tick <= 0 {
+		// Unknown grid: permit, because refusing every order on a missing
+		// registry field would be a worse failure than the one being prevented.
+		return true
+	}
+	return math.Abs(entry-stop) >= tick*minStopTicks
+}
+
 // PerpRewardRisk is the house reward-to-risk ratio for live perpetual orders.
 //
 // Matches the paper desk's targetRewardRisk. At 1:3 a strategy needs a 25% win
@@ -77,6 +99,11 @@ func (b *PerpBridge) attachBrackets(ctx context.Context, plan PerpOrderPlan, sto
 	if pr, ok := b.reg.Lookup(plan.Symbol); ok {
 		tick = pr.TickSize
 	}
+	if !StopHasTickResolution(plan.LimitPrice, stop, tick) {
+		return fmt.Errorf("stop is under %g ticks from entry on %s (tick %g) — it cannot be expressed on this price grid",
+			minStopTicks, plan.Symbol, tick)
+	}
+
 	sp := strconv.FormatFloat(roundToTick(stop, tick), 'f', -1, 64)
 	tp := strconv.FormatFloat(roundToTick(target, tick), 'f', -1, 64)
 

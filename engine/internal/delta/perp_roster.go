@@ -53,6 +53,29 @@ var defaultScalpLiveStreams = []PerpStream{
 	{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "ADAUSD"},
 	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAXUSD"},
 	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAXUSD"},
+
+	// Promoted 2026-08-09 from the paper desk at the owner's direction.
+	//
+	// LIGHTUSD turns over $517k/day (rank 34 of 220, more liquid than ADAUSD)
+	// and XAIUSD $150k (rank 60). Both clear the bar where a $100 position is a
+	// rounding error in the book rather than a participant in it.
+	//
+	// MOVEUSD and 1000SATSUSD are NOT here, and the reason is mechanical rather
+	// than a judgement about the strategies:
+	//
+	//   MOVEUSD      $1,985/day, rank 208. A $100 position is 5% of a whole
+	//                day's turnover — entering and exiting would move the price
+	//                against itself, and the paper fill assumes it does not.
+	//   1000SATSUSD  mark 0.00001055 against a 0.0000001 tick. A 0.35% stop is
+	//                0.37 of ONE TICK, so it cannot be expressed: it rounds to a
+	//                full tick, 0.95%, and the real risk is ~3x what the
+	//                strategy intends. The 1:3 geometry does not exist there.
+	//
+	// Nine of the eighteen paper trades that made this desk look profitable were
+	// on those two symbols. They stay on the paper tier.
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LIGHTUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LIGHTUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "XAIUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
@@ -68,11 +91,16 @@ var defaultScalpLiveStreams = []PerpStream{
 // one has 1-4 trades, so none is evidence of anything yet; that is precisely
 // why they belong on paper rather than on the wallet.
 var defaultScalpPaperStreams = []PerpStream{
+	// The LIGHTUSD and XAIUSD streams were PROMOTED to the live roster on
+	// 2026-08-09 and removed from here: a stream belongs to exactly one tier, or
+	// "candidate" stops meaning "cannot spend money". They still paper-trade,
+	// because ScalpPaperStreams is the union.
+	//
+	// These two symbols remain candidates for a mechanical reason rather than a
+	// judgement about the strategies — see the live roster above. Both keep
+	// accumulating a paper record; neither can reach the wallet.
 	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "MOVEUSD"},
 	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "MOVEUSD"},
-	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LIGHTUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LIGHTUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "XAIUSD"},
 	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "1000SATSUSD"},
 	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "1000SATSUSD"},
 	{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "1000SATSUSD"},

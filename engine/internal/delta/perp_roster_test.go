@@ -65,7 +65,10 @@ func TestPerpAllowList_GatesOnSymbolToo(t *testing.T) {
 func TestScalpLiveStreams_MatchTheOwnerSelectionExactly(t *testing.T) {
 	want := []PerpStream{
 		{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAXUSD"},
+		{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LIGHTUSD"},
 		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAXUSD"},
+		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LIGHTUSD"},
+		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "XAIUSD"},
 		{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "ADAUSD"},
 	}
 	got := append([]PerpStream(nil), ScalpLiveStreams()...)
@@ -165,8 +168,16 @@ func TestScalpLiveStrategies_EnvOverrideWins(t *testing.T) {
 func TestScalpLiveStrategies_BlankOverrideFallsBack(t *testing.T) {
 	for _, raw := range []string{"", "  ", ",", " , "} {
 		t.Setenv("SCALP_LIVE_STRATEGIES", raw)
-		if len(ScalpLiveStrategies()) != len(defaultScalpLiveStreams) {
-			t.Errorf("SCALP_LIVE_STRATEGIES=%q did not fall back to the default list", raw)
+		// Distinct strategy NAMES, not stream count. Six streams now carry three
+		// names — the same strategy runs on more than one symbol — so comparing
+		// against the stream count would fail for a correct roster.
+		distinct := map[string]bool{}
+		for _, st := range defaultScalpLiveStreams {
+			distinct[st.Strategy] = true
+		}
+		if got := len(ScalpLiveStrategies()); got != len(distinct) {
+			t.Errorf("SCALP_LIVE_STRATEGIES=%q gave %d strategies, want the %d distinct names in the default roster",
+				raw, got, len(distinct))
 		}
 	}
 }
@@ -239,5 +250,31 @@ func TestPerpPaperCandidates_UnknownStreamIsRefusedEverywhere(t *testing.T) {
 	// the pairing is the gate, not the name.
 	if PerpStreamPaperPermitted("ANTI_M1_Break_D30_T20_Long", "NOTASYMBOLUSD") {
 		t.Error("a candidate was permitted on a symbol it was not selected for")
+	}
+}
+
+// The two symbols excluded from the promotion must NOT reach the venue.
+//
+// Excluded for mechanical reasons, not preference: MOVEUSD turns over
+// $1,985/day (rank 208 of 220) so a $100 position is 5% of a day's volume, and
+// 1000SATSUSD marks at 0.00001055 against a 0.0000001 tick, where a 0.35% stop
+// is 0.37 of ONE tick and cannot be expressed at all.
+func TestPerpRoster_ThinAndCoarseSymbolsStayOffTheVenue(t *testing.T) {
+	for _, sym := range []string{"MOVEUSD", "1000SATSUSD"} {
+		for _, st := range ScalpLiveStreams() {
+			if st.Symbol == sym {
+				t.Errorf("%s is on the live roster; it was excluded because the venue cannot support the trade", sym)
+			}
+		}
+		// They must still PAPER trade — that is where the evidence accumulates.
+		found := false
+		for _, st := range ScalpPaperStreams() {
+			if st.Symbol == sym {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s was dropped from the paper desk too; it should keep being watched", sym)
+		}
 	}
 }

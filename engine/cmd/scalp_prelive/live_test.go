@@ -80,7 +80,7 @@ func TestScalpLive_SymbolsDefaultToTheSelectedSet(t *testing.T) {
 	for _, s := range got {
 		seen[s] = true
 	}
-	for _, want := range []string{"ADAUSD", "AVAXUSD"} {
+	for _, want := range []string{"ADAUSD", "AVAXUSD", "LIGHTUSD", "XAIUSD"} {
 		if !seen[want] {
 			t.Errorf("%s missing from the default symbols (got %v)", want, got)
 		}
@@ -102,8 +102,15 @@ func TestScalpLive_SymbolsDefaultToTheSelectedSet(t *testing.T) {
 	if seen["BNBUSD"] {
 		t.Error("BNBUSD is back in the default symbols; it was deselected on the $100 restatement")
 	}
-	if len(got) != 2 {
-		t.Errorf("default symbols = %v, want exactly ADAUSD and AVAXUSD", got)
+	if len(got) != 4 {
+		t.Errorf("default symbols = %v, want the four the live streams trade", got)
+	}
+	// The two the promotion deliberately EXCLUDED must stay out. MOVEUSD turns
+	// over $1,985/day and 1000SATSUSD cannot express a 0.35% stop on its tick.
+	for _, gone := range []string{"MOVEUSD", "1000SATSUSD"} {
+		if seen[gone] {
+			t.Errorf("%s reached the live symbol set; it was excluded for a mechanical reason, not a preference", gone)
+		}
 	}
 }
 
