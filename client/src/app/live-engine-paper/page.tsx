@@ -326,7 +326,7 @@ function AccountBook({ d, updatedAt }: { d: PaperDesk; updatedAt: string }) {
       <DeskCard>
         <DeskSectionHeader
           title={`Account ${d.account}`}
-          subtitle="One shared balance within this book — separate from the other account, so neither can fund the other."
+          subtitle="One shared balance within this book — ring-fenced from the other books, so none can fund another."
           actions={
             <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
               {updatedAt ? `updated ${updatedAt}` : "—"}
