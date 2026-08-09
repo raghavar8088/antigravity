@@ -905,6 +905,7 @@ The content is organized as follows:
   delta/perp_roster.go
   delta/perp_sizing_test.go
   delta/perp_sizing.go
+  delta/tickformat_test.go
   delta/trade_status_test.go
   derivatives/derivatives_test.go
   derivatives/funding_delta_test.go

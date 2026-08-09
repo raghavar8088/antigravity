@@ -60,12 +60,13 @@ type PlaceOrderRequest struct {
 	ReduceOnly           bool      `json:"reduce_only,omitempty"`            // required for closing positions
 	CancelOrdersAccepted string    `json:"cancel_orders_accepted,omitempty"` // "true" to cancel conflicting open orders
 
-// Bracket legs are NOT fields on this struct.
+	// Bracket legs are NOT fields on this struct.
 	//
 	// They were, and Delta rejected every order: the bracket parameters belong
 	// to POST /v2/orders/bracket, which attaches protection to an EXISTING
 	// position, not to the entry order. See PlaceBracket.
 }
+
 // PlaceOrderResult is a simplified view of Delta's order response.
 type PlaceOrderResult struct {
 	OrderID   string    `json:"order_id"`

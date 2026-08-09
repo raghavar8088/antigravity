@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 // Bracket orders.
@@ -95,6 +97,58 @@ func (c *Client) PlaceBracket(ctx context.Context, req BracketRequest) error {
 		return fmt.Errorf("bracket rejected (HTTP %d): %s", status, truncate(string(data), 300))
 	}
 	return nil
+}
+
+// formatTickPrice renders a price on the venue's grid, exactly.
+//
+// roundToTick does float arithmetic — math.Round(p/tick)*tick — and the result
+// carries representation noise: 0.01286 comes back as 0.012860000000000001.
+// FormatFloat with precision -1 prints every one of those digits, and Delta
+// rejects the order:
+//
+//	"invalid value"  param: stop_loss_order.stop_price
+//	"invalid value"  param: stop_loss_order.limit_price
+//
+// The position then opens with no venue protection and falls back to the 15s
+// monitor. One COOKIEUSD trade did exactly that and closed 1.280% adverse
+// against a 0.626% stop — a 2.04x overshoot, -$4.15 on a $300 position, from a
+// float printing three extra digits.
+//
+// Formatting to the tick's own decimal count is what makes the value legal.
+func formatTickPrice(price, tick float64) string {
+	if price <= 0 {
+		return ""
+	}
+	if tick <= 0 {
+		// Unknown grid. Bounded precision anyway: -1 is what produced the
+		// rejection, and no venue accepts seventeen significant figures.
+		return strconv.FormatFloat(price, 'f', 8, 64)
+	}
+	return strconv.FormatFloat(roundToTick(price, tick), 'f', tickDecimals(tick), 64)
+}
+
+// tickDecimals is how many decimal places a tick implies. 0.00001 -> 5.
+func tickDecimals(tick float64) int {
+	if tick <= 0 {
+		return 8
+	}
+	// Derived from the tick's own printed form rather than from log10, which
+	// returns -4.999999 for 0.00001 and truncates to the wrong place.
+	str := strconv.FormatFloat(tick, 'f', -1, 64)
+	if i := strings.IndexByte(str, '.'); i >= 0 {
+		d := len(str) - i - 1
+		// Trailing zeros in the tick are not precision: "0.000010000000000000"
+		// is a 5-decimal grid, and Delta returns tick sizes in that form.
+		for d > 0 && str[len(str)-(len(str)-i-1-d)-1] == '0' {
+			break
+		}
+		trimmed := strings.TrimRight(str[i+1:], "0")
+		if len(trimmed) > 0 {
+			return len(trimmed)
+		}
+		return 0
+	}
+	return 0
 }
 
 // CancelBracketsForProduct removes every resting bracket leg on a product.

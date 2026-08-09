@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strconv"
 )
 
 // Venue-side protection and fill-relative levels.
@@ -104,8 +103,14 @@ func (b *PerpBridge) attachBrackets(ctx context.Context, plan PerpOrderPlan, sto
 			minStopTicks, plan.Symbol, tick)
 	}
 
-	sp := strconv.FormatFloat(roundToTick(stop, tick), 'f', -1, 64)
-	tp := strconv.FormatFloat(roundToTick(target, tick), 'f', -1, 64)
+	// Formatted to the tick's OWN decimal count. FormatFloat with -1 printed
+	// the float noise left by roundToTick — 0.012860000000000001 — and Delta
+	// refused it as off-grid, leaving the position unprotected.
+	sp := formatTickPrice(stop, tick)
+	tp := formatTickPrice(target, tick)
+	if sp == "" || tp == "" {
+		return fmt.Errorf("bracket: could not express stop %.10f / target %.10f on a %g tick", stop, target, tick)
+	}
 
 	// The dedicated bracket endpoint, not the entry order.
 	//
