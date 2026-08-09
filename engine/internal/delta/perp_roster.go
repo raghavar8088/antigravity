@@ -138,10 +138,11 @@ var defaultScalpPaperStreams = []PerpStream{
 const (
 	PaperAccount01 = "01"
 	PaperAccount02 = "02"
+	PaperAccount03 = "03"
 )
 
 // PaperAccountIDs is every book, in display order.
-func PaperAccountIDs() []string { return []string{PaperAccount01, PaperAccount02} }
+func PaperAccountIDs() []string { return []string{PaperAccount01, PaperAccount02, PaperAccount03} }
 
 // defaultScalpPaperStreams02 is Account 02's watch list.
 //
@@ -187,16 +188,68 @@ var defaultScalpPaperStreams02 = []PerpStream{
 	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "BANKUSD"},
 }
 
+// defaultScalpPaperStreams03 is Account 03's watch list.
+//
+// Added 2026-08-09 from the scalp leaderboard. Trade counts run 3-19, so every
+// row still reads "too few" — the same reason 01 and 02 exist rather than a
+// promotion.
+//
+// It overlaps 02 heavily and that is the experiment: the two books hold many of
+// the same streams in different combinations, and with only three concurrent
+// slots per book, WHICH streams compete for them changes what each gets to
+// trade. A stream that earns in one book and not the other is telling you the
+// result was the company it kept, not the signal.
+var defaultScalpPaperStreams03 = []PerpStream{
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "BANKUSD"},
+	{Strategy: "ANTI_D20_HeikinAshi_Flip", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_D20_VWAP_Reversion", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1X_VWAP_TrendPull_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
+}
+
 // ScalpPaperStreamsFor returns one account's watch list.
 //
 // Account 01 carries the LIVE roster plus its candidates, so it stays a faithful
 // mirror of what real money is doing. Account 02 is candidates only — nothing in
 // it can reach the venue, whatever it shows.
 func ScalpPaperStreamsFor(account string) []PerpStream {
-	if account == PaperAccount02 {
-		out := make([]PerpStream, 0, len(defaultScalpPaperStreams02))
+	var src []PerpStream
+	switch account {
+	case PaperAccount02:
+		src = defaultScalpPaperStreams02
+	case PaperAccount03:
+		src = defaultScalpPaperStreams03
+	}
+	if src != nil {
+		out := make([]PerpStream, 0, len(src))
 		seen := map[string]bool{}
-		for _, st := range defaultScalpPaperStreams02 {
+		for _, st := range src {
 			k := perpStreamKey(st.Strategy, st.Symbol)
 			if !seen[k] {
 				seen[k] = true
