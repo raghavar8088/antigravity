@@ -59,6 +59,8 @@ type PaperOpen = {
   /** NET of the round-trip taker fee it will pay to close. */
   unrealisedUsd: number;
   unrealisedPct: number;
+  /** True when this stream is ALSO on the venue allow-list. */
+  live: boolean;
 };
 type PaperTrade = {
   strategy: string;
@@ -72,6 +74,7 @@ type PaperTrade = {
   netUsd: number;
   closedAt: string;
   holdMin: number;
+  live: boolean;
 };
 type PaperDesk = {
   startingEquityUsd: number;
@@ -263,6 +266,20 @@ export default function LiveEnginePaperDeskPage() {
           "—"
         ),
     },
+    {
+      id: "route",
+      header: "Route",
+      // A candidate's result is NOT evidence about real money. Without this the
+      // two are indistinguishable on the page.
+      cell: (r: PaperOpen) =>
+        r.live ? (
+          <DeskChip tone="primary" style={{ fontWeight: 700 }}>
+            LIVE
+          </DeskChip>
+        ) : (
+          <DeskChip tone="default">candidate</DeskChip>
+        ),
+    },
     { id: "at", header: "Opened", cell: (r) => ageLabel(r.openedAt) },
   ];
 
@@ -270,6 +287,20 @@ export default function LiveEnginePaperDeskPage() {
     { id: "at", header: "Closed", cell: (r) => r.closedAt?.slice(5, 16).replace("T", " ") },
     { id: "strategy", header: "Strategy", cell: (r) => r.strategy },
     { id: "symbol", header: "Symbol", cell: (r) => r.symbol },
+    {
+      id: "route",
+      header: "Route",
+      // A candidate's result is NOT evidence about real money. Without this the
+      // two are indistinguishable on the page.
+      cell: (r: PaperTrade) =>
+        r.live ? (
+          <DeskChip tone="primary" style={{ fontWeight: 700 }}>
+            LIVE
+          </DeskChip>
+        ) : (
+          <DeskChip tone="default">candidate</DeskChip>
+        ),
+    },
     { id: "dir", header: "Side", cell: (r) => (r.dir || "").toUpperCase() },
     { id: "entry", align: "right", header: "Entry", cell: (r) => fmtPrice(r.entry) },
     { id: "exit", align: "right", header: "Exit", cell: (r) => fmtPrice(r.exit) },
@@ -321,10 +352,12 @@ export default function LiveEnginePaperDeskPage() {
             </DeskChip>
           </div>
           <p className="desk-body-md" style={{ marginTop: 6, maxWidth: 800, color: "var(--desk-on-surface-variant)" }}>
-            The strategies promoted to the Live Engine, traded on one shared $100 of paper money against real Delta
-            prices, with Delta&apos;s real taker fee on both legs. Only the money is simulated — the allow-list, the
-            prices, the fees, the size caps and the margin rules are the same ones the real account runs under. Where
-            this desk and the live record disagree, the difference is <strong>execution</strong>.
+            Two tiers on one shared $100 of paper money, against real Delta prices with Delta&apos;s real taker fee on
+            both legs. Rows marked <strong>LIVE</strong> are also on the real-money allow-list, so this desk mirrors what
+            actual capital is doing; rows marked <strong>candidate</strong> are being watched on live terms BEFORE anyone
+            decides they deserve money — they cannot reach the venue. Only the money is simulated; the prices, fees, size
+            caps and margin rules are the ones the real account runs under. Where a LIVE row disagrees with the live
+            record, the difference is <strong>execution</strong>.
           </p>
         </div>
 
@@ -453,7 +486,7 @@ export default function LiveEnginePaperDeskPage() {
             columns={openColumns}
             rows={paper?.openPositions ?? []}
             getRowKey={(r) => `${r.strategy}|${r.symbol}`}
-            minWidth={1200}
+            minWidth={1320}
             empty={
               <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
                 No open paper positions.
@@ -476,7 +509,7 @@ export default function LiveEnginePaperDeskPage() {
             columns={tradeColumns}
             rows={paper?.recentTrades ?? []}
             getRowKey={(r, i) => `${r.strategy}-${r.closedAt}-${i}`}
-            minWidth={1100}
+            minWidth={1220}
             empty={
               <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
                 No closed paper trades yet.

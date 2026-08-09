@@ -327,7 +327,16 @@ func (c *Client) GetWalletAll(ctx context.Context) ([]WalletEntry, error) {
 	return entries, nil
 }
 
-// GetWallet returns USDT available balance (backwards-compat helper).
+// GetWallet returns the USDT wallet BALANCE — the account's total equity.
+//
+// It returned AvailableBalance, which is balance minus margin currently posted
+// against open positions. The Live Engine page labels this "Real Equity", so an
+// account holding $90.74 with $29.94 of margin in use displayed as $60.60 — it
+// read as a $30 loss that had not happened. Margin is capital you still own; it
+// is committed, not spent.
+//
+// Callers that want spendable cash should use GetWalletAll and read
+// AvailableBalance explicitly, so the choice is visible at the call site.
 func (c *Client) GetWallet(ctx context.Context) (float64, error) {
 	entries, err := c.GetWalletAll(ctx)
 	if err != nil {
@@ -335,7 +344,7 @@ func (c *Client) GetWallet(ctx context.Context) (float64, error) {
 	}
 	for _, e := range entries {
 		if e.Asset == "USDT" || e.Asset == "USD" {
-			return e.AvailableBalance, nil
+			return e.Balance, nil
 		}
 	}
 	return 0, nil

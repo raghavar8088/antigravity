@@ -44,6 +44,7 @@ type paperTrade struct {
 	OpenedAt  time.Time `json:"openedAt"`
 	ClosedAt  time.Time `json:"closedAt"`
 	HoldMin   int64     `json:"holdMin"`
+	Live      bool      `json:"live"`
 }
 
 type paperPos struct {
@@ -66,6 +67,12 @@ type paperPos struct {
 	// every result on this desk.
 	UnrealisedUSD float64 `json:"unrealisedUsd"`
 	UnrealisedPct float64 `json:"unrealisedPct"`
+	// Live is true when this exact stream is ALSO on the venue allow-list.
+	//
+	// The desk trades the live roster plus candidates, and without this the two
+	// are indistinguishable on the page — an operator would read a candidate's
+	// result as evidence about real money.
+	Live bool `json:"live"`
 }
 
 // paperAccount is one strategy's CONTRIBUTION to the shared account.
@@ -228,6 +235,7 @@ func (d *livePaperDesk) onSignal(strategy, symbol, dir string, entry, stop, targ
 		d.accounts[strategy] = &paperAccount{Strategy: strategy}
 	}
 	p := &paperPos{
+		Live:     delta.PerpStreamPermitted(strategy, symbol),
 		Strategy: strategy, Symbol: symbol, Dir: dir,
 		Entry: entry, Stop: stop, Target: target,
 		Contracts: notional / entry,
@@ -336,6 +344,7 @@ func (d *livePaperDesk) closeLocked(k string, p *paperPos, exit float64, reason 
 	d.equity += net
 
 	d.closed = append(d.closed, paperTrade{
+		Live:     p.Live,
 		Strategy: p.Strategy, Symbol: p.Symbol, Dir: p.Dir,
 		Entry: p.Entry, Exit: exit, Stop: p.Stop, Target: p.Target,
 		Contracts: p.Contracts, Reason: reason,
