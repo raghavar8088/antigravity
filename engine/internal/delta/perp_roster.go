@@ -139,10 +139,13 @@ const (
 	PaperAccount01 = "01"
 	PaperAccount02 = "02"
 	PaperAccount03 = "03"
+	PaperAccount04 = "04"
 )
 
 // PaperAccountIDs is every book, in display order.
-func PaperAccountIDs() []string { return []string{PaperAccount01, PaperAccount02, PaperAccount03} }
+func PaperAccountIDs() []string {
+	return []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04}
+}
 
 // defaultScalpPaperStreams02 is Account 02's watch list.
 //
@@ -233,6 +236,65 @@ var defaultScalpPaperStreams03 = []PerpStream{
 	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
 }
 
+// defaultScalpPaperStreams04 is Account 04's watch list.
+//
+// Added 2026-08-09 from the scalp leaderboard. 41 streams, the widest book so
+// far, overlapping 02 and 03 substantially.
+//
+// Worth stating plainly: all four books are drawn from the top of the same
+// leaderboard, and that leaderboard ranks 27,784 streams. Selecting the best
+// rows four times over does not produce four independent tests — it produces
+// four samples of the same right tail. What separates them is only the
+// COMBINATION, because three concurrent slots per book means the streams
+// compete with each other for the chance to trade.
+//
+// So a stream earning in one book and not another is evidence about crowding,
+// not about the signal. Nothing here is evidence that any of these deserve
+// money; the trade counts (3-26) are two orders of magnitude short of the gate.
+var defaultScalpPaperStreams04 = []PerpStream{
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "BANKUSD"},
+	{Strategy: "ANTI_D20_HeikinAshi_Flip", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_D20_VWAP_Reversion", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_MACD_Align_Long", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "LABUSD"},
+	{Strategy: "M1_NR7_Expand_T20_Long", Symbol: "SOLVUSD"},
+	{Strategy: "M1_NR7_Expand_T50_Long", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_M1X_VWAP_TrendPull_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
+}
+
 // ScalpPaperStreamsFor returns one account's watch list.
 //
 // Account 01 carries the LIVE roster plus its candidates, so it stays a faithful
@@ -245,6 +307,8 @@ func ScalpPaperStreamsFor(account string) []PerpStream {
 		src = defaultScalpPaperStreams02
 	case PaperAccount03:
 		src = defaultScalpPaperStreams03
+	case PaperAccount04:
+		src = defaultScalpPaperStreams04
 	}
 	if src != nil {
 		out := make([]PerpStream, 0, len(src))
