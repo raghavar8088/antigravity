@@ -587,6 +587,21 @@ func perpExitReason(t *PerpLiveTrade, mark float64, now time.Time) string {
 		if r := perpPriceExit(t, mark); r != "" {
 			return r
 		}
+	} else if perpStopBreachedBadly(t, mark) {
+		// BACKSTOP: bracketed, but price is far past the stop and the position
+		// is still open. The venue leg either has not triggered or triggered and
+		// could not fill.
+		//
+		// Both happen. LABUSD triggered at 0.1243 into a market at 0.1253; the
+		// leg converted to a buy limit below the market and rested unfilled
+		// while the loss ran from a planned -$1.78 to -$3.22, with the monitor
+		// standing down because a bracket was "attached". Trusting the bracket
+		// absolutely turned a capped loss into an open-ended one.
+		//
+		// So the stand-down is conditional, not total: the venue owns the normal
+		// exit, and this process still owns the case where the venue demonstrably
+		// has not acted.
+		return "SL_BACKSTOP"
 	}
 	// The time stop. Checked last so it never masks a price exit, but checked —
 	// it is how 9 in 10 of these trades end on the paper desk.
@@ -594,6 +609,29 @@ func perpExitReason(t *PerpLiveTrade, mark float64, now time.Time) string {
 		return "TTL"
 	}
 	return ""
+}
+
+// perpStopBackstopFraction is how far past the stop price must go before the
+// monitor overrides a bracket.
+//
+// Wide enough that ordinary trigger latency does not cause a double-close — the
+// bracket usually fills within a tick or two — and tight enough that a stop
+// which cannot fill is caught long before liquidation at ~7.5%.
+const perpStopBackstopFraction = 0.004
+
+// perpStopBreachedBadly reports a position sitting well beyond its stop.
+//
+// The signal that a venue bracket has not done its job: not that price touched
+// the stop, but that it went through and STAYED through.
+func perpStopBreachedBadly(t *PerpLiveTrade, mark float64) bool {
+	if t == nil || t.StopPrice <= 0 || mark <= 0 {
+		return false
+	}
+	limit := t.StopPrice * perpStopBackstopFraction
+	if t.long() {
+		return mark <= t.StopPrice-limit
+	}
+	return mark >= t.StopPrice+limit
 }
 
 // perpPriceExit reports a stop or target hit at the given mark.

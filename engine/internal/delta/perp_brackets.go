@@ -23,6 +23,14 @@ import (
 // Two ticks minimum, so rounding cannot move a level onto or past the entry.
 const minStopTicks = 2.0
 
+// stopLimitSlippage is how far past the trigger a stop's LIMIT is placed, so
+// the order is marketable the moment it arms.
+//
+// 0.5% of the stop price. Wide enough that a gap through the level still fills —
+// the failure being fixed — and far narrower than the ~7.5% liquidation
+// distance, so a filled stop is always better than being closed by the venue.
+const stopLimitSlippage = 0.005
+
 // StopHasTickResolution reports whether a stop can be expressed on this
 // contract's price grid.
 func StopHasTickResolution(entry, stop, tick float64) bool {
@@ -108,7 +116,16 @@ func (b *PerpBridge) attachBrackets(ctx context.Context, plan PerpOrderPlan, sto
 	// refused it as off-grid, leaving the position unprotected.
 	sp := formatTickPrice(stop, tick)
 	tp := formatTickPrice(target, tick)
-	if sp == "" || tp == "" {
+	// Room for the stop's limit to be marketable when it triggers. Direction
+	// matters: closing a LONG sells, so the limit goes BELOW the trigger;
+	// closing a SHORT buys, so it goes ABOVE.
+	slip := stop * stopLimitSlippage
+	slipRaw := stop + slip
+	if plan.Side == SideBuy {
+		slipRaw = stop - slip
+	}
+	slipLimit := formatTickPrice(slipRaw, tick)
+	if sp == "" || tp == "" || slipLimit == "" {
 		return fmt.Errorf("bracket: could not express stop %.10f / target %.10f on a %g tick", stop, target, tick)
 	}
 
@@ -124,10 +141,19 @@ func (b *PerpBridge) attachBrackets(ctx context.Context, plan PerpOrderPlan, sto
 		StopLoss: &BracketLeg{
 			OrderType: TypeLimit,
 			StopPrice: sp,
-			// Limit equal to the trigger: on touch this behaves like a market
-			// close. A wider limit would fill further away, which is the
-			// overshoot being fixed; a tighter one might not fill at all.
-			LimitPrice: sp,
+			// The limit sits BEYOND the trigger, not on it.
+			//
+			// Setting them equal produced a stop that triggered and then could
+			// not fill. Live case: LABUSD short, stop 0.1243, price gapped to
+			// 0.1253. The leg converted to a buy limit at 0.1243 — below the
+			// market — and rested unfilled while the loss ran from the planned
+			// -$1.78 to -$3.22, with the monitor standing down because a
+			// bracket was "attached".
+			//
+			// A stop that cannot fill is not protection. Slippage room makes it
+			// marketable on touch, which is the whole point of a stop; the cost
+			// is a few basis points of give, against an unbounded downside.
+			LimitPrice: slipLimit,
 		},
 		TakeProfit: &BracketLeg{
 			OrderType:  TypeLimit,
