@@ -429,7 +429,7 @@ export default function LiveEnginePage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [st, ac, po, cp, dp, or, ro, ps, pt, rc, vn, pd, au] = await Promise.all([
+      const [st, ac, po, cp, dp, or, ro, ps, pt, rc, vn, au] = await Promise.all([
         fetch("/api/live-engine/state", { cache: "no-store" }),
         fetch("/api/live-engine/account", { cache: "no-store" }),
         fetch("/api/live-engine/positions", { cache: "no-store" }),
@@ -444,7 +444,6 @@ export default function LiveEnginePage() {
         fetch("/api/scalp/scalp/live/trades", { cache: "no-store" }),
         fetch("/api/live-engine/reconciliation", { cache: "no-store" }),
         fetch("/api/live-engine/venue", { cache: "no-store" }),
-        fetch("/api/scalp/scalp/live/paper", { cache: "no-store" }),
         fetch("/api/live-engine/audit", { cache: "no-store" }),
       ]);
       if (!st.ok) {
@@ -468,7 +467,6 @@ export default function LiveEnginePage() {
       // must keep working, and the section says so rather than showing empty
       // tables that read as "nothing happened".
       if (vn.ok) setVenue((await vn.json()) as VenuePayload);
-      if (pd.ok) setPaper((await pd.json()) as PaperDesk);
       if (au.ok) setAudit(((await au.json()) as { entries: AuditEntry[] }).entries ?? []);
       setError("");
     } catch {
@@ -512,8 +510,6 @@ export default function LiveEnginePage() {
 
   const [perpBusy, setPerpBusy] = useState<boolean>(false);
   const [venue, setVenue] = useState<VenuePayload | null>(null);
-  const [paper, setPaper] = useState<PaperDesk | null>(null);
-  const [paperTab, setPaperTab] = useState<string>("accounts");
   const [venueTab, setVenueTab] = useState<string>("positions");
 
   /**
@@ -1357,298 +1353,14 @@ export default function LiveEnginePage() {
           </p>
         </DeskCard>
 
-        {/* SECTION 5b — LIVE ENGINE PAPER DESK.
+        {/* The Live Engine Paper Desk card lived here.
 
-            The promoted strategies on paper money, live prices, live fees. The
-            surface that answers "is this worth real capital" — which neither
-            the scalp leaderboard nor the live record could answer alone. */}
-        <DeskCard padding="md">
-          <DeskSectionHeader
-            title="Live Engine Paper Desk"
-            subtitle="The live-routed strategies on $100 each — real Delta prices, real taker fees both legs. Only the money is paper."
-            actions={
-              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
-                {paper
-                  ? `$${paper.startingEquityUsd.toFixed(0)} shared · size ${paper.maxLeverage}× / ${
-                      paper.maxConcurrent
-                    } concurrent · margin ${paper.productLeverage}× (liq ${paper.liquidationDistPct.toFixed(
-                      1,
-                    )}%) · ${(paper.feeRatePerSide * 100).toFixed(3)}%/side`
-                  : "—"}
-              </span>
-            }
-          />
-
-          {(() => {
-            const accts = paper?.accounts ?? [];
-            const trades = accts.reduce((a, x) => a + x.trades, 0);
-            const wins = accts.reduce((a, x) => a + x.wins, 0);
-            const net = accts.reduce((a, x) => a + x.netUsd, 0);
-            const fees = accts.reduce((a, x) => a + x.feesUsd, 0);
-            const gross = accts.reduce((a, x) => a + x.grossUsd, 0);
-            return (
-              <div className="desk-metrics-row" style={{ marginBottom: 16 }}>
-                <DeskMetricTile
-                  label="Account Balance"
-                  value={paper ? `$${paper.equityUsd.toFixed(2)}` : "—"}
-                  valueClassName={paper ? pnlTone(paper.netUsd) : undefined}
-                  sub={`one shared $${paper?.startingEquityUsd.toFixed(0) ?? 100} · ${
-                    accts.length || 0
-                  } strategies drawing from it`}
-                  highlight
-                />
-                <DeskMetricTile
-                  compact
-                  label="Net P&L"
-                  value={paper ? fmtUSD(paper.netUsd) : "—"}
-                  valueClassName={paper ? pnlTone(paper.netUsd) : undefined}
-                  sub={paper ? `${paper.roiPct >= 0 ? "+" : ""}${paper.roiPct.toFixed(2)}% · gross ${fmtUSD(gross)}` : "—"}
-                />
-                <DeskMetricTile
-                  compact
-                  label="Deployed"
-                  value={paper ? fmtUSD(paper.openNotionalUsd) : "—"}
-                  sub={paper ? `of ${fmtUSD(paper.maxNotionalUsd)} max (${paper.maxLeverage}× the balance)` : "—"}
-                />
-                <DeskMetricTile
-                  compact
-                  label="Taker Fees"
-                  value={accts.length ? fmtUSD(-fees) : "—"}
-                  valueClassName={fees > 0 ? "desk-pnl-negative" : undefined}
-                  sub={gross > 0 ? `${((fees / gross) * 100).toFixed(0)}% of gross` : "both legs"}
-                />
-                <DeskMetricTile
-                  compact
-                  label="Trades"
-                  value={trades ? String(trades) : "—"}
-                  sub={trades ? `win rate ${((100 * wins) / trades).toFixed(1)}%` : "waiting for signals"}
-                />
-                <DeskMetricTile
-                  compact
-                  label="Open"
-                  value={String(paper?.openPositions?.length ?? 0)}
-                  sub={paper ? `desk up ${paper.uptimeMin}m` : "—"}
-                />
-              </div>
-            );
-          })()}
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-            {[
-              ["accounts", `Accounts (${paper?.accounts?.length ?? 0})`],
-              ["open", `Open (${paper?.openPositions?.length ?? 0})`],
-              ["trades", `Closed (${paper?.recentTrades?.length ?? 0})`],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setPaperTab(id)}
-                className="desk-label-md"
-                style={{
-                  cursor: "pointer",
-                  padding: "5px 12px",
-                  borderRadius: 6,
-                  border: "1px solid var(--desk-outline)",
-                  background: paperTab === id ? "var(--desk-primary)" : "transparent",
-                  color: paperTab === id ? "var(--desk-on-primary)" : "var(--desk-on-surface-variant)",
-                  fontWeight: 600,
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {paperTab === "accounts" && (
-            <DeskDataTable
-              columns={[
-                {
-                  id: "strategy",
-                  header: "Strategy",
-                  cell: (r: PaperAccount) => (
-                    <span className="desk-body-md" style={{ fontWeight: 600 }}>
-                      {r.strategy}
-                    </span>
-                  ),
-                },
-                {
-                  id: "share",
-                  align: "right",
-                  header: "Share of Balance",
-                  // A CONTRIBUTION, not a balance. There is one $100 and these
-                  // rows say what each strategy added to or took from it;
-                  // showing a per-strategy equity implied ten accounts and ten
-                  // times the capital.
-                  cell: (r: PaperAccount) => (
-                    <span className={pnlTone(r.netUsd)} style={{ fontWeight: 700 }}>
-                      {`${r.shareOfEquityPct >= 0 ? "+" : ""}${r.shareOfEquityPct.toFixed(2)}%`}
-                    </span>
-                  ),
-                },
-                { id: "n", align: "right", header: "Trades", cell: (r: PaperAccount) => r.trades },
-                {
-                  id: "wr",
-                  align: "right",
-                  header: "WR %",
-                  cell: (r: PaperAccount) => (r.trades ? ((100 * r.wins) / r.trades).toFixed(1) : "—"),
-                },
-                {
-                  id: "gross",
-                  align: "right",
-                  header: "Gross",
-                  cell: (r: PaperAccount) => <span className={pnlTone(r.grossUsd)}>{fmtUSD(r.grossUsd)}</span>,
-                },
-                {
-                  id: "fees",
-                  align: "right",
-                  header: "− Taker Fees",
-                  cell: (r: PaperAccount) => <span className="desk-pnl-negative">{fmtUSD(-r.feesUsd)}</span>,
-                },
-                {
-                  id: "net",
-                  align: "right",
-                  header: "= Net",
-                  cell: (r: PaperAccount) => (
-                    <span className={pnlTone(r.netUsd)} style={{ fontWeight: 700 }}>
-                      {fmtUSD(r.netUsd)}
-                    </span>
-                  ),
-                },
-                {
-                  id: "verdict",
-                  header: "Worth Real Money?",
-                  // Deliberately a question, not a verdict. Positive net is
-                  // necessary and nowhere near sufficient — the go-live gate
-                  // wants 200 trades, and these counts are far below it.
-                  cell: (r: PaperAccount) =>
-                    r.trades < 30 ? (
-                      <DeskChip tone="default">too few trades</DeskChip>
-                    ) : r.netUsd > 0 ? (
-                      <DeskChip tone="success" style={{ fontWeight: 700 }}>
-                        positive
-                      </DeskChip>
-                    ) : (
-                      <DeskChip tone="danger">negative</DeskChip>
-                    ),
-                },
-              ]}
-              rows={paper?.accounts ?? []}
-              getRowKey={(r: PaperAccount) => r.strategy}
-              minWidth={980}
-              empty={
-                <DeskEmptyStateInline text="No strategy has traded yet. Accounts appear on the first paper fill." />
-              }
-            />
-          )}
-
-          {paperTab === "open" && (
-            <DeskDataTable
-              columns={[
-                { id: "strategy", header: "Strategy", cell: (r: PaperOpen) => r.strategy },
-                { id: "symbol", header: "Symbol", cell: (r: PaperOpen) => r.symbol },
-                {
-                  id: "dir",
-                  header: "Side",
-                  cell: (r: PaperOpen) => (
-                    <DeskChip tone={r.dir?.toUpperCase() === "LONG" ? "success" : "danger"}>
-                      {(r.dir || "?").toUpperCase()}
-                    </DeskChip>
-                  ),
-                },
-                { id: "entry", align: "right", header: "Entry", cell: (r: PaperOpen) => fmtPrice(r.entry) },
-                { id: "stop", align: "right", header: "Stop", cell: (r: PaperOpen) => fmtPrice(r.stop) },
-                { id: "target", align: "right", header: "Target", cell: (r: PaperOpen) => fmtPrice(r.target) },
-                {
-                  id: "rr",
-                  align: "right",
-                  header: "R:R",
-                  cell: (r: PaperOpen) => {
-                    const risk = Math.abs(r.entry - r.stop);
-                    return risk > 0 ? `1:${(Math.abs(r.target - r.entry) / risk).toFixed(2)}` : "—";
-                  },
-                },
-                { id: "at", header: "Opened", cell: (r: PaperOpen) => ageLabel(r.openedAt) },
-              ]}
-              rows={paper?.openPositions ?? []}
-              getRowKey={(r: PaperOpen) => `${r.strategy}|${r.symbol}`}
-              minWidth={900}
-              empty={<DeskEmptyStateInline text="No open paper positions." />}
-            />
-          )}
-
-          {paperTab === "trades" && (
-            <DeskDataTable
-              columns={[
-                { id: "at", header: "Closed", cell: (r: PaperTrade) => r.closedAt?.slice(5, 16).replace("T", " ") },
-                { id: "strategy", header: "Strategy", cell: (r: PaperTrade) => r.strategy },
-                { id: "symbol", header: "Symbol", cell: (r: PaperTrade) => r.symbol },
-                { id: "dir", header: "Side", cell: (r: PaperTrade) => (r.dir || "").toUpperCase() },
-                { id: "entry", align: "right", header: "Entry", cell: (r: PaperTrade) => fmtPrice(r.entry) },
-                { id: "exit", align: "right", header: "Exit", cell: (r: PaperTrade) => fmtPrice(r.exit) },
-                {
-                  id: "reason",
-                  header: "Exit",
-                  cell: (r: PaperTrade) => (
-                    <DeskChip tone={r.reason === "TP" ? "success" : r.reason === "SL" ? "danger" : "default"}>
-                      {r.reason}
-                    </DeskChip>
-                  ),
-                },
-                { id: "hold", align: "right", header: "Held", cell: (r: PaperTrade) => `${r.holdMin}m` },
-                {
-                  id: "gross",
-                  align: "right",
-                  header: "Gross",
-                  cell: (r: PaperTrade) => <span className={pnlTone(r.grossUsd)}>{fmtUSD(r.grossUsd)}</span>,
-                },
-                {
-                  id: "fees",
-                  align: "right",
-                  header: "− Fees",
-                  cell: (r: PaperTrade) => <span className="desk-pnl-negative">{fmtUSD(-r.feesUsd)}</span>,
-                },
-                {
-                  id: "net",
-                  align: "right",
-                  header: "= Net",
-                  cell: (r: PaperTrade) => (
-                    <span className={pnlTone(r.netUsd)} style={{ fontWeight: 600 }}>
-                      {fmtUSD(r.netUsd)}
-                    </span>
-                  ),
-                },
-              ]}
-              rows={paper?.recentTrades ?? []}
-              getRowKey={(r: PaperTrade, i: number) => `${r.strategy}-${r.closedAt}-${i}`}
-              minWidth={1100}
-              empty={<DeskEmptyStateInline text="No closed paper trades yet." />}
-            />
-          )}
-
-          <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 820, color: "var(--desk-on-surface-variant)" }}>
-            Two different leverage numbers apply, as on the real account:{" "}
-            <strong>{paper?.maxLeverage ?? 3}× limits SIZE</strong> (up to $
-            {((paper?.startingEquityUsd ?? 100) * (paper?.maxLeverage ?? 3)).toFixed(0)} of positions), while{" "}
-            <strong>{paper?.productLeverage ?? 10}× is the margin setting</strong> — it decides how much cash Delta
-            freezes and therefore how far a price must move before the venue force-closes you (
-            {paper?.liquidationDistPct?.toFixed(1) ?? "9.5"}%). Stops sit around 0.7%, so the strategy closes the trade,
-            not the venue. This desk refuses a trade whose stop sits past that line, exactly as the bridge does.
-            <br />
-            <br />
-            Every other variable matches the live bridge except one: <strong>execution</strong>. <strong>One shared
-            $100</strong> — not $100 each — with the same 3× aggregate cap and 3-position limit the bridge enforces,
-            the same Delta prices, the same 0.059% taker fee on both legs, the same strategies and the same levels. A
-            strategy&apos;s row shows what it contributed to that single balance, so a win here really does fund the
-            next position elsewhere. So where this
-            desk and the real record disagree, the difference is slippage, latency and partial fills — not a modelling
-            choice.
-            <br />
-            <br />
-            &ldquo;Worth real money?&rdquo; is a question, not a verdict. Positive net is necessary and nowhere near
-            sufficient: the pre-registered gate wants 200 trades per stream, and a strategy showing a profit over 30 is
-            still mostly noise.
-          </p>
-        </DeskCard>
+            Moved to its own page at /live-engine-paper when it grew to four
+            independent books. It stayed here reading the OLD single-book API
+            shape, so when that endpoint began returning {accounts: [...]} the
+            card dereferenced undefined and took the whole page down — a
+            duplicate surface that nobody was maintaining, breaking the one
+            that shows real money. */}
 
         {/* SECTION 6b — DELTA EXCHANGE, verbatim.
 
