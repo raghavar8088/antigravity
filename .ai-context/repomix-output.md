@@ -594,6 +594,7 @@ The content is organized as follows:
   lib/risk/noTradeRootCause.ts
   lib/risk/promotionGate.ts
   lib/risk/RiskEngine.ts
+  lib/scalpProxyReachability.test.ts
   lib/sep/sepPipeline.ts
   lib/shadowTradeIntentMapper.test.ts
   lib/strategyAuthority/authorityScore.ts

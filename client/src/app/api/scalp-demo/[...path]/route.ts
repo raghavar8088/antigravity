@@ -96,6 +96,10 @@ const MUTATION_PATHS = [
   // the proxy injects the desk token server-side.
   "/scalp/live/arm",
   "/scalp/live/disarm",
+  // Same per-stream switch as the live proxy. The demo page is generated from
+  // the live page, so a path allowed there must be allowed here or the demo
+  // desk gets a control that renders and reaches nothing.
+  "/scalp/live/strategy",
 ];
 
 function isAllowed(pathname: string): boolean {

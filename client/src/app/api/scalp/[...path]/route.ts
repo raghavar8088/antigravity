@@ -96,6 +96,14 @@ const MUTATION_PATHS = [
   // the proxy injects the desk token server-side.
   "/scalp/live/arm",
   "/scalp/live/disarm",
+  // The per-stream ON/OFF switch.
+  //
+  // Omitting it made every toggle click fail silently at the proxy while the
+  // engine endpoint worked perfectly when called directly — which is the same
+  // failure described above, one layer out: a control that renders, responds
+  // to clicks, and reaches nothing. It requires a session like the others, and
+  // the token is injected server-side.
+  "/scalp/live/strategy",
 ];
 
 function isAllowed(pathname: string): boolean {
