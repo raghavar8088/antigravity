@@ -611,12 +611,45 @@ func liveEngineDailyPnlProvider(bridge *delta.Bridge) func(context.Context) ([]m
 	}
 }
 
+// optionDeskActive reports whether the option-buying desk may trade.
+//
+// Default OFF, at the owner's instruction: the engine being armed must not be
+// enough to place an option order. Only an explicit LIVE_ENGINE_OPTIONS_ENABLED
+// =true turns the desk back on, so the quiet default is the safe one.
+func optionDeskActive() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("LIVE_ENGINE_OPTIONS_ENABLED")), "true")
+}
+
 func liveEngineRosterProvider(buyEngine *options.Engine, bridge *delta.Bridge) func(context.Context) ([]liveengine.StrategyEligibility, error) {
 	return func(ctx context.Context) ([]liveengine.StrategyEligibility, error) {
 		out := make([]liveengine.StrategyEligibility, 0)
 		if buyEngine == nil {
 			return out, nil
 		}
+
+		// The options desk is retired: option trading is off by the owner's
+		// master switch, its trade custody was purged on 2026-08-09, and the
+		// live engine now trades perpetual streams instead.
+		//
+		// Listing ~100 option strategies here was worse than listing nothing.
+		// Every row read "NOT LIVE - 0 real fills / 0d", which describes a
+		// strategy waiting to qualify. None of them are waiting; they cannot
+		// trade at all while the switch is off, and the gate that produced the
+		// text is evaluating evidence for a desk that no longer runs.
+		//
+		// The allow-list is cleared alongside it rather than left dangling.
+		// Several of those rows were ENABLED - a live-capital permission - and
+		// hiding the table while quietly retaining the permission is exactly
+		// the kind of invisible armed state this control plane exists to
+		// prevent. Turning the desk back on should be a deliberate act that
+		// starts from nothing enabled.
+		if !optionDeskActive() {
+			if bridge != nil && len(bridge.LiveAllowList()) > 0 {
+				bridge.SetLiveAllowList(nil)
+			}
+			return out, nil
+		}
+
 		allowed := map[string]bool{}
 		for _, n := range bridge.LiveAllowList() {
 			allowed[n] = true

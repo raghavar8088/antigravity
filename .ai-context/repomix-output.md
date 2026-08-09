@@ -1752,6 +1752,7 @@ The content is organized as follows:
   antigravity/liveengine_venue.go
   antigravity/liveengine_wiring.go
   antigravity/main.go
+  antigravity/roster_retired_test.go
   antigravity/tickfeed.go
   backtest/main.go
   btc_qualify_25/main.go
