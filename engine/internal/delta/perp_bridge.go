@@ -406,10 +406,6 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		OrderID:          res.OrderID,
 		Status:           "OPEN",
 	}
-	// What each outcome is worth, priced at the fill.
-	if pr, ok := b.reg.Lookup(plan.Symbol); ok {
-		t.IfTargetUSD, t.IfStopUSD = perpOutcomeUSD(t, pr.ContractValue)
-	}
 	if ttl > 0 {
 		t.ExpiresAt = t.OpenedAt.Add(ttl)
 	}
@@ -867,7 +863,18 @@ func (b *PerpBridge) Stats() PerpBridgeStats {
 
 	open := make([]PerpLiveTrade, 0, len(b.open))
 	for _, t := range b.open {
-		open = append(open, *t)
+		c := *t
+		// Computed on READ, not only at open.
+		//
+		// Computing at open left every position restored from custody — and
+		// every position that predates a deploy — reporting $0.00 for both
+		// outcomes, which reads as "this trade risks nothing and wins nothing"
+		// rather than "not calculated". Derived from fields the trade already
+		// carries, so there is no state to keep in sync.
+		if pr, ok := b.reg.Lookup(c.Symbol); ok {
+			c.IfTargetUSD, c.IfStopUSD = perpOutcomeUSD(&c, pr.ContractValue)
+		}
+		open = append(open, c)
 	}
 	sort.Slice(open, func(i, j int) bool { return open[i].OpenedAt.Before(open[j].OpenedAt) })
 
