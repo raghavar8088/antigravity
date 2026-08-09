@@ -70,6 +70,11 @@ const ic = {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/terminal", label: "Command Center", icon: ic.monitor },
   { href: "/live-engine", label: "Live Engine", icon: ic.live },
+  // Directly below the Live Engine, because it is the same desk against the
+  // demo venue: same layout, same controls, same fee and bracket handling,
+  // separate process and separate credentials so the two wallets can never be
+  // confused for one another.
+  { href: "/live-demo-engine", label: "Live Demo Engine", icon: ic.live },
   // Directly below the Live Engine because it answers the question that page
   // cannot: the Live Engine shows what real capital is doing, this shows
   // whether those same strategies deserve it. Same allow-list, same Delta

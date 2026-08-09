@@ -84,6 +84,7 @@ The content is organized as follows:
   app/api/killswitch/resume/route.ts
   app/api/killswitch/status/route.ts
   app/api/killswitch/trigger/route.ts
+  app/api/live-demo-engine/[...path]/route.ts
   app/api/live-engine/[...path]/route.ts
   app/api/mock-trading/account/latest/route.ts
   app/api/mock-trading/account/route.ts
@@ -126,6 +127,7 @@ The content is organized as follows:
   app/api/risk/positions/route.ts
   app/api/risk/summary/route.ts
   app/api/scalers/stats/route.ts
+  app/api/scalp-demo/[...path]/route.ts
   app/api/scalp/[...path]/route.ts
   app/api/sep/bottom/route.ts
   app/api/sep/rankings/route.ts
@@ -155,6 +157,7 @@ The content is organized as follows:
   app/favicon.ico
   app/globals.css
   app/layout.tsx
+  app/live-demo-engine/page.tsx
   app/live-engine-paper/page.tsx
   app/live-engine/page.tsx
   app/login/page.tsx
@@ -1793,6 +1796,7 @@ The content is organized as follows:
   coding-standards.md
   dependency-map.md
   folder-structure.md
+  LIVE_DEMO_ENGINE.md
   module-index.md
   onboarding-guide.md
   repository-summary.md
