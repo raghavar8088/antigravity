@@ -30,9 +30,19 @@ func TestPerpExitReason_MonitorStandsDownWhenBracketed(t *testing.T) {
 	if got := perpExitReason(base(false), 0.016400, now); got != "SL" {
 		t.Errorf("unbracketed position at a broken stop returned %q; the monitor is its only protection", got)
 	}
-	// Bracketed, the venue owns it — the monitor must NOT close at market.
-	if got := perpExitReason(base(true), 0.016400, now); got != "" {
-		t.Errorf("bracketed position returned %q; the monitor front-ran the venue and that is the overshoot", got)
+	// Bracketed and JUST through the stop — the venue owns this exit. 0.016320
+	// is 0.07% past a 0.016308 stop, inside the backstop threshold, so the
+	// monitor must stay out of it. Closing here at market is exactly the
+	// front-running that caused the overshoot.
+	if got := perpExitReason(base(true), 0.016320, now); got != "" {
+		t.Errorf("bracketed position just through its stop returned %q; the venue owns that exit", got)
+	}
+	// But far through it, the venue has demonstrably not acted and the monitor
+	// must override. Asserted here as well as in the backstop tests, because
+	// the two behaviours are one decision and reading them apart hides the
+	// boundary between them.
+	if got := perpExitReason(base(true), 0.016400, now); got != "SL_BACKSTOP" {
+		t.Errorf("bracketed position 0.56%% past its stop returned %q; a bracket that has not filled is not protection", got)
 	}
 	// Same for the target.
 	if got := perpExitReason(base(true), 0.015900, now); got != "" {

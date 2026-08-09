@@ -1,1 +1,1 @@
-{"engine-delta":{"communities":[0,1,2,3,4],"files":3,"symbols":58,"top_files":[{"file":"engine/internal/delta/perp_bridge.go","symbols":43},{"file":"engine/internal/delta/perp_brackets.go","symbols":10},{"file":"engine/internal/delta/perp_backstop_test.go","symbols":5}]}}
+{"engine-delta":{"communities":[0],"files":1,"symbols":4,"top_files":[{"file":"engine/internal/delta/perp_monitor_test.go","symbols":4}]}}
