@@ -1087,7 +1087,21 @@ func (d *desk) serve(port int) {
 			"open":            len(out),
 			"live_open":       liveOpen,
 			"live_strategies": roster,
-			"rows":            out,
+			// The exact STREAMS, as "strategy|SYMBOL".
+			//
+			// live_strategies is names only, and a board filtering on it shows
+			// the cross product: 3 names x 92 symbols = 276 rows labelled
+			// "live-routed" when 6 streams actually route. The venue gates on
+			// the pair, so any surface claiming to show live exposure has to.
+			"live_streams": func() []string {
+				out := make([]string, 0, len(livePairs))
+				for k := range livePairs {
+					out = append(out, k)
+				}
+				sort.Strings(out)
+				return out
+			}(),
+			"rows": out,
 		})
 	}))
 

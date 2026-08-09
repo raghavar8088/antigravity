@@ -154,6 +154,12 @@ export default function ScalpDeskPage() {
   // The live allow-list itself, so the leaderboard covers strategies that are
   // currently FLAT — which is most of them, most of the time.
   const [liveRoster, setLiveRoster] = useState<string[]>([]);
+  // The exact (strategy, symbol) STREAMS that route live, as "strategy|SYMBOL".
+  //
+  // Filtering the board on strategy NAME alone showed the cross product — 3
+  // names across 92 symbols read as 276 "live-routed streams" when 6 route. A
+  // board that overstates live exposure by 46x is worse than no board.
+  const [liveStreams, setLiveStreams] = useState<string[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -176,9 +182,14 @@ export default function ScalpDeskPage() {
       // Positions are additive: an older engine without this endpoint should
       // leave the rest of the page working rather than blanking it.
       if (po.ok) {
-        const body = (await po.json()) as { rows?: OpenPos[]; live_strategies?: string[] };
+        const body = (await po.json()) as {
+          rows?: OpenPos[];
+          live_strategies?: string[];
+          live_streams?: string[];
+        };
         setPositions(body.rows ?? []);
         setLiveRoster(body.live_strategies ?? []);
+        setLiveStreams(body.live_streams ?? []);
       } else {
         setPositions([]);
       }
@@ -260,15 +271,21 @@ export default function ScalpDeskPage() {
    * Derived from the same rows, so it cannot disagree with the table below it.
    */
   const liveStrategyNames = useMemo(() => new Set(liveRoster), [liveRoster]);
+  const liveStreamSet = useMemo(() => new Set(liveStreams), [liveStreams]);
   const liveRows = useMemo(
     () =>
       rows
-        .filter((r) => liveStrategyNames.has(r.strategy))
+        // Match the exact stream the venue gates on, not just the name.
+        .filter((r) =>
+          liveStreamSet.size > 0
+            ? liveStreamSet.has(`${r.strategy}|${r.symbol.toUpperCase()}`)
+            : liveStrategyNames.has(r.strategy),
+        )
         // Ranked by the $100 taker result, not the paper one. Sorting by paper
         // net would put the same strategies on top that the paper board already
         // flatters — the habit this table exists to break.
         .sort((a, b) => (b.live_net_usd ?? 0) - (a.live_net_usd ?? 0)),
-    [rows, liveStrategyNames],
+    [rows, liveStreamSet, liveStrategyNames],
   );
 
   /**
@@ -726,7 +743,7 @@ export default function ScalpDeskPage() {
             subtitle="Each strategy on its OWN $100 account at 3x notional, with Delta taker fees both legs — the terms the live desk actually trades on."
             actions={
               <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
-                {liveRows.length} live-routed streams
+                {liveRows.length} of {liveStreamSet.size || liveRows.length} live-routed streams
               </span>
             }
           />
