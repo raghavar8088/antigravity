@@ -50,32 +50,55 @@ import (
 // selected from the right tail of 2,416 streams on in-sample data. Being on
 // this list is permission, not evidence.
 var defaultScalpLiveStreams = []PerpStream{
-	{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "ADAUSD"},
-	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAXUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAXUSD"},
-
-	// Promoted 2026-08-09 from the paper desk at the owner's direction.
+	// Replaced 2026-08-09 at the owner's direction with Account 03's book.
 	//
-	// LIGHTUSD turns over $517k/day (rank 34 of 220, more liquid than ADAUSD)
-	// and XAIUSD $150k (rank 60). Both clear the bar where a $100 position is a
-	// rounding error in the book rather than a participant in it.
+	// Account 03's record at promotion: 99 trades, $111.93 on $100 (+11.93%),
+	// win rate 34.3%, gross $24.39 against $12.50 of taker fees — 51% of
+	// everything it earned went to the venue. That is the best evidence this
+	// application has produced, and it is still not much: 23 of the 31 streams
+	// had traded, most on 1-16 trades against a gate that asks for 200.
 	//
-	// MOVEUSD and 1000SATSUSD are NOT here, and the reason is mechanical rather
-	// than a judgement about the strategies:
+	// Symbol liquidity checked before promotion. All ten clear the bar where a
+	// ~$110 position is invisible in the book; the thinnest, AVAAIUSD at $118k a
+	// day, puts a position at 0.09% of daily turnover against the 5% that
+	// disqualified MOVEUSD.
 	//
-	//   MOVEUSD      $1,985/day, rank 208. A $100 position is 5% of a whole
-	//                day's turnover — entering and exiting would move the price
-	//                against itself, and the paper fill assumes it does not.
-	//   1000SATSUSD  mark 0.00001055 against a 0.0000001 tick. A 0.35% stop is
-	//                0.37 of ONE TICK, so it cannot be expressed: it rounds to a
-	//                full tick, 0.95%, and the real risk is ~3x what the
-	//                strategy intends. The 1:3 geometry does not exist there.
-	//
-	// Nine of the eighteen paper trades that made this desk look profitable were
-	// on those two symbols. They stay on the paper tier.
-	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LIGHTUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LIGHTUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "XAIUSD"},
+	// What this does NOT establish: that these streams beat the previous six.
+	// They were selected from the top of a leaderboard ranking 27,784 streams,
+	// and the same selection has now been made five times. The honest read is
+	// that Account 03 is the best-performing sample of a right tail, not a
+	// demonstrated edge.
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "BANKUSD"},
+	{Strategy: "ANTI_D20_HeikinAshi_Flip", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_D20_VWAP_Reversion", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1X_VWAP_TrendPull_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine

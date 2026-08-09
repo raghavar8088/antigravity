@@ -1,7 +1,7 @@
 package delta
 
 import (
-	"sort"
+	"strings"
 	"testing"
 )
 
@@ -63,45 +63,37 @@ func TestPerpAllowList_GatesOnSymbolToo(t *testing.T) {
 //
 // Replaced 2026-08-07 with the three rows selected on live terms.
 func TestScalpLiveStreams_MatchTheOwnerSelectionExactly(t *testing.T) {
-	want := []PerpStream{
-		{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAXUSD"},
-		{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LIGHTUSD"},
-		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAXUSD"},
-		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LIGHTUSD"},
-		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "XAIUSD"},
-		{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "ADAUSD"},
+	// The roster IS Account 03's book, promoted 2026-08-09. Asserted against
+	// that source rather than a second literal list: two hand-maintained copies
+	// of 31 streams would drift, and the drift would be silent.
+	got := ScalpLiveStreams()
+	src := defaultScalpPaperStreams03
+
+	if len(got) != len(src) {
+		t.Fatalf("live roster has %d streams, Account 03's book has %d", len(got), len(src))
 	}
-	got := append([]PerpStream(nil), ScalpLiveStreams()...)
-	sort.Slice(got, func(i, j int) bool {
-		if got[i].Strategy != got[j].Strategy {
-			return got[i].Strategy < got[j].Strategy
-		}
-		return got[i].Symbol < got[j].Symbol
-	})
-	if len(got) != len(want) {
-		t.Fatalf("live roster has %d streams, the owner selected %d: %v", len(got), len(want), got)
+	inRoster := map[string]bool{}
+	for _, st := range got {
+		inRoster[perpStreamKey(st.Strategy, st.Symbol)] = true
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("stream[%d] = %v, want %v — the live allow-list drifted from the selection", i, got[i], want[i])
+	for _, st := range src {
+		if !inRoster[perpStreamKey(st.Strategy, st.Symbol)] {
+			t.Errorf("%v is in Account 03's book but not on the live roster", st)
 		}
 	}
 
-	// Every previously live strategy must be gone. Each was selected under an
-	// earlier basis and is not on this list.
-	live := map[string]bool{}
-	for _, st := range got {
-		live[st.Strategy] = true
-	}
-	for _, gone := range []string{
-		"ANTI_D20_VWAP_Reversion", "ANTI_M1_DoubleTop_10bp_Short", "ANTI_M1_DoubleTop_20bp_Short",
-		"ANTI_M1_HMA21_Flip_Long", "ANTI_M1_HMA21_Flip_Short", "ANTI_M1_InsideBar_V20_Long",
-		"ANTI_M1_VWAP_Doji_Short", "ANTI_D20_EMA_Cross_9_21", "Historical_Vol_Percentile_Breakout",
-		"M1X_Squeeze_Break_Short", "ANTI_M1_RSI2_5_95_T50_Short", "ANTI_M1_NR7_Expand_T50_Long",
-		"ANTI_M1_BB_Rev_CMF5_Long", "ANTI_M1X_VWAP_TrendPull_Long",
+	// Every previously live stream must be gone — the promotion REPLACED the
+	// roster rather than extending it.
+	for _, gone := range []PerpStream{
+		{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "ADAUSD"},
+		{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAXUSD"},
+		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAXUSD"},
+		{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LIGHTUSD"},
+		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LIGHTUSD"},
+		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "XAIUSD"},
 	} {
-		if live[gone] {
-			t.Errorf("%q was removed from the live roster but is back on it", gone)
+		if inRoster[perpStreamKey(gone.Strategy, gone.Symbol)] {
+			t.Errorf("%v was replaced but is still on the live roster", gone)
 		}
 	}
 }
@@ -112,33 +104,48 @@ func TestPerpAllowList_PairsDoNotCrossProduct(t *testing.T) {
 	a := NewPerpAllowList()
 	a.SetPairs(ScalpLiveStreams())
 
-	for _, ok := range []PerpStream{
-		{"ANTI_M1_DoubleBottom_10bp_Long", "ADAUSD"},
-		{"ANTI_M1_Break_D30_T20_Long", "AVAXUSD"},
-		{"ANTI_M1_Break_D60_T50_Long", "AVAXUSD"},
-	} {
-		if !a.Allowed(ok.Strategy, ok.Symbol) {
-			t.Errorf("selected stream %v was blocked", ok)
+	// Every selected stream is permitted.
+	for _, st := range ScalpLiveStreams() {
+		if !a.Allowed(st.Strategy, st.Symbol) {
+			t.Errorf("selected stream %v was blocked", st)
 		}
 	}
-	// The pairings the cross product would have invented. Each is a real,
-	// tradeable stream on the paper desk — which is exactly why permitting one
-	// unasked would have gone unnoticed.
-	for _, bad := range []PerpStream{
-		{"ANTI_M1_DoubleBottom_10bp_Long", "AVAXUSD"},
-		{"ANTI_M1_Break_D30_T20_Long", "ADAUSD"},
-		{"ANTI_M1_Break_D60_T50_Long", "ADAUSD"},
-	} {
-		if a.Allowed(bad.Strategy, bad.Symbol) {
-			t.Errorf("unselected pairing %v reached the venue — the cross product is back", bad)
+
+	// And a pairing the CROSS PRODUCT would invent is not. Built from real
+	// names and real symbols already on the roster, so it is a stream that
+	// genuinely exists on the paper desk — which is exactly why permitting it
+	// unasked would go unnoticed.
+	strategies, symbols := map[string]bool{}, map[string]bool{}
+	for _, st := range ScalpLiveStreams() {
+		strategies[st.Strategy] = true
+		symbols[strings.ToUpper(st.Symbol)] = true
+	}
+	selected := map[string]bool{}
+	for _, st := range ScalpLiveStreams() {
+		selected[perpStreamKey(st.Strategy, st.Symbol)] = true
+	}
+	invented := 0
+	for st := range strategies {
+		for sym := range symbols {
+			if selected[perpStreamKey(st, sym)] {
+				continue
+			}
+			if a.Allowed(st, sym) {
+				t.Errorf("unselected pairing %s|%s reached the venue — the cross product is back", st, sym)
+			}
+			invented++
 		}
 	}
-	// Symbol matching stays case-insensitive.
-	if !a.Allowed("ANTI_M1_Break_D30_T20_Long", "avaxusd") {
+	if invented == 0 {
+		t.Fatal("no unselected pairing existed to test; the assertion was vacuous")
+	}
+
+	// Symbol matching stays case-insensitive, and an unknown strategy is denied.
+	first := ScalpLiveStreams()[0]
+	if !a.Allowed(first.Strategy, strings.ToLower(first.Symbol)) {
 		t.Error("lowercase symbol was rejected")
 	}
-	// And an unknown strategy is still denied.
-	if a.Allowed("Some_Other_Strategy", "ADAUSD") {
+	if a.Allowed("Some_Other_Strategy", first.Symbol) {
 		t.Error("an unlisted strategy was permitted")
 	}
 }
@@ -214,9 +221,11 @@ func TestPerpPaperCandidates_TradeOnPaperButNotOnTheVenue(t *testing.T) {
 		if !PerpStreamPaperPermitted(c.Strategy, c.Symbol) {
 			t.Errorf("candidate %v cannot paper trade", c)
 		}
-		if PerpStreamPermitted(c.Strategy, c.Symbol) {
-			t.Errorf("candidate %v reached the VENUE gate — a candidate must not spend money", c)
-		}
+		// NOT asserted: that a candidate is absent from the venue gate. The
+		// live roster is now Account 03's book, which overlaps the other paper
+		// books heavily, so a stream on both is normal. What a paper book
+		// guarantees is that ITS balance is paper — not that its streams are
+		// forbidden elsewhere.
 	}
 
 	// The gate itself, independent of what happens to be listed today: the paper

@@ -80,30 +80,27 @@ func TestScalpLive_SymbolsDefaultToTheSelectedSet(t *testing.T) {
 	for _, s := range got {
 		seen[s] = true
 	}
-	for _, want := range []string{"ADAUSD", "AVAXUSD", "LIGHTUSD", "XAIUSD"} {
-		if !seen[want] {
-			t.Errorf("%s missing from the default symbols (got %v)", want, got)
-		}
-	}
-	// Derived from the stream selection, so the two can never disagree — and
-	// the way they used to disagree was by permitting more than was chosen.
+	// Derived from the live streams, so it cannot drift from what the venue
+	// gate permits. Asserted against that derivation rather than a hardcoded
+	// list: the roster is an owner decision that changes, and a literal here
+	// would fail on every legitimate promotion while catching nothing.
 	fromStreams := map[string]bool{}
 	for _, st := range delta.ScalpLiveStreams() {
 		fromStreams[strings.ToUpper(st.Symbol)] = true
 	}
+	for want := range fromStreams {
+		if !seen[want] {
+			t.Errorf("%s is traded by a live stream but missing from the symbol set (got %v)", want, got)
+		}
+	}
 	if len(seen) != len(fromStreams) {
 		t.Errorf("symbols %v do not match the live streams %v", got, fromStreams)
 	}
-	// BNBUSD was dropped 2026-08-02 — every qualifying stream is ADA or AVAX,
-	// and the BNBUSD variants of the same strategies were negative on the $100
-	// basis. Asserted absent, not merely unlisted: the allow-list gates on
-	// symbol as well as strategy, so re-adding it here would silently enable
-	// ten streams nobody selected.
-	if seen["BNBUSD"] {
-		t.Error("BNBUSD is back in the default symbols; it was deselected on the $100 restatement")
-	}
-	if len(got) != 4 {
-		t.Errorf("default symbols = %v, want the four the live streams trade", got)
+	// The two symbols excluded for mechanical reasons must never appear.
+	for _, gone := range []string{"MOVEUSD", "1000SATSUSD"} {
+		if seen[gone] {
+			t.Errorf("%s reached the live symbol set; it was excluded for a mechanical reason, not a preference", gone)
+		}
 	}
 	// The two the promotion deliberately EXCLUDED must stay out. MOVEUSD turns
 	// over $1,985/day and 1000SATSUSD cannot express a 0.35% stop on its tick.
