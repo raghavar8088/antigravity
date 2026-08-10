@@ -204,6 +204,13 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	if n := scalpLiveMaxConcurrent(); n > 0 {
 		b.SetMaxConcurrentPositions(n)
 	}
+	// Volatility-scaled stops. On by default: a 0.60% stop against a 1.13%
+	// median minute range produced 9 of 9 stop-outs and not one trade that
+	// reached a third of its target, so the fixed fraction is the known-broken
+	// setting rather than the safe one. SCALP_LIVE_VOL_STOPS=false restores it.
+	if strings.ToLower(strings.TrimSpace(os.Getenv("SCALP_LIVE_VOL_STOPS"))) != "false" {
+		b.EnableVolatilityStops(delta.NewVolatilityTracker(perpUniverseBaseURL()))
+	}
 	// Exact streams, not strategies x symbols. The cross product enabled
 	// pairings the operator never selected — three chosen rows became six live
 	// streams — and the allow-list is the last thing between a paper signal and

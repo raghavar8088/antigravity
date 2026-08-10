@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -141,7 +142,11 @@ type PerpBridge struct {
 	// unable to trade — otherwise 19 of 31 streams sit at "on", never fill, and
 	// look like strategies that simply are not signalling.
 	gridBlocked map[string]gridBlock
-	lastError   string
+
+	// vol measures per-symbol noise so the stop can be set outside it. Nil
+	// leaves every strategy's own stop untouched.
+	vol       *VolatilityTracker
+	lastError string
 
 	armed atomic.Bool
 	// fundingUSD is the venue's settled funding total, refreshed from the
@@ -353,6 +358,33 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		log.Printf("[PERP LIVE] %s %s: refused — %d position(s) already open on this symbol (cap %d)",
 			strategy, symbol, sameSymbol, cap)
 		return nil
+	}
+
+	// Volatility-scaled levels, BEFORE the grid gate.
+	//
+	// Ordered this way deliberately: the gate asks whether the stop can survive
+	// the price grid, and it must judge the stop that will actually be sent. A
+	// wider stop clears the grid more easily, so gating the strategy's original
+	// 0.6% would refuse symbols that are perfectly tradable once the stop is
+	// measured properly.
+	if b.vol != nil {
+		if frac, ok := b.vol.StopFractionFor(ctx, symbol); ok {
+			newStop, newTarget := volScaledLevels(entry, stop, target, frac, long)
+			if newStop > 0 && newTarget > 0 {
+				// The time stop scales with the distance. A stop three times
+				// wider takes far longer to resolve, and leaving the TTL at one
+				// hour would close most positions on time before either level
+				// was reached — replacing "stopped out by noise" with "timed
+				// out before the signal could be judged", which answers the
+				// question no better.
+				if origRisk := math.Abs(entry - stop); origRisk > 0 {
+					if scale := math.Abs(entry-newStop) / origRisk; scale > 1 {
+						ttl = time.Duration(float64(ttl) * scale)
+					}
+				}
+				stop, target = newStop, newTarget
+			}
+		}
 	}
 
 	// PRE-TRADE protectability gate.
