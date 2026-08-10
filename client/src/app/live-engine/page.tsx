@@ -209,7 +209,13 @@ type PerpStats = {
   /** Switched off by the owner — engine truth, not browser state. */
   disabledStrategies?: string[];
   /** The roster at its real granularity: (strategy, symbol) streams. */
-  liveStreams?: { strategy: string; symbol: string; enabled: boolean }[];
+  liveStreams?: {
+    strategy: string;
+    symbol: string;
+    enabled: boolean;
+    gridRefusals?: number;
+    lastStopTicks?: number;
+  }[];
   openPositions: PerpTrade[];
   submitted: number;
   rejected: number;
@@ -236,6 +242,9 @@ type LeaderRow = {
   stopOuts: number;
   /** Whether this strategy may open new live positions. */
   enabled: boolean;
+  /** Signals refused pre-trade because the symbol's tick grid is too coarse. */
+  gridRefusals: number;
+  lastStopTicks: number;
   allowed: boolean;
   live: boolean;
   reason: string;
@@ -1072,6 +1081,8 @@ export default function LiveEnginePage() {
         // Rendered from the engine's disabled set, so the switch shows what the
         // engine will actually do rather than what this tab last clicked.
         enabled: !(perp.disabledStrategies ?? []).includes(`${name}|${symbol.toUpperCase()}`),
+        gridRefusals: 0,
+        lastStopTicks: 0,
         allowed: true,
         // The scalp desk's promotion gate passes none of these; the bridge
         // trades them on owner instruction, not on a gate verdict.
@@ -1085,7 +1096,10 @@ export default function LiveEnginePage() {
       // what decides whether the result means anything.
       const streamKey = (strategy: string, symbol: string) => `${strategy}|${(symbol || "").toUpperCase()}`;
       for (const st of perp.liveStreams ?? []) {
-        perpRows.set(streamKey(st.strategy, st.symbol), blankPerp(st.strategy, st.symbol));
+        const row = blankPerp(st.strategy, st.symbol);
+        row.gridRefusals = st.gridRefusals ?? 0;
+        row.lastStopTicks = st.lastStopTicks ?? 0;
+        perpRows.set(streamKey(st.strategy, st.symbol), row);
       }
       for (const t of perpTrades) {
         if (t.status !== "CLOSED") continue;
@@ -1227,6 +1241,31 @@ export default function LiveEnginePage() {
             onChange={(next) => void toggleStrategy(r.strategy, r.symbol, next)}
           />
         ),
+      },
+      {
+        id: "grid",
+        header: "Grid",
+        // A stream can be switched ON and still be structurally unable to
+        // trade, because its symbol's tick grid is too coarse for the stop the
+        // strategy wants. Shown next to the switch, because that is exactly
+        // where "on" would otherwise be a lie: 19 of 31 streams currently sit
+        // in this state, and without this they read as strategies that simply
+        // are not signalling.
+        cell: (r) =>
+          r.gridRefusals > 0 ? (
+            <span
+              className="desk-pnl-negative"
+              title={`Refused ${r.gridRefusals} signal(s) before entry: the stop was ${r.lastStopTicks.toFixed(1)} ticks wide, under the ${20} needed for it to survive this price grid. Switched ON, but it cannot open a position on this symbol.`}
+              style={{ fontWeight: 700 }}
+            >
+              blocked
+              <span style={{ opacity: 0.7, fontWeight: 400 }}>
+                {` ${r.lastStopTicks.toFixed(1)}t ×${r.gridRefusals}`}
+              </span>
+            </span>
+          ) : (
+            <span style={{ opacity: 0.5 }}>—</span>
+          ),
       },
       {
         id: "overshoot",

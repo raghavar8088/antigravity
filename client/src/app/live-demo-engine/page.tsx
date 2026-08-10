@@ -221,7 +221,13 @@ type PerpStats = {
   /** Switched off by the owner — engine truth, not browser state. */
   disabledStrategies?: string[];
   /** The roster at its real granularity: (strategy, symbol) streams. */
-  liveStreams?: { strategy: string; symbol: string; enabled: boolean }[];
+  liveStreams?: {
+    strategy: string;
+    symbol: string;
+    enabled: boolean;
+    gridRefusals?: number;
+    lastStopTicks?: number;
+  }[];
   openPositions: PerpTrade[];
   submitted: number;
   rejected: number;
@@ -248,6 +254,9 @@ type LeaderRow = {
   stopOuts: number;
   /** Whether this strategy may open new live positions. */
   enabled: boolean;
+  /** Signals refused pre-trade because the symbol's tick grid is too coarse. */
+  gridRefusals: number;
+  lastStopTicks: number;
   allowed: boolean;
   live: boolean;
   reason: string;
@@ -537,6 +546,7 @@ export default function LiveEnginePage() {
   const [actionMsg, setActionMsg] = useState<string>("");
   const [showAllOrders, setShowAllOrders] = useState<boolean>(false);
   const [showAllClosed, setShowAllClosed] = useState<boolean>(false);
+  const [confirmClear, setConfirmClear] = useState<boolean>(false);
 
 
   const refresh = useCallback(async () => {
@@ -625,6 +635,45 @@ export default function LiveEnginePage() {
     void refresh();
     const t = setInterval(() => void refresh(), 15_000);
     return () => clearInterval(t);
+  }, [refresh]);
+
+  /**
+   * Wipe the live trade record on BOTH desks.
+   *
+   * Both, in one action, because the two panels this empties are already
+   * merged: Closed Positions counts "across both desks" and the leaderboard
+   * ranks the perpetual streams. Clearing one engine would leave the other's
+   * rows on screen, which reads as the button having failed.
+   *
+   * Open positions survive on purpose — both engines drop only CLOSED and
+   * FAILED rows. An open position is real money on Delta, and its row is the
+   * only thing tying it to a stop, a target and the strategy that opened it.
+   *
+   * Each result is reported separately. A single "cleared" message covering a
+   * pair of calls where one 500'd is how a UI teaches an operator to trust a
+   * control that does not work.
+   */
+  const clearLiveData = useCallback(async () => {
+    setBusy(true);
+    setActionMsg("");
+    try {
+      const [opt, perpRes] = await Promise.all([
+        fetch("/api/live-demo-engine/clear-history", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }),
+        fetch("/api/scalp-demo/scalp/live/clear-history", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }),
+      ]);
+      const optBody = (await opt.json().catch(() => null)) as { cleared?: number } | null;
+      const perpBody = (await perpRes.json().catch(() => null)) as { cleared?: number } | null;
+      const parts: string[] = [];
+      parts.push(opt.ok ? `options desk: ${optBody?.cleared ?? 0} cleared` : `options desk FAILED (HTTP ${opt.status})`);
+      parts.push(perpRes.ok ? `perp desk: ${perpBody?.cleared ?? 0} cleared` : `perp desk FAILED (HTTP ${perpRes.status})`);
+      setActionMsg(parts.join(" · ") + (opt.ok && perpRes.ok ? " — open positions untouched" : ""));
+      setConfirmClear(false);
+      await refresh();
+    } catch {
+      setActionMsg("clear failed — the control plane did not respond; nothing was cleared");
+    } finally {
+      setBusy(false);
+    }
   }, [refresh]);
 
   /**
@@ -1044,6 +1093,8 @@ export default function LiveEnginePage() {
         // Rendered from the engine's disabled set, so the switch shows what the
         // engine will actually do rather than what this tab last clicked.
         enabled: !(perp.disabledStrategies ?? []).includes(`${name}|${symbol.toUpperCase()}`),
+        gridRefusals: 0,
+        lastStopTicks: 0,
         allowed: true,
         // The scalp desk's promotion gate passes none of these; the bridge
         // trades them on owner instruction, not on a gate verdict.
@@ -1057,7 +1108,10 @@ export default function LiveEnginePage() {
       // what decides whether the result means anything.
       const streamKey = (strategy: string, symbol: string) => `${strategy}|${(symbol || "").toUpperCase()}`;
       for (const st of perp.liveStreams ?? []) {
-        perpRows.set(streamKey(st.strategy, st.symbol), blankPerp(st.strategy, st.symbol));
+        const row = blankPerp(st.strategy, st.symbol);
+        row.gridRefusals = st.gridRefusals ?? 0;
+        row.lastStopTicks = st.lastStopTicks ?? 0;
+        perpRows.set(streamKey(st.strategy, st.symbol), row);
       }
       for (const t of perpTrades) {
         if (t.status !== "CLOSED") continue;
@@ -1199,6 +1253,31 @@ export default function LiveEnginePage() {
             onChange={(next) => void toggleStrategy(r.strategy, r.symbol, next)}
           />
         ),
+      },
+      {
+        id: "grid",
+        header: "Grid",
+        // A stream can be switched ON and still be structurally unable to
+        // trade, because its symbol's tick grid is too coarse for the stop the
+        // strategy wants. Shown next to the switch, because that is exactly
+        // where "on" would otherwise be a lie: 19 of 31 streams currently sit
+        // in this state, and without this they read as strategies that simply
+        // are not signalling.
+        cell: (r) =>
+          r.gridRefusals > 0 ? (
+            <span
+              className="desk-pnl-negative"
+              title={`Refused ${r.gridRefusals} signal(s) before entry: the stop was ${r.lastStopTicks.toFixed(1)} ticks wide, under the ${20} needed for it to survive this price grid. Switched ON, but it cannot open a position on this symbol.`}
+              style={{ fontWeight: 700 }}
+            >
+              blocked
+              <span style={{ opacity: 0.7, fontWeight: 400 }}>
+                {` ${r.lastStopTicks.toFixed(1)}t ×${r.gridRefusals}`}
+              </span>
+            </span>
+          ) : (
+            <span style={{ opacity: 0.5 }}>—</span>
+          ),
       },
       {
         id: "overshoot",
@@ -1579,6 +1658,30 @@ export default function LiveEnginePage() {
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
                 : "every strategy enabled on the perpetual desk, ranked once it has real fills"
+            }
+            actions={
+              /* Two-step, and the second step states the count and the
+                 consequence. A one-click control here would let a misclick
+                 destroy the fill record that every promotion decision reads —
+                 and unlike a bad trade, there is nothing to undo it with. */
+              confirmClear ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span className="desk-body-md" style={{ color: "var(--desk-error)", fontWeight: 600 }}>
+                    Delete {allClosed.length} closed {allClosed.length === 1 ? "row" : "rows"} on both desks? Open
+                    positions are kept. This cannot be undone.
+                  </span>
+                  <DeskButton variant="text" onClick={() => setConfirmClear(false)} disabled={busy}>
+                    Cancel
+                  </DeskButton>
+                  <DeskButton variant="danger-tonal" onClick={() => void clearLiveData()} disabled={busy}>
+                    {busy ? "Clearing…" : "Yes, clear it"}
+                  </DeskButton>
+                </div>
+              ) : (
+                <DeskButton variant="outlined" onClick={() => setConfirmClear(true)} disabled={busy}>
+                  Clear live data
+                </DeskButton>
+              )
             }
           />
           <DeskDataTable

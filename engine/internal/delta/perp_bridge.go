@@ -135,6 +135,12 @@ type PerpBridge struct {
 	// missing from a saved enable-list — a switch whose failure mode is a
 	// desk that quietly stops trading is worse than one that keeps going.
 	strategyOff map[string]bool
+
+	// gridBlocked records streams the pre-trade grid gate has refused, keyed by
+	// stream. Kept so the board can show a stream that is switched ON and still
+	// unable to trade — otherwise 19 of 31 streams sit at "on", never fill, and
+	// look like strategies that simply are not signalling.
+	gridBlocked map[string]gridBlock
 	lastError   string
 
 	armed atomic.Bool
@@ -360,9 +366,19 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	//
 	// Refusing a signal costs nothing. Opening one that cannot be bracketed
 	// costs whatever the market does next.
-	if reason := stopSurvivesGrid(b.reg, symbol, entry, stop); reason != "" {
+	if ticks, reason := stopGridTicks(b.reg, symbol, entry, stop); reason != "" {
 		log.Printf("[PERP LIVE] %s %s: refused before entry — %s", strategy, symbol, reason)
 		b.rejected.Add(1)
+		b.mu.Lock()
+		if b.gridBlocked == nil {
+			b.gridBlocked = make(map[string]gridBlock)
+		}
+		k := perpStreamKey(strategy, symbol)
+		gb := b.gridBlocked[k]
+		gb.Refusals++
+		gb.LastStopTicks = ticks
+		b.gridBlocked[k] = gb
+		b.mu.Unlock()
 		return nil
 	}
 
@@ -1015,10 +1031,14 @@ func (b *PerpBridge) Stats() PerpBridgeStats {
 			pairs := b.allow.Pairs()
 			out := make([]PerpStreamView, 0, len(pairs))
 			for _, st := range pairs {
+				k := perpStreamKey(st.Strategy, st.Symbol)
+				gb := b.gridBlocked[k]
 				out = append(out, PerpStreamView{
-					Strategy: st.Strategy,
-					Symbol:   st.Symbol,
-					Enabled:  !b.strategyOff[perpStreamKey(st.Strategy, st.Symbol)],
+					Strategy:      st.Strategy,
+					Symbol:        st.Symbol,
+					Enabled:       !b.strategyOff[k],
+					GridRefusals:  gb.Refusals,
+					LastStopTicks: gb.LastStopTicks,
 				})
 			}
 			return out

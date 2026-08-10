@@ -28,21 +28,31 @@ const minEntryStopTicks = 20
 // and "refused" without a cause is how a desk goes quiet for a week before
 // anyone works out why.
 func stopSurvivesGrid(reg *PerpRegistry, symbol string, entry, stop float64) string {
+	_, reason := stopGridTicks(reg, symbol, entry, stop)
+	return reason
+}
+
+// stopGridTicks returns the stop's width in ticks and, if it is too narrow, the
+// reason it cannot be traded.
+//
+// The width is returned even when the stop passes, so the desk can report the
+// margin a stream is operating on rather than only a pass/fail.
+func stopGridTicks(reg *PerpRegistry, symbol string, entry, stop float64) (float64, string) {
 	if reg == nil || entry <= 0 || stop <= 0 {
-		return ""
+		return 0, ""
 	}
 	prod, ok := reg.Lookup(symbol)
 	if !ok || prod.TickSize <= 0 {
 		// Unknown grid: permit. Refusing every order because a registry field is
 		// missing is a worse failure than the one being prevented, and it would
 		// present as the desk silently declining to trade.
-		return ""
+		return 0, ""
 	}
 	ticks := math.Abs(entry-stop) / prod.TickSize
 	if ticks < minEntryStopTicks {
-		return fmt.Sprintf(
+		return ticks, fmt.Sprintf(
 			"stop is %.1f ticks wide on %s (tick %g); under %d ticks the grid moves price in steps worth more than %.0f%% of the planned risk",
 			ticks, symbol, prod.TickSize, minEntryStopTicks, 100/float64(minEntryStopTicks))
 	}
-	return ""
+	return ticks, ""
 }
