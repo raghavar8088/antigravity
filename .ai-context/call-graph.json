@@ -1,1 +1,1 @@
-{}
+{"engine/cmd/scalp_prelive/risk_fraction_test.go::TestScalpLiveRiskFraction_DefaultsToTwoPercent()":["engine/cmd/scalp_prelive/live.go::scalpLiveRiskFraction()"],"engine/cmd/scalp_prelive/risk_fraction_test.go::TestScalpLiveRiskFraction_HonoursAValidOverride()":["engine/cmd/scalp_prelive/live.go::scalpLiveRiskFraction()"],"engine/cmd/scalp_prelive/risk_fraction_test.go::TestScalpLiveRiskFraction_RejectsNonsense()":["engine/cmd/scalp_prelive/live.go::scalpLiveRiskFraction()"]}

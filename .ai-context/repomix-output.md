@@ -913,6 +913,7 @@ The content is organized as follows:
   delta/perp_products_test.go
   delta/perp_products.go
   delta/perp_reconcile_test.go
+  delta/perp_risk_fraction.go
   delta/perp_roster_test.go
   delta/perp_roster.go
   delta/perp_sizing_test.go
@@ -1790,6 +1791,7 @@ The content is organized as follows:
   scalp_prelive/paperpersist_test.go
   scalp_prelive/paperpersist.go
   scalp_prelive/profile_test.go
+  scalp_prelive/risk_fraction_test.go
   scalp_prelive/symbols_test.go
   scalp_prelive/symbols_venue_test.go
   scalp_prelive/symbols.go

@@ -59,6 +59,28 @@ func scalpLiveEquityUSD() float64 {
 	return 100
 }
 
+// scalpLiveRiskFraction is the share of equity risked per trade.
+//
+// Configurable because the default interacts badly with the aggregate cap. At
+// 2% risk against a ~0.64% stop, one position is sized at roughly 3.1x equity —
+// the entire 3x book ceiling — so the first signal to arrive consumes
+// everything and the other two concurrency slots get nothing. That is exactly
+// what happened on 2026-08-09: SKYAIUSD opened at $299 of a $300 ceiling and
+// the next two signals were refused as dust.
+//
+// Sizing each position near 1x equity instead lets all three slots fill, which
+// matters when the point of trading is to collect evidence across the roster
+// rather than to make money on one stream.
+func scalpLiveRiskFraction() float64 {
+	if raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_RISK_FRACTION")); raw != "" {
+		if f, err := strconv.ParseFloat(raw, 64); err == nil && f > 0 && f < 1 {
+			return f
+		}
+		log.Printf("[PERP LIVE] SCALP_LIVE_RISK_FRACTION=%q is not a fraction in (0,1) — keeping the default", raw)
+	}
+	return 0.02
+}
+
 // scalpLiveSymbols is the symbol half of the allow-list. Empty means "any symbol
 // the allow-listed strategies trade", which is broader than the owner selected,
 // so it is set explicitly by default.
@@ -122,14 +144,19 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 
 	equity := scalpLiveEquityUSD()
 	b := delta.NewPerpBridge(client, reg, equity)
+	// Applied after construction so the default stays the documented 2% and an
+	// override is an explicit, logged act rather than a hidden constructor arg.
+	if rf := scalpLiveRiskFraction(); rf != 0.02 {
+		b.SetRiskPerTradeFraction(rf)
+	}
 	// Exact streams, not strategies x symbols. The cross product enabled
 	// pairings the operator never selected — three chosen rows became six live
 	// streams — and the allow-list is the last thing between a paper signal and
 	// real money.
 	b.AllowList().SetPairs(delta.ScalpLiveStreams())
 
-	log.Printf("[SCALP LIVE] configured: $%.2f account, %d strategies, %d products known — DISARMED until armed explicitly",
-		equity, b.AllowList().Count(), reg.Count())
+	log.Printf("[SCALP LIVE] configured: $%.2f account, %.2f%% risk/trade ($%.3f), %d strategies, %d products known — DISARMED until armed explicitly",
+		equity, scalpLiveRiskFraction()*100, equity*scalpLiveRiskFraction(), b.AllowList().Count(), reg.Count())
 
 	// Persist the open book alongside the desk's own state, on the mounted
 	// volume, so custody survives a restart instead of stranding funded
