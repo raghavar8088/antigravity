@@ -80,6 +80,7 @@ The content is organized as follows:
   app/api/eth-prelive/desk/[...path]/route.ts
   app/api/event-center/route.ts
   app/api/execution/request/route.ts
+  app/api/fx/usd-inr/route.ts
   app/api/health/storage/route.ts
   app/api/killswitch/resume/route.ts
   app/api/killswitch/status/route.ts

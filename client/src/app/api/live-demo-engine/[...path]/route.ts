@@ -80,6 +80,48 @@ function notApplicable(reason: string) {
   return NextResponse.json({ items: [], notApplicable: true, reason });
 }
 
+/**
+ * Shape of the demo perpetual desk's /scalp/live/stats.
+ *
+ * `enabled` is false until the bridge holds credentials; `armed` is false until
+ * an operator arms it, and never survives a restart.
+ */
+type DemoStats = { enabled?: boolean; stats?: { armed?: boolean; equityUsd?: number } };
+
+/**
+ * Translate the demo desk's stats into the state shape the page reads.
+ *
+ * The page is generated from the live one by scripts/clone_live_demo_page.py,
+ * so it reads the OPTIONS engine's LiveState: `armed`, `configured`,
+ * `killSwitchActive`, `consecutiveRejects`. The demo engine is a different
+ * program and answers with none of those. Passing its payload through meant an
+ * entire control card rendered from `undefined` — showing an operator a state
+ * that nothing had reported.
+ *
+ * The adapter belongs here rather than in the page: the page is regenerated,
+ * this route is not. The values are constants because they are facts about the
+ * venue, not readings — demo.delta.exchange has no options desk, so its options
+ * engine is not armed, not configured and has placed no rejected orders. The
+ * perpetual desk's real arm state is shown by its own card, which reads
+ * /api/scalp-demo directly.
+ */
+function demoState(body: DemoStats): Record<string, unknown> {
+  return {
+    state: "DISARMED",
+    armed: false,
+    configured: false,
+    optionsTradingEnabled: false,
+    killSwitchActive: false,
+    killSwitchControllable: false,
+    consecutiveRejects: 0,
+    maxConsecutiveRejects: 3,
+    ceilingUsd: body.stats?.equityUsd ?? 0,
+    /** Demo-only additions, ignored by the generated page's typed reads. */
+    demoBridgeEnabled: body.enabled === true,
+    demoPerpArmed: body.stats?.armed === true,
+  };
+}
+
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
   const action = (path ?? []).join("/");
@@ -106,6 +148,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
       signal: AbortSignal.timeout(25_000),
     });
     const body = await res.text();
+
+    // `state` is the page's reachability probe AND the source of its control
+    // card, so it is the one action that must be translated rather than piped.
+    if (action === "state" && res.ok) {
+      try {
+        return NextResponse.json(demoState(JSON.parse(body) as DemoStats));
+      } catch {
+        // Unparseable upstream is a fault, not an empty desk. Fall through to
+        // the raw passthrough so the page reports the real status.
+      }
+    }
+
     return new NextResponse(body, {
       status: res.status,
       headers: { "content-type": res.headers.get("content-type") ?? "application/json" },

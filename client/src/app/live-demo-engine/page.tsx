@@ -253,12 +253,44 @@ type LeaderRow = {
   reason: string;
 };
 
-function fmtUSD(v: number | undefined): string {
+/**
+ * USD → INR rate, or null until it loads.
+ *
+ * Module-level so all 31 money call sites convert without threading a prop
+ * through every column definition. Set once per refresh from /api/fx/usd-inr,
+ * alongside the state updates that trigger the re-render.
+ */
+let usdInrRate: number | null = null;
+
+function setUsdInrRate(rate: number | null): void {
+  usdInrRate = rate && Number.isFinite(rate) && rate > 0 ? rate : null;
+}
+
+/**
+ * Format a money amount in rupees.
+ *
+ * Falls back to DOLLARS with a $ sign when the rate has not loaded, rather than
+ * printing a dollar figure under a ₹ sign. A wrong currency symbol on a real
+ * P&L is a 95x misstatement that looks completely ordinary — the symbol always
+ * tells the truth about which currency the number actually is.
+ */
+function fmtMoney(v: number | undefined): string {
   if (v === undefined || Number.isNaN(v)) return "—";
-  const abs = Math.abs(v);
-  // Option premiums here are cents-scale; 2dp would round a real move to $0.00.
+  if (usdInrRate === null) {
+    const abs = Math.abs(v);
+    const dp = abs > 0 && abs < 1 ? 4 : 2;
+    return `${v < 0 ? "-" : ""}$${abs.toFixed(dp)}`;
+  }
+  const inr = v * usdInrRate;
+  const abs = Math.abs(inr);
+  // Fixed-size mode trades one contract, so a stop-out is a fraction of a
+  // rupee. 2dp would round every result on the desk to ₹0.00 and report a
+  // desk that is trading as a desk that is doing nothing.
   const dp = abs > 0 && abs < 1 ? 4 : 2;
-  return `${v < 0 ? "-" : ""}$${abs.toFixed(dp)}`;
+  return `${inr < 0 ? "-" : ""}₹${abs.toLocaleString("en-IN", {
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
+  })}`;
 }
 /**
  * Render a price at a sensible precision.
@@ -277,6 +309,45 @@ function fmtPrice(v: number | undefined): string {
 
 function pnlTone(v: number): string {
   return v > 0 ? "desk-pnl-positive" : v < 0 ? "desk-pnl-negative" : "desk-pnl-neutral";
+}
+
+/**
+ * Payload readers that do not lie about shape.
+ *
+ * A control plane may answer a panel it has no source for with
+ * `{items: [], notApplicable: true, reason}` instead of a list. This page used
+ * to cast every response straight to its type — `(await cp.json()) as
+ * ClosedPosition[]` — and a cast is a compile-time claim about a runtime
+ * payload, not a check. When the demo control plane started answering that way,
+ * `closed.length` read undefined and the table's `.slice()` threw, blanking the
+ * whole page. It survives here because these readers verify before they hand
+ * anything to a setter.
+ *
+ * Kept on the LIVE page rather than patched into the generated demo one:
+ * scripts/clone_live_demo_page.py rebuilds the demo page from this file, so a
+ * fix applied there is deleted by the next regeneration. This is the only place
+ * it stays fixed.
+ */
+type NotApplicable = { notApplicable?: boolean; reason?: string };
+
+function naReasonOf(payload: unknown): string | null {
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const p = payload as NotApplicable;
+    if (p.notApplicable) return p.reason ?? "not available on this venue";
+  }
+  return null;
+}
+
+/** An array, or an empty one — never an object wearing an array's type. */
+function asArray<T>(payload: unknown): T[] {
+  return Array.isArray(payload) ? (payload as T[]) : [];
+}
+
+/** An object, or null when the payload is a not-applicable marker. */
+function asRecord<T>(payload: unknown): T | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (naReasonOf(payload)) return null;
+  return payload as T;
 }
 function ageLabel(iso?: string): string {
   if (!iso) return "no data";
@@ -442,6 +513,14 @@ type PaperDesk = {
 
 export default function LiveEnginePage() {
   const [state, setState] = useState<LiveState | null>(null);
+  const [fx, setFx] = useState<{ rate: number; asOf: string | null } | null>(null);
+  /**
+   * Why a panel is empty, keyed by panel, rendered in that panel's own empty
+   * state. "No rows" and "this venue has no such desk" look identical on screen
+   * and mean opposite things — and a silent zero read as a result is the
+   * recurring failure on these desks, not an acceptable default.
+   */
+  const [na, setNa] = useState<Record<string, string>>({});
   const [account, setAccount] = useState<Account | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [closed, setClosed] = useState<ClosedPosition[]>([]);
@@ -483,24 +562,57 @@ export default function LiveEnginePage() {
         setError(`control plane unreachable (HTTP ${st.status})`);
         return;
       }
-      setState(await st.json());
-      if (ac.ok) setAccount(await ac.json());
-      if (po.ok) setPositions((await po.json()) as Position[]);
-      if (cp.ok) setClosed((await cp.json()) as ClosedPosition[]);
-      if (dp.ok) setDaily((await dp.json()) as DailyPnl[]);
-      if (or.ok) setOrders((await or.json()) as Order[]);
-      if (ro.ok) setRoster((await ro.json()) as Eligibility[]);
-      if (ps.ok) {
-        const body = (await ps.json()) as { enabled?: boolean; stats?: PerpStats };
-        setPerp(body.enabled ? (body.stats ?? null) : null);
+
+      // The display rate. Deliberately not part of the Promise.all above: a
+      // currency-conversion outage must never stop the desk's own numbers from
+      // loading. On failure the rate stays null and every amount renders in
+      // dollars with a $ sign, which is wrong-currency but never wrong-number.
+      try {
+        const fx = await fetch("/api/fx/usd-inr", { cache: "no-store" });
+        const body = (await fx.json()) as { ok?: boolean; rate?: number; asOf?: string | null };
+        if (fx.ok && body.ok && typeof body.rate === "number") {
+          setUsdInrRate(body.rate);
+          setFx({ rate: body.rate, asOf: body.asOf ?? null });
+        } else {
+          setUsdInrRate(null);
+          setFx(null);
+        }
+      } catch {
+        setUsdInrRate(null);
+        setFx(null);
       }
-      if (pt.ok) setPerpTrades(((await pt.json()) as PerpTrade[]) ?? []);
-      if (rc.ok) setRecon(await rc.json());
+      const notes: Record<string, string> = {};
+      /** Read a payload once, and remember any "no source here" it carries. */
+      const read = async (res: Response, key: string): Promise<unknown> => {
+        if (!res.ok) return null;
+        const body = await res.json().catch(() => null);
+        const reason = naReasonOf(body);
+        if (reason) {
+          notes[key] = reason;
+          return null;
+        }
+        return body;
+      };
+
+      setState(asRecord<LiveState>(await read(st, "state")));
+      setAccount(asRecord<Account>(await read(ac, "account")));
+      setPositions(asArray<Position>(await read(po, "positions")));
+      setClosed(asArray<ClosedPosition>(await read(cp, "closed")));
+      setDaily(asArray<DailyPnl>(await read(dp, "daily")));
+      setOrders(asArray<Order>(await read(or, "orders")));
+      setRoster(asArray<Eligibility>(await read(ro, "roster")));
+      if (ps.ok) {
+        const body = (await ps.json().catch(() => null)) as { enabled?: boolean; stats?: PerpStats } | null;
+        setPerp(body?.enabled ? (body.stats ?? null) : null);
+      }
+      setPerpTrades(asArray<PerpTrade>(await read(pt, "perpTrades")));
+      setRecon(asRecord<Recon>(await read(rc, "recon")));
       // Venue truth is additive: if Delta is unreachable the rest of the page
       // must keep working, and the section says so rather than showing empty
       // tables that read as "nothing happened".
-      if (vn.ok) setVenue((await vn.json()) as VenuePayload);
-      if (au.ok) setAudit(((await au.json()) as { entries: AuditEntry[] }).entries ?? []);
+      setVenue(asRecord<VenuePayload>(await read(vn, "venue")));
+      setAudit(asArray<AuditEntry>(asRecord<{ entries: AuditEntry[] }>(await read(au, "audit"))?.entries));
+      setNa(notes);
       setError("");
     } catch {
       setError("control plane unreachable");
@@ -618,6 +730,17 @@ export default function LiveEnginePage() {
 
   const armed = state?.armed ?? false;
 
+  /**
+   * An empty table says why it is empty. Without this, "no source on this
+   * venue" and "traded nothing" render as the same blank row.
+   */
+  const emptyNote = useCallback(
+    (key: string, fallback: string) => (
+      <span style={{ color: "var(--desk-on-surface-variant)" }}>{na[key] ?? fallback}</span>
+    ),
+    [na],
+  );
+
   /** Every live position on the wallet, whichever desk opened it. */
   const allPositions: UnifiedPosition[] = useMemo(() => {
     const out: UnifiedPosition[] = positions.map((p) => ({
@@ -692,13 +815,13 @@ export default function LiveEnginePage() {
         // charged whichever way the trade goes, so it shrinks this AND deepens
         // "If SL" — it does not cancel between them.
         cell: (p) =>
-          p.ifTargetUsd ? <span className="desk-pnl-positive">{fmtUSD(p.ifTargetUsd)}</span> : "—",
+          p.ifTargetUsd ? <span className="desk-pnl-positive">{fmtMoney(p.ifTargetUsd)}</span> : "—",
       },
       {
         id: "ifstop",
         align: "right",
         header: "If SL",
-        cell: (p) => (p.ifStopUsd ? <span className="desk-pnl-negative">{fmtUSD(p.ifStopUsd)}</span> : "—"),
+        cell: (p) => (p.ifStopUsd ? <span className="desk-pnl-negative">{fmtMoney(p.ifStopUsd)}</span> : "—"),
       },
       {
         id: "rr",
@@ -713,7 +836,7 @@ export default function LiveEnginePage() {
         id: "upnl",
         align: "right",
         header: "Unrealized",
-        cell: (p) => <span className={pnlTone(p.unrealizedPnl)}>{fmtUSD(p.unrealizedPnl)}</span>,
+        cell: (p) => <span className={pnlTone(p.unrealizedPnl)}>{fmtMoney(p.unrealizedPnl)}</span>,
       },
     ],
     [],
@@ -722,7 +845,7 @@ export default function LiveEnginePage() {
   const dailyColumns: DeskColumn<DailyPnl>[] = useMemo(
     () => [
       { id: "date", header: "Date (IST)", cell: (d) => fmtISTDayLabel(d.date) },
-      { id: "cap", align: "right", header: "Capital used", cell: (d) => fmtUSD(d.capitalUsd) },
+      { id: "cap", align: "right", header: "Capital used", cell: (d) => fmtMoney(d.capitalUsd) },
       {
         id: "roi", align: "right", header: "ROI",
         cell: (d) => <span className={pnlTone(d.roiPct)} style={{ fontWeight: 600 }}>{d.roiPct.toFixed(1)}%</span>,
@@ -741,7 +864,7 @@ export default function LiveEnginePage() {
                   : undefined
               }
             >
-              {fmtUSD(d.feesUsd)}
+              {fmtMoney(d.feesUsd)}
               {d.feeDragPct !== undefined && (
                 <span style={{ opacity: 0.6 }}> ({d.feeDragPct.toFixed(0)}%)</span>
               )}
@@ -754,9 +877,9 @@ export default function LiveEnginePage() {
           <span
             className={pnlTone(d.pnlUsd)}
             style={{ fontWeight: 600 }}
-            title={d.grossPnlUsd !== undefined ? `Gross ${fmtUSD(d.grossPnlUsd)} before fees` : undefined}
+            title={d.grossPnlUsd !== undefined ? `Gross ${fmtMoney(d.grossPnlUsd)} before fees` : undefined}
           >
-            {fmtUSD(d.pnlUsd)}
+            {fmtMoney(d.pnlUsd)}
           </span>
         ),
       },
@@ -846,11 +969,11 @@ export default function LiveEnginePage() {
             style={{ fontWeight: 600 }}
             title={
               c.grossPnl !== undefined && c.feesUsd !== undefined
-                ? `Gross ${fmtUSD(c.grossPnl)} − fees ${fmtUSD(c.feesUsd)}`
+                ? `Gross ${fmtMoney(c.grossPnl)} − fees ${fmtMoney(c.feesUsd)}`
                 : undefined
             }
           >
-            {fmtUSD(c.realizedPnl)}
+            {fmtMoney(c.realizedPnl)}
           </span>
         ),
       },
@@ -864,7 +987,7 @@ export default function LiveEnginePage() {
       { id: "type", header: "Type", cell: (o) => <DeskChip tone={o.optionType === "CALL" ? "success" : "primary"}>{o.optionType}</DeskChip> },
       { id: "sym", header: "Symbol", cell: (o) => o.symbol || "—" },
       { id: "ct", align: "right", header: "Contracts", cell: (o) => o.contracts },
-      { id: "prem", align: "right", header: "Premium", cell: (o) => fmtUSD(o.premiumUsd) },
+      { id: "prem", align: "right", header: "Premium", cell: (o) => fmtMoney(o.premiumUsd) },
       {
         id: "status",
         header: "Status",
@@ -1021,19 +1144,19 @@ export default function LiveEnginePage() {
         id: "gross",
         header: "Gross $",
         align: "right",
-        cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.grossUsd)}>{fmtUSD(r.grossUsd)}</span> : "—"),
+        cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.grossUsd)}>{fmtMoney(r.grossUsd)}</span> : "—"),
       },
       {
         id: "fees",
         header: "Fees $",
         align: "right",
-        cell: (r) => (r.trades > 0 ? fmtUSD(r.feesUsd) : "—"),
+        cell: (r) => (r.trades > 0 ? fmtMoney(r.feesUsd) : "—"),
       },
       {
         id: "net",
         header: "Net $",
         align: "right",
-        cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.netUsd)}>{fmtUSD(r.netUsd)}</span> : "—"),
+        cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.netUsd)}>{fmtMoney(r.netUsd)}</span> : "—"),
       },
       {
         id: "symbol",
@@ -1216,6 +1339,26 @@ export default function LiveEnginePage() {
               DEMO — NOT REAL MONEY
             </span>
           </div>
+          {/*
+            The conversion, stated. Every money figure on this page is a USD
+            amount multiplied by this rate, and a converted number is only as
+            true as the rate behind it — so the rate and its age are shown
+            rather than assumed. When the provider is unreachable the amounts
+            stay in dollars and say so, instead of being restated 95x under a
+            rupee sign.
+          */}
+          <p className="desk-label-md" style={{ marginTop: 6, color: "var(--desk-on-surface-variant)" }}>
+            {fx ? (
+              <>
+                Amounts in <strong>INR</strong> at ₹{fx.rate.toFixed(4)}/$
+                {fx.asOf ? ` · rate as of ${fx.asOf}` : ""} · instrument prices stay in USD, as Delta quotes them
+              </>
+            ) : (
+              <span className="desk-pnl-negative">
+                INR rate unavailable — amounts below are shown in USD
+              </span>
+            )}
+          </p>
           <p className="desk-body-md" style={{ marginTop: 6, maxWidth: 760, color: "var(--desk-on-surface-variant)" }}>
             Paper-equivalent trading on <strong>demo.delta.exchange</strong> — the demo wallet, never the real one.
             Same engine, same sizing, same taker fees and bracket placement as the Live Engine, so what is rehearsed
@@ -1371,15 +1514,19 @@ export default function LiveEnginePage() {
         <DeskCard>
           <DeskSectionHeader
             title="Live Account"
-            subtitle={account ? `${account.source} · ${ageLabel(account.asOf)}${account.stale ? " · STALE" : ""}` : "—"}
+            subtitle={
+              account
+                ? `${account.source} · ${ageLabel(account.asOf)}${account.stale ? " · STALE" : ""}`
+                : na.account ?? "—"
+            }
           />
           <div className="desk-metrics-row">
-            <DeskMetricTile label="Real Equity" value={account ? fmtUSD(account.equityUsd) : "—"} sub={account?.stale ? "stale — see source" : "delta wallet"} highlight />
-            <DeskMetricTile label={`Tradable (≤ $${CEILING})`} value={account ? fmtUSD(account.tradableUsd) : "—"} sub="ceiling enforced server-side" />
-            <DeskMetricTile label="Available" value={account ? fmtUSD(account.availableUsd) : "—"} sub="equity − margin" />
-            <DeskMetricTile label="Margin Used" value={account ? fmtUSD(account.marginUsedUsd) : "—"} sub="delta positions" />
-            <DeskMetricTile label="Open Risk" value={account ? fmtUSD(account.openRiskUsd) : "—"} sub="premium at risk (long)" />
-            <DeskMetricTile label="Realized Today" value={account ? fmtUSD(account.realizedTodayUsd) : "—"} valueClassName={account ? pnlTone(account.realizedTodayUsd) : undefined} sub="to daily breaker" />
+            <DeskMetricTile label="Real Equity" value={account ? fmtMoney(account.equityUsd) : "—"} sub={account?.stale ? "stale — see source" : "delta wallet"} highlight />
+            <DeskMetricTile label={`Tradable (≤ $${CEILING})`} value={account ? fmtMoney(account.tradableUsd) : "—"} sub="ceiling enforced server-side" />
+            <DeskMetricTile label="Available" value={account ? fmtMoney(account.availableUsd) : "—"} sub="equity − margin" />
+            <DeskMetricTile label="Margin Used" value={account ? fmtMoney(account.marginUsedUsd) : "—"} sub="delta positions" />
+            <DeskMetricTile label="Open Risk" value={account ? fmtMoney(account.openRiskUsd) : "—"} sub="premium at risk (long)" />
+            <DeskMetricTile label="Realized Today" value={account ? fmtMoney(account.realizedTodayUsd) : "—"} valueClassName={account ? pnlTone(account.realizedTodayUsd) : undefined} sub="to daily breaker" />
           </div>
         </DeskCard>
 
@@ -1428,7 +1575,7 @@ export default function LiveEnginePage() {
             title="Strategy Leaderboard"
             subtitle={
               leaderRows.some((r) => r.trades > 0)
-                ? `${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} perpetual strategies have filled · realized ${fmtUSD(
+                ? `${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} perpetual strategies have filled · realized ${fmtMoney(
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
                 : "every strategy enabled on the perpetual desk, ranked once it has real fills"
@@ -1460,7 +1607,7 @@ export default function LiveEnginePage() {
             title="Closed Positions"
             subtitle={
               allClosed.length
-                ? `${allClosed.length} closed across both desks · realized ${fmtUSD(
+                ? `${allClosed.length} closed across both desks · realized ${fmtMoney(
                     allClosed.reduce((s, c) => s + (c.realizedPnl || 0), 0),
                   )}`
                 : "closed by take-profit, stop-loss, time stop or expiry"
@@ -1483,7 +1630,7 @@ export default function LiveEnginePage() {
             rows={showAllClosed ? allClosed : allClosed.slice(0, 100)}
             getRowKey={(c) => c.id}
             stickyHeader
-            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No closed positions yet.</span>}
+            empty={emptyNote("closed", "No closed positions yet.")}
           />
         </DeskCard>
 
@@ -1493,7 +1640,7 @@ export default function LiveEnginePage() {
             title="Daily P&L"
             subtitle={
               daily.length
-                ? `${daily.length} day(s) · total realized ${fmtUSD(daily.reduce((s2, d) => s2 + (d.pnlUsd || 0), 0))}`
+                ? `${daily.length} day(s) · total realized ${fmtMoney(daily.reduce((s2, d) => s2 + (d.pnlUsd || 0), 0))}`
                 : "realised results per IST day, from closed positions"
             }
           />
@@ -1502,7 +1649,7 @@ export default function LiveEnginePage() {
             rows={daily}
             getRowKey={(d) => d.date}
             stickyHeader
-            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No closed trades yet.</span>}
+            empty={emptyNote("daily", "No closed trades yet.")}
           />
         </DeskCard>
 
@@ -1524,7 +1671,7 @@ export default function LiveEnginePage() {
             rows={showAllOrders ? orders : orders.slice(0, 100)}
             getRowKey={(o) => o.id}
             stickyHeader
-            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No live orders yet.</span>}
+            empty={emptyNote("orders", "No live orders yet.")}
           />
         </DeskCard>
 
@@ -1539,7 +1686,7 @@ export default function LiveEnginePage() {
             rows={roster}
             getRowKey={(e) => e.strategy}
             stickyHeader
-            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No strategies.</span>}
+            empty={emptyNote("roster", "No strategies.")}
           />
         </DeskCard>
 
@@ -1575,7 +1722,10 @@ export default function LiveEnginePage() {
         <DeskCard padding="md">
           <DeskSectionHeader
             title="Delta Exchange — Venue Truth"
-            subtitle="Straight from the exchange. Not filtered by strategy or desk; where this disagrees with the sections above, this is correct."
+            subtitle={
+              na.venue ??
+              "Straight from the exchange. Not filtered by strategy or desk; where this disagrees with the sections above, this is correct."
+            }
             actions={
               <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
                 {venue ? ageLabel(venue.asOf) : "—"}
@@ -1610,8 +1760,8 @@ export default function LiveEnginePage() {
                 key={b.asset}
                 compact
                 label={`${b.asset} balance`}
-                value={fmtUSD(b.balance)}
-                sub={`available ${fmtUSD(b.availableBalance)}`}
+                value={fmtMoney(b.balance)}
+                sub={`available ${fmtMoney(b.availableBalance)}`}
               />
             ))}
             {!venue?.balances?.length && (
@@ -1658,10 +1808,10 @@ export default function LiveEnginePage() {
                   align: "right",
                   header: "Unrealized",
                   cell: (r: VenuePosition) => (
-                    <span className={pnlTone(r.unrealizedPnl ?? 0)}>{fmtUSD(r.unrealizedPnl)}</span>
+                    <span className={pnlTone(r.unrealizedPnl ?? 0)}>{fmtMoney(r.unrealizedPnl)}</span>
                   ),
                 },
-                { id: "margin", align: "right", header: "Margin", cell: (r: VenuePosition) => fmtUSD(r.margin) },
+                { id: "margin", align: "right", header: "Margin", cell: (r: VenuePosition) => fmtMoney(r.margin) },
                 {
                   id: "liq",
                   align: "right",
@@ -1721,7 +1871,7 @@ export default function LiveEnginePage() {
                   id: "fee",
                   align: "right",
                   header: "Fee",
-                  cell: (r: VenueHistoricalOrder) => fmtUSD(r.paidCommission),
+                  cell: (r: VenueHistoricalOrder) => fmtMoney(r.paidCommission),
                 },
                 {
                   // The venue's own reason, which the engine's log cannot know.
@@ -1757,7 +1907,7 @@ export default function LiveEnginePage() {
                   id: "fee",
                   align: "right",
                   header: "Commission",
-                  cell: (r: VenueFill) => <span className="desk-pnl-negative">{fmtUSD(r.commission)}</span>,
+                  cell: (r: VenueFill) => <span className="desk-pnl-negative">{fmtMoney(r.commission)}</span>,
                 },
               ]}
               rows={venue?.fills ?? []}
@@ -1786,9 +1936,9 @@ export default function LiveEnginePage() {
                   id: "amount",
                   align: "right",
                   header: "Amount",
-                  cell: (r: VenueLedger) => <span className={pnlTone(r.amount)}>{fmtUSD(r.amount)}</span>,
+                  cell: (r: VenueLedger) => <span className={pnlTone(r.amount)}>{fmtMoney(r.amount)}</span>,
                 },
-                { id: "balance", align: "right", header: "Balance After", cell: (r: VenueLedger) => fmtUSD(r.balance) },
+                { id: "balance", align: "right", header: "Balance After", cell: (r: VenueLedger) => fmtMoney(r.balance) },
                 { id: "asset", header: "Asset", cell: (r: VenueLedger) => r.asset },
               ]}
               rows={venue?.ledger ?? []}
@@ -1807,7 +1957,7 @@ export default function LiveEnginePage() {
             rows={[...audit].reverse().slice(0, 100)}
             getRowKey={(a, i) => `${a.at}-${i}`}
             stickyHeader
-            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No audit entries yet.</span>}
+            empty={emptyNote("audit", "No audit entries yet.")}
           />
         </DeskCard>
 
