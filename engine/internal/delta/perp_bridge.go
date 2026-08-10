@@ -349,6 +349,23 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		return nil
 	}
 
+	// PRE-TRADE protectability gate.
+	//
+	// This check already existed, but it ran when brackets were ATTACHED —
+	// after the position was funded. By then the only options were bad ones:
+	// the engine kept the position and fell back to a 15s monitor, which closed
+	// one 1.5x past its stop. A position you cannot protect is not a position
+	// with weaker protection; it is a position that should not have been
+	// opened.
+	//
+	// Refusing a signal costs nothing. Opening one that cannot be bracketed
+	// costs whatever the market does next.
+	if reason := stopSurvivesGrid(b.reg, symbol, entry, stop); reason != "" {
+		log.Printf("[PERP LIVE] %s %s: refused before entry — %s", strategy, symbol, reason)
+		b.rejected.Add(1)
+		return nil
+	}
+
 	plan, err := PlanPerpOrder(b.reg, cfg, symbol, long, entry, stop, target, openCount, openNotional)
 	if err != nil {
 		// Capacity and sub-contract refusals are routine; log them quietly once

@@ -904,9 +904,12 @@ The content is organized as follows:
   delta/perp_bridge_test.go
   delta/perp_bridge.go
   delta/perp_concentration_test.go
+  delta/perp_concurrency.go
   delta/perp_dust_test.go
   delta/perp_fixed_contracts_test.go
   delta/perp_fixed_contracts.go
+  delta/perp_grid_gate_test.go
+  delta/perp_grid_gate.go
   delta/perp_history_persist_test.go
   delta/perp_monitor_test.go
   delta/perp_outcome_test.go

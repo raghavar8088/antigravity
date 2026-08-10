@@ -59,6 +59,30 @@ func scalpLiveEquityUSD() float64 {
 	return 100
 }
 
+// scalpLiveMaxConcurrent caps how many live positions may be open at once.
+//
+// The default of 3 was sized for $300 positions. In fixed-size mode a position
+// is roughly $0.20, so ten of them total about $2 against a $10 account — the
+// cap has stopped being a risk control and become the main thing throttling
+// how fast the roster earns a record.
+//
+// That throttle also biases the record. With 31 streams competing for 3 slots,
+// the ones that fill are the ones that signal FASTEST, not the ones that are
+// best, and 21 of 31 had no fills at all after 37 trades. One slot per symbol
+// is the useful ceiling, since the per-symbol cap allows no more.
+func scalpLiveMaxConcurrent() int {
+	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_MAX_CONCURRENT"))
+	if raw == "" {
+		return 0 // keep the built-in default
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		log.Printf("[PERP LIVE] SCALP_LIVE_MAX_CONCURRENT=%q is not a positive integer — keeping the default", raw)
+		return 0
+	}
+	return n
+}
+
 // scalpLiveFixedContracts sends a constant contract count and ignores risk
 // sizing entirely. 0 means size from risk, which is the default.
 //
@@ -176,6 +200,9 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	}
 	if n := scalpLiveFixedContracts(); n > 0 {
 		b.SetFixedContracts(n)
+	}
+	if n := scalpLiveMaxConcurrent(); n > 0 {
+		b.SetMaxConcurrentPositions(n)
 	}
 	// Exact streams, not strategies x symbols. The cross product enabled
 	// pairings the operator never selected — three chosen rows became six live
