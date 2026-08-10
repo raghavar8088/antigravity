@@ -933,6 +933,35 @@ func (b *Bridge) Trades() []LiveTrade {
 	return out
 }
 
+// ClearHistory drops the CLOSED and FAILED trade record, keeping every OPEN
+// position untouched, and returns how many rows went.
+//
+// Open positions are deliberately exempt and this is not a convenience. The
+// trade record is the ONLY place a live position is tied to its exit plan and
+// to the strategy that opened it — Delta holds the fills and the money but has
+// never heard of ANTI_Ornstein_Uhlenbeck_Reversion. Dropping an open row would
+// orphan a real position on the venue: the bridge would report nothing open
+// while the money sat there unmanaged, which is exactly the failure the custody
+// file was written to prevent.
+//
+// Persisted immediately. A clear that lived only in memory would come back on
+// the next restart, and an operator who saw the table empty would reasonably
+// believe it was gone.
+func (b *Bridge) ClearHistory() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	kept := make([]LiveTrade, 0, len(b.trades))
+	for _, t := range b.trades {
+		if t.Status == "OPEN" {
+			kept = append(kept, t)
+		}
+	}
+	removed := len(b.trades) - len(kept)
+	b.trades = kept
+	b.persistTradesLocked()
+	return removed
+}
+
 // OpenTrades returns only trades with Status == "OPEN".
 func (b *Bridge) OpenTrades() []LiveTrade {
 	b.mu.RLock()

@@ -104,6 +104,11 @@ const MUTATION_PATHS = [
   // to clicks, and reaches nothing. It requires a session like the others, and
   // the token is injected server-side.
   "/scalp/live/strategy",
+  // Clearing the LIVE closed-trade record — what the Strategy Leaderboard ranks
+  // and what Closed Positions lists. Same reasoning as the two entries above:
+  // the button exists on the page, so the path has to exist here or the click
+  // resolves to a 4xx the operator reads as "nothing happened".
+  "/scalp/live/clear-history",
 ];
 
 function isAllowed(pathname: string): boolean {

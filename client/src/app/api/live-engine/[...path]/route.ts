@@ -48,7 +48,7 @@ async function verifySession(token: string): Promise<{ ok: boolean; userId?: str
 }
 
 const READ_ACTIONS = ["state", "account", "positions", "closed-positions", "daily-pnl", "orders", "roster", "reconciliation", "audit"];
-const WRITE_ACTIONS = ["arm", "disarm", "close-all", "strategy", "kill-switch"];
+const WRITE_ACTIONS = ["arm", "disarm", "close-all", "strategy", "kill-switch", "clear-history"];
 
 function upstreamBase(): string {
   return (

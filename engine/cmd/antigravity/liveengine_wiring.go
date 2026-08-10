@@ -223,6 +223,7 @@ func wireLiveEngine(
 		Roster:          liveEngineRosterProvider(buyEngine, bridge),
 		Reconciliation:  liveEngineReconciliationProvider(bridge),
 		AllowList:       bridge.LiveAllowList,
+		ClearHistory:    bridge.ClearHistory,
 		SetAllowList: func(names []string) error {
 			bridge.SetLiveAllowList(names)
 			ctrl.RecordRosterChange("operator", fmt.Sprintf("live allow-list set to %d strategies", len(names)))

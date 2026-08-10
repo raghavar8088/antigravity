@@ -67,6 +67,10 @@ const (
 	ActionAutoDisarm   AuditAction = "AUTO_DISARM"
 	ActionCloseAll     AuditAction = "CLOSE_ALL"
 	ActionRosterChange AuditAction = "ROSTER_CHANGE"
+	// ActionClearHistory records an operator wiping the closed-trade record.
+	// Audited because it destroys the evidence every promotion decision reads,
+	// and the audit trail is the one record it does NOT clear.
+	ActionClearHistory AuditAction = "CLEAR_HISTORY"
 	ActionRejectStreak AuditAction = "REJECT_STREAK"
 	ActionArmRejected  AuditAction = "ARM_REJECTED"
 	// Operator-driven kill switch from the Live Engine toggle.
@@ -178,6 +182,16 @@ func (c *Controller) appendAuditLocked(actor string, action AuditAction, reason,
 	if len(c.audit) > c.maxAudit {
 		c.audit = c.audit[len(c.audit)-c.maxAudit:]
 	}
+}
+
+// RecordClearHistory audits an operator clearing the trade record.
+//
+// The audit trail is deliberately NOT cleared by that action, so "who emptied
+// the leaderboard, and when" stays answerable afterwards.
+func (c *Controller) RecordClearHistory(actor, detail string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.appendAuditLocked(actor, ActionClearHistory, "", detail)
 }
 
 // Arm transitions to ARMED. It requires the exact typed confirmation phrase, a

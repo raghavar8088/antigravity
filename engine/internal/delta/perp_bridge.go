@@ -1018,6 +1018,29 @@ func (b *PerpBridge) Stats() PerpBridgeStats {
 	}
 }
 
+// ClearHistory drops the closed-trade record and returns how many rows went.
+//
+// Only the CLOSED record. Open positions live in b.open and are untouched: they
+// are real money on the venue, and the bridge's own book is what lets it manage
+// their stop, target and expiry. Erasing an open row would leave the position
+// on Delta with nothing tracking it.
+//
+// This is destructive in a way the leaderboard makes easy to underestimate. The
+// closed record is what the leaderboard ranks and therefore what the promotion
+// gate reads, so clearing it resets the evidence every capital decision rests
+// on — a stream with 200 fills behind it goes back to zero and has to earn the
+// sample again.
+//
+// Persisted immediately, so the clear survives a restart rather than reappearing.
+func (b *PerpBridge) ClearHistory() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	removed := len(b.history)
+	b.history = nil
+	b.persistLocked()
+	return removed
+}
+
 // History returns closed live trades, newest last.
 func (b *PerpBridge) History() []PerpLiveTrade {
 	b.mu.RLock()

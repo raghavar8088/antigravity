@@ -525,6 +525,7 @@ export default function LiveEnginePage() {
   const [actionMsg, setActionMsg] = useState<string>("");
   const [showAllOrders, setShowAllOrders] = useState<boolean>(false);
   const [showAllClosed, setShowAllClosed] = useState<boolean>(false);
+  const [confirmClear, setConfirmClear] = useState<boolean>(false);
 
 
   const refresh = useCallback(async () => {
@@ -613,6 +614,45 @@ export default function LiveEnginePage() {
     void refresh();
     const t = setInterval(() => void refresh(), 15_000);
     return () => clearInterval(t);
+  }, [refresh]);
+
+  /**
+   * Wipe the live trade record on BOTH desks.
+   *
+   * Both, in one action, because the two panels this empties are already
+   * merged: Closed Positions counts "across both desks" and the leaderboard
+   * ranks the perpetual streams. Clearing one engine would leave the other's
+   * rows on screen, which reads as the button having failed.
+   *
+   * Open positions survive on purpose — both engines drop only CLOSED and
+   * FAILED rows. An open position is real money on Delta, and its row is the
+   * only thing tying it to a stop, a target and the strategy that opened it.
+   *
+   * Each result is reported separately. A single "cleared" message covering a
+   * pair of calls where one 500'd is how a UI teaches an operator to trust a
+   * control that does not work.
+   */
+  const clearLiveData = useCallback(async () => {
+    setBusy(true);
+    setActionMsg("");
+    try {
+      const [opt, perpRes] = await Promise.all([
+        fetch("/api/live-engine/clear-history", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }),
+        fetch("/api/scalp/scalp/live/clear-history", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }),
+      ]);
+      const optBody = (await opt.json().catch(() => null)) as { cleared?: number } | null;
+      const perpBody = (await perpRes.json().catch(() => null)) as { cleared?: number } | null;
+      const parts: string[] = [];
+      parts.push(opt.ok ? `options desk: ${optBody?.cleared ?? 0} cleared` : `options desk FAILED (HTTP ${opt.status})`);
+      parts.push(perpRes.ok ? `perp desk: ${perpBody?.cleared ?? 0} cleared` : `perp desk FAILED (HTTP ${perpRes.status})`);
+      setActionMsg(parts.join(" · ") + (opt.ok && perpRes.ok ? " — open positions untouched" : ""));
+      setConfirmClear(false);
+      await refresh();
+    } catch {
+      setActionMsg("clear failed — the control plane did not respond; nothing was cleared");
+    } finally {
+      setBusy(false);
+    }
   }, [refresh]);
 
   /**
@@ -1562,6 +1602,30 @@ export default function LiveEnginePage() {
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
                 : "every strategy enabled on the perpetual desk, ranked once it has real fills"
+            }
+            actions={
+              /* Two-step, and the second step states the count and the
+                 consequence. A one-click control here would let a misclick
+                 destroy the fill record that every promotion decision reads —
+                 and unlike a bad trade, there is nothing to undo it with. */
+              confirmClear ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span className="desk-body-md" style={{ color: "var(--desk-error)", fontWeight: 600 }}>
+                    Delete {allClosed.length} closed {allClosed.length === 1 ? "row" : "rows"} on both desks? Open
+                    positions are kept. This cannot be undone.
+                  </span>
+                  <DeskButton variant="text" onClick={() => setConfirmClear(false)} disabled={busy}>
+                    Cancel
+                  </DeskButton>
+                  <DeskButton variant="danger-tonal" onClick={() => void clearLiveData()} disabled={busy}>
+                    {busy ? "Clearing…" : "Yes, clear it"}
+                  </DeskButton>
+                </div>
+              ) : (
+                <DeskButton variant="outlined" onClick={() => setConfirmClear(true)} disabled={busy}>
+                  Clear live data
+                </DeskButton>
+              )
             }
           />
           <DeskDataTable

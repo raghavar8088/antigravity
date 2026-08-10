@@ -449,6 +449,19 @@ func (d *liveDesk) registerHTTP(
 		writeJSON(w, d.bridge.History())
 	}))
 
+	// Clear the LIVE closed-trade record — what the Strategy Leaderboard ranks
+	// and what Closed Positions lists. POST only: a clear behind a GET would fire
+	// on a link preview or a browser prefetch.
+	http.HandleFunc("/scalp/live/clear-history", gated(postOnly(func(w http.ResponseWriter, r *http.Request) {
+		if d == nil {
+			writeJSON(w, map[string]any{"status": "noop", "reason": "live trading not configured", "cleared": 0})
+			return
+		}
+		n := d.bridge.ClearHistory()
+		log.Printf("[SCALP LIVE] history cleared by operator: %d closed trades dropped, open positions untouched", n)
+		writeJSON(w, map[string]any{"status": "cleared", "cleared": n})
+	})))
+
 	http.HandleFunc("/scalp/live/reconcile", gated(func(w http.ResponseWriter, r *http.Request) {
 		if d == nil {
 			writeJSON(w, map[string]any{"enabled": false})

@@ -3,6 +3,7 @@ package liveengine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -53,6 +54,10 @@ type DataProviders struct {
 	// replaces it. Both optional; when nil the strategy toggle is unavailable.
 	AllowList    func() []string
 	SetAllowList func(names []string) error
+	// ClearHistory wipes the CLOSED/FAILED trade record and returns the number of
+	// rows dropped. Open positions must survive it. Optional; when nil the
+	// action reports itself unavailable rather than silently succeeding.
+	ClearHistory func() int
 }
 
 // Authorizer returns the acting principal and whether the request may perform a
@@ -116,6 +121,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveDisarm(w, r)
 	case "close-all":
 		h.serveCloseAll(w, r)
+	case "clear-history":
+		h.serveClearHistory(w, r)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown live-engine action: " + action})
 	}
@@ -240,6 +247,25 @@ func (h *Handler) serveDisarm(w http.ResponseWriter, r *http.Request) {
 	}
 	h.ctrl.Disarm(actor, body.Reason)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "state": h.ctrl.Snapshot()})
+}
+
+// serveClearHistory wipes the closed-trade record, keeping open positions.
+//
+// Behind the same mutation authorisation as arming: it cannot lose money, but it
+// destroys the record the promotion gate reads, and an accidental GET-triggered
+// clear would be unrecoverable from the UI.
+func (h *Handler) serveClearHistory(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.authorizeMutation(w, r)
+	if !ok {
+		return
+	}
+	if h.data.ClearHistory == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "error": "clear-history not wired on this engine"})
+		return
+	}
+	n := h.data.ClearHistory()
+	h.ctrl.RecordClearHistory(actor, fmt.Sprintf("cleared=%d closed/failed rows; open positions untouched", n))
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "cleared": n})
 }
 
 func (h *Handler) serveCloseAll(w http.ResponseWriter, r *http.Request) {
