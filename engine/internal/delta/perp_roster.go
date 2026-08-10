@@ -200,11 +200,12 @@ const (
 	PaperAccount03 = "03"
 	PaperAccount04 = "04"
 	PaperAccount05 = "05"
+	PaperAccount06 = "06"
 )
 
 // PaperAccountIDs is every book, in display order.
 func PaperAccountIDs() []string {
-	return []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04, PaperAccount05}
+	return []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04, PaperAccount05, PaperAccount06}
 }
 
 // defaultScalpPaperStreams02 is Account 02's watch list.
@@ -413,6 +414,130 @@ var defaultScalpPaperStreams05 = []PerpStream{
 	{Strategy: "ANTI_M1X_VWAP_TrendPull_Long", Symbol: "XANUSD"},
 }
 
+// defaultScalpPaperStreams06 is Account 06's watch list.
+//
+// Added 2026-08-10 from the same scalp sweep board as Account 05, taken in
+// leaderboard order — but with one rule the other books do not have: no
+// (strategy, symbol) pair that any of Accounts 01-05 already watches.
+//
+// The pair is the unit, not the strategy. ANTI_M1_RSI2_5_95_T50_Long on TSTUSD
+// belongs to five other books, so it is absent here; the same strategy on
+// BMTUSD, NEIROUSD and MMTUSD is present, because a strategy is not one thing
+// across symbols. Twenty-nine of the top 124 rows were dropped by that rule.
+//
+// What that buys is a book whose result cannot be explained by the books beside
+// it. Accounts 01-05 overlap heavily by design — the same stream with different
+// neighbours competing for three slots is the experiment they run. This one
+// asks the other question: whether the streams NO existing book has funded are
+// worth funding. Every row here is new evidence or none at all.
+//
+// Read the trade counts first. Thirty-one of these ninety-five cleared the
+// board's own n >= 30 bar; the remaining sixty-four are small samples where a
+// +30% return is a handful of lucky fills, and the board sorts on ending capital
+// rather than on merit, so the order below is not a ranking. Six symbols here
+// (BEATUSD, SIRENUSD, BILLUSD, GRIFFAINUSD, KAITOUSD, VELVETUSD) appear in no
+// other book, and the desk discovers its universe above a $50k turnover floor —
+// so those streams go quiet if turnover dries up rather than failing loudly.
+var defaultScalpPaperStreams06 = []PerpStream{
+	// Cleared the board's own qualification bar (n >= 30).
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_D20_Keltner_Breakout", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_M1_MACD_Align_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "NEIROUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "MMTUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_Structural_Break_Detection", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "COAIUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "LISTAUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "MMTUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T50_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "LISTAUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_Structural_Break_Detection", Symbol: "MUBARAKUSD"},
+	// Below 30 closed trades — carried for the sample, not for the return.
+	{Strategy: "ANTI_D20_Stoch_Cross", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "COAIUSD"},
+	{Strategy: "ANTI_M1_MACD_Align_Short", Symbol: "LISTAUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_ThreeCrows_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_MACD_Align_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "COAIUSD"},
+	{Strategy: "ANTI_M1_Burst_K4_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "NEIROUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LISTAUSD"},
+	{Strategy: "ANTI_M1_DoubleBottom_20bp_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "COAIUSD"},
+	{Strategy: "ANTI_M1_ThreeSoldiers_Long", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "COAIUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Short", Symbol: "LISTAUSD"},
+	{Strategy: "ANTI_D20_Stoch_Cross", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_M1XB_Trend_Pullback_E21_Long", Symbol: "MMTUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "NEIROUSD"},
+	{Strategy: "ANTI_D20_Donchian_Breakout", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_EMA_Cross_T50_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_Structural_Break_Detection", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_D20_ZScore_Reversion", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "MMTUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "LISTAUSD"},
+	{Strategy: "M1_Burst_K4_Short", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "VELVETUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Long", Symbol: "MMTUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "COAIUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Short", Symbol: "COAIUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "KAITOUSD"},
+	{Strategy: "ANTI_M1_EMA_Cross_T20_Long", Symbol: "LABUSD"},
+	{Strategy: "Hidden_Liquidity_Detection", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Short", Symbol: "LISTAUSD"},
+	{Strategy: "M1_PinBar_W2_Short", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_D20_Opening_Range_Breakout", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_M1X_Asia_FalseBreak", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Short", Symbol: "NEIROUSD"},
+	{Strategy: "ANTI_M1_EMA_Cross_T20_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Long", Symbol: "VELVETUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "SOLVUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "SOLVUSD"},
+	{Strategy: "M1_RSI_Div_Short", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "KAITOUSD"},
+	{Strategy: "ANTI_M1_FailedBreak_60_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_ThreeCrows_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "NEIROUSD"},
+	{Strategy: "ANTI_M1_BB_Rev_CMF0_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Short", Symbol: "SIRENUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "BILLUSD"},
+	{Strategy: "ANTI_M1_MACD_Align_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LISTAUSD"},
+	{Strategy: "ANTI_M1_FailedBreak_60_Long", Symbol: "SKYAIUSD"},
+	{Strategy: "ANTI_M1_PinBar_W3_Long", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "GRIFFAINUSD"},
+	{Strategy: "ANTI_M1_FailedBreak_30_Long", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "SAGAUSD"},
+}
+
 // ScalpPaperStreamsFor returns one account's watch list.
 //
 // Account 01 carries the LIVE roster plus its candidates, so it stays a faithful
@@ -436,6 +561,8 @@ func ScalpPaperStreamsFor(account string) []PerpStream {
 		src = defaultScalpPaperStreams04
 	case PaperAccount05:
 		src = defaultScalpPaperStreams05
+	case PaperAccount06:
+		src = defaultScalpPaperStreams06
 	}
 	if src != nil {
 		out := make([]PerpStream, 0, len(src))

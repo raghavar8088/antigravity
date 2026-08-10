@@ -81,7 +81,7 @@ type PaperTrade = {
   live: boolean;
 };
 type PaperDesk = {
-  /** Which book this is — "01".."05". Each is an independent $100 account. */
+  /** Which book this is — "01".."06". Each is an independent $100 account. */
   account: string;
   startingEquityUsd: number;
   equityUsd: number;

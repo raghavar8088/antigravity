@@ -920,6 +920,7 @@ The content is organized as follows:
   delta/perp_products.go
   delta/perp_reconcile_test.go
   delta/perp_risk_fraction.go
+  delta/perp_roster_account06_test.go
   delta/perp_roster_additions_test.go
   delta/perp_roster_test.go
   delta/perp_roster.go
