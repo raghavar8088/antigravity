@@ -60,6 +60,21 @@ type PerpRiskConfig struct {
 	// are the normal case for signals reading the same bars, so the cap is on
 	// the instrument, which is what the risk is actually denominated in.
 	MaxPositionsPerSymbol int
+
+	// FixedContracts, when > 0, sends exactly this many contracts and ignores
+	// risk-based sizing entirely.
+	//
+	// For running the desk at the smallest size the venue accepts, to test
+	// whether the signals and the plumbing are right at a cost that does not
+	// matter. It deliberately bypasses the risk maths: the point is a known,
+	// minimal quantity, not a quantity derived from an account that is no
+	// longer meaningfully at risk.
+	//
+	// Notional then varies with price — 1 contract is $0.03 of SOLVUSD and
+	// $1.21 of LABUSD — so dollar P&L is NOT comparable between symbols at this
+	// setting. Win rate, stop overshoot and fee drag are ratios and stay
+	// comparable, which is what this mode exists to measure.
+	FixedContracts int
 	// MaxNotionalUSD is a hard per-order ceiling, independent of the above.
 	MaxNotionalUSD float64
 	// MaxAggregateLeverage caps notional across ALL open positions at once.
@@ -177,6 +192,37 @@ func PlanPerpOrder(
 	stopFrac := math.Abs(entry-stop) / entry
 	if stopFrac <= 0 {
 		return PerpOrderPlan{}, fmt.Errorf("delta: stop distance is zero")
+	}
+
+	// Fixed-size mode short-circuits the risk maths and every notional cap.
+	//
+	// The caps exist to stop a position being too LARGE; a fixed minimum size
+	// cannot be. Running it through them would let the aggregate ceiling or the
+	// dust guard refuse a one-contract order — the dust guard especially, since
+	// it compares against an intended notional this mode never computes. The
+	// concurrency and per-symbol caps above still apply, because those are
+	// about how many positions exist, not how big they are.
+	if cfg.FixedContracts > 0 {
+		prod, ok := reg.Lookup(symbol)
+		if !ok {
+			return PerpOrderPlan{}, fmt.Errorf("delta: %s is not a known product", symbol)
+		}
+		side := OrderSide("buy")
+		if !long {
+			side = OrderSide("sell")
+		}
+		return PerpOrderPlan{
+			Symbol:      prod.Symbol,
+			ProductID:   prod.ProductID,
+			Side:        side,
+			Contracts:   cfg.FixedContracts,
+			LimitPrice:  entry,
+			StopPrice:   stop,
+			TargetPrice: target,
+			NotionalUSD: float64(cfg.FixedContracts) * prod.NotionalPerContract(entry),
+			RiskUSD:     float64(cfg.FixedContracts) * math.Abs(entry-stop) * prod.ContractValue,
+			Leverage:    float64(cfg.LeverageForOrder),
+		}, nil
 	}
 
 	riskUSD := cfg.EquityUSD * cfg.RiskPerTradeFraction

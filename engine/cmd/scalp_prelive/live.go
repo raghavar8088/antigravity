@@ -59,6 +59,31 @@ func scalpLiveEquityUSD() float64 {
 	return 100
 }
 
+// scalpLiveFixedContracts sends a constant contract count and ignores risk
+// sizing entirely. 0 means size from risk, which is the default.
+//
+// Set to 1 to run the desk at the venue's minimum: the cheapest possible way to
+// find out whether the signals fire correctly, the brackets attach, and the
+// stops close where they are placed. A one-contract stop-out on MUBARAKUSD
+// costs about a tenth of a cent.
+//
+// The trade-off is that notional then varies with price — 1 contract is $0.03
+// of SOLVUSD and $1.21 of LABUSD — so dollar P&L is not comparable between
+// symbols. Ratios (win rate, stop overshoot, fee drag) are, and they are what
+// this mode is for.
+func scalpLiveFixedContracts() int {
+	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_FIXED_CONTRACTS"))
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		log.Printf("[PERP LIVE] SCALP_LIVE_FIXED_CONTRACTS=%q is not a non-negative integer — sizing from risk instead", raw)
+		return 0
+	}
+	return n
+}
+
 // scalpLiveRiskFraction is the share of equity risked per trade.
 //
 // Configurable because the default interacts badly with the aggregate cap. At
@@ -148,6 +173,9 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	// override is an explicit, logged act rather than a hidden constructor arg.
 	if rf := scalpLiveRiskFraction(); rf != 0.02 {
 		b.SetRiskPerTradeFraction(rf)
+	}
+	if n := scalpLiveFixedContracts(); n > 0 {
+		b.SetFixedContracts(n)
 	}
 	// Exact streams, not strategies x symbols. The cross product enabled
 	// pairings the operator never selected — three chosen rows became six live
