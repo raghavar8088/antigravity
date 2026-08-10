@@ -100,6 +100,41 @@ var defaultScalpLiveStreams = []PerpStream{
 	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "SKYAIUSD"},
 	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAAIUSD"},
 	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
+	// Added 2026-08-10 at the owner's direction, alongside the 31 above rather
+	// than replacing them. Selected off the paper leaderboard on the same
+	// terms: gross, minus taker fees, equals net on the book's balance.
+	//
+	// Two symbols are new to the live desk. XANUSD trades $1.8M a day and
+	// prices at 1e-06, giving ~76 ticks of stop room. BMTUSD trades $44M but
+	// ticks at 1e-05 on a $0.025 price, so its stop is ~16 ticks and the
+	// pre-trade grid gate will refuse it — added as instructed, and it will
+	// show as blocked rather than trade.
+	//
+	// Six of these fourteen land on symbols the grid gate already refuses
+	// (SAGAUSD 9.7t, MUBARAKUSD 14.5t, LABUSD 7.7t, BMTUSD 15.8t). They are
+	// recorded here so the roster says what was chosen; the gate decides what
+	// executes, and the board reports which is which.
+	//
+	// Only two carry a sample worth the word: ANTI_Recurrence_Quantification_
+	// Signal on TSTUSD (70 trades) and ANTI_Ornstein_Uhlenbeck_Reversion on
+	// BMTUSD (58). The other twelve are 3-15 trades against a gate that asks
+	// for 200, and one — ANTI_M1_HMA21_Flip_Short on XANUSD — is NEGATIVE on
+	// the board it was picked from. Being on this list is permission, not
+	// evidence.
+	{Strategy: "ANTI_M1_HMA21_Flip_Long", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_MACD_Align_Long", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "BMTUSD"},
+	{Strategy: "M1_VWAP_Rev_40bp_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "TSTUSD"},
+	{Strategy: "M1_VWAP_Rev_70bp_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "XANUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine

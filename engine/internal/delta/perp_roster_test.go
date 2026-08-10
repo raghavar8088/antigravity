@@ -63,14 +63,23 @@ func TestPerpAllowList_GatesOnSymbolToo(t *testing.T) {
 //
 // Replaced 2026-08-07 with the three rows selected on live terms.
 func TestScalpLiveStreams_MatchTheOwnerSelectionExactly(t *testing.T) {
-	// The roster IS Account 03's book, promoted 2026-08-09. Asserted against
-	// that source rather than a second literal list: two hand-maintained copies
-	// of 31 streams would drift, and the drift would be silent.
+	// The roster CONTAINS Account 03's book, promoted 2026-08-09, plus 14
+	// streams the owner added on 2026-08-10 alongside it.
+	//
+	// This asserted equality until then. The addition deliberately broke that,
+	// so the invariant is now containment: nothing from Account 03 may be
+	// dropped by an "add these too" change. Every previous roster edit on this
+	// desk was a wholesale replacement, which is precisely why an append that
+	// quietly loses the existing book is the failure worth pinning.
+	//
+	// Checked against the source rather than a second literal list: two
+	// hand-maintained copies would drift, and the drift would be silent.
 	got := ScalpLiveStreams()
 	src := defaultScalpPaperStreams03
 
-	if len(got) != len(src) {
-		t.Fatalf("live roster has %d streams, Account 03's book has %d", len(got), len(src))
+	if len(got) < len(src) {
+		t.Fatalf("live roster has %d streams, fewer than Account 03's %d — an addition dropped part of the book",
+			len(got), len(src))
 	}
 	inRoster := map[string]bool{}
 	for _, st := range got {
