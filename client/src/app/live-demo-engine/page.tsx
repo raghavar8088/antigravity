@@ -190,6 +190,8 @@ type UnifiedPosition = {
   /** What this position pays at target / costs at stop, NET of the round trip. */
   ifTargetUsd?: number;
   ifStopUsd?: number;
+  /** Position size in USD — what this position has deployed. */
+  notionalUsd?: number;
   strategy: string;
 };
 
@@ -342,6 +344,13 @@ function LeaderSortHeader({
     </button>
   );
 }
+
+/**
+ * Delta's BTC option contract size. One contract is 0.001 BTC, so a premium
+ * quoted per BTC must be scaled by it — the same multiplier whose absence once
+ * reported a $0.05 result as $50.
+ */
+const OPTION_CONTRACT_SIZE_BTC = 0.001;
 
 const LEADER_MIN_SAMPLE = 10;
 
@@ -943,6 +952,9 @@ export default function LiveEnginePage() {
       marginUsd: p.marginUsd,
       stopPrice: p.stopLossPrice,
       targetPrice: p.takeProfitPrice,
+      // Options: premium at mark. Long premium is what the position is worth,
+      // and it is the figure the desk already treats as capital at risk.
+      notionalUsd: p.markPrice * p.size * OPTION_CONTRACT_SIZE_BTC,
       strategy: p.strategy,
     }));
     for (const t of perp?.openPositions ?? []) {
@@ -951,6 +963,7 @@ export default function LiveEnginePage() {
         symbol: t.symbol,
         side: t.side,
         size: t.contracts,
+        notionalUsd: t.notionalUsd,
         entryPrice: t.entryPrice,
         // The venue's own mark, from the SAME custody read that decides this
         // position's exits — so the screen and the risk engine cannot disagree
@@ -1953,6 +1966,27 @@ export default function LiveEnginePage() {
               allPositions.length
                 ? `${allPositions.length} open on the Delta wallet · ${positions.length} option, ${allPositions.length - positions.length} perpetual`
                 : "0 open"
+            }
+            actions={
+              allPositions.length ? (
+                // Same summary the Paper Desk carries: how many, how much is
+                // committed, and what it is worth right now. Deployed is the
+                // sum of position notionals, NOT the margin Delta froze — the
+                // margin is a tenth of it at 10x, and reporting that as
+                // "deployed" would understate the exposure by an order of
+                // magnitude on a page whose whole job is showing real risk.
+                <span className="desk-label-md" style={{ color: "var(--desk-on-surface-variant)" }}>
+                  {`${allPositions.length} open · ${fmtMoney(
+                    allPositions.reduce((sum, p) => sum + (p.notionalUsd ?? 0), 0),
+                  )} deployed`}{" "}
+                  <span
+                    className={pnlTone(allPositions.reduce((sum, p) => sum + p.unrealizedPnl, 0))}
+                    style={{ fontWeight: 700 }}
+                  >
+                    {fmtMoney(allPositions.reduce((sum, p) => sum + p.unrealizedPnl, 0))}
+                  </span>
+                </span>
+              ) : undefined
             }
           />
           <DeskDataTable
