@@ -245,6 +245,48 @@ var defaultScalpLiveStreams = []PerpStream{
 	{Strategy: "Hidden_Liquidity_Detection", Symbol: "LABUSD"},
 	{Strategy: "M1_Burst_K4_Short", Symbol: "BEATUSD"},
 	{Strategy: "M1_PinBar_W2_Short", Symbol: "BLESSUSD"},
+	// Added 2026-08-11 at the owner's direction, alongside everything above.
+	//
+	// This is a much larger selection than the previous two and its evidence is
+	// much thinner: most of these streams have single-digit trade counts and
+	// many have NONE at all. They are recorded because the owner chose them;
+	// the gates decide what actually executes.
+	//
+	// Adding streams does not increase throughput. Ten positions may be open at
+	// once and only one per symbol, so a longer list changes WHICH streams
+	// compete for those slots, not how many trade. On a roster this size the
+	// slot goes to whichever stream signals first, which is a property of
+	// signal frequency rather than of quality.
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Long", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_M1X_VWAP_TrendPull_Short", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Short", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_BB_Rev_CMF0_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_FailedBreak_30_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "SAGAUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_M1_MACD_Align_Long", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "MMTUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "KAITOUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "BEATUSD"},
+	{Strategy: "ANTI_D20_Stoch_Cross", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "TSTUSD"},
+	{Strategy: "Ornstein_Uhlenbeck_Reversion", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "KAITOUSD"},
+	{Strategy: "ANTI_M1_BB_Rev_CMF5_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T20_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_MACD_Align_Long", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "AIOUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_FailedBreak_60_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1X_Trend_Pullback_Long", Symbol: "MMTUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_Structural_Break_Detection", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "ARCUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
