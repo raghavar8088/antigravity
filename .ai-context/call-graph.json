@@ -1,1 +1,1 @@
-{}
+{"engine/internal/liveengine/inception_test.go::TestAccountROI_BaselineIsFixedAtFirstSight()":["engine/internal/liveengine/inception.go::AccountROI()"],"engine/internal/liveengine/inception_test.go::TestAccountROI_SurvivesRestart()":["engine/internal/liveengine/inception.go::inceptionPath()","engine/internal/liveengine/inception.go::AccountROI()"],"engine/internal/liveengine/inception_test.go::TestAccountROI_ZeroEquityIsNotABaseline()":["engine/internal/liveengine/inception.go::AccountROI()"]}

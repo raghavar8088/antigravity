@@ -56,6 +56,11 @@ type Account = {
   marginUsedUsd: number;
   openRiskUsd: number;
   realizedTodayUsd: number;
+  /** Wallet balance ROI is measured from; 0 until a baseline is captured. */
+  inceptionEquityUsd?: number;
+  inceptionAt?: string;
+  roiUsd?: number;
+  roiPct?: number;
   distanceToBreakerPct: number;
   source: string;
   asOf: string;
@@ -1651,7 +1656,36 @@ export default function LiveEnginePage() {
             }
           />
           <div className="desk-metrics-row">
-            <DeskMetricTile label="Real Equity" value={account ? fmtMoney(account.equityUsd) : "—"} sub={account?.stale ? "stale — see source" : "delta wallet"} highlight />
+            <DeskMetricTile
+              label="Real Equity"
+              value={account ? fmtMoney(account.equityUsd) : "—"}
+              sub={account?.stale ? "stale — see source" : "delta wallet"}
+              highlight
+            />
+            {/*
+              ROI beside the capital it is measured on. Against the FIRST wallet
+              balance recorded, not the configured desk equity: the desk risks
+              $10 of a wallet holding $61, and dividing by the risk budget would
+              report a return on money that was never the denominator.
+
+              Shown as "—" until a baseline exists rather than as 0%, because
+              "0% return" is a claim about performance and "no baseline yet" is
+              a claim about the record.
+            */}
+            <DeskMetricTile
+              label="ROI since inception"
+              value={
+                account?.inceptionEquityUsd && account.inceptionEquityUsd > 0
+                  ? `${(account.roiPct ?? 0) >= 0 ? "+" : ""}${(account.roiPct ?? 0).toFixed(2)}%`
+                  : "—"
+              }
+              valueClassName={account?.inceptionEquityUsd ? pnlTone(account.roiPct ?? 0) : undefined}
+              sub={
+                account?.inceptionEquityUsd && account.inceptionEquityUsd > 0
+                  ? `${fmtMoney(account.roiUsd)} on ${fmtMoney(account.inceptionEquityUsd)} opening`
+                  : "no baseline captured yet"
+              }
+            />
             <DeskMetricTile label={`Tradable (≤ $${CEILING})`} value={account ? fmtMoney(account.tradableUsd) : "—"} sub="ceiling enforced server-side" />
             <DeskMetricTile label="Available" value={account ? fmtMoney(account.availableUsd) : "—"} sub="equity − margin" />
             <DeskMetricTile label="Margin Used" value={account ? fmtMoney(account.marginUsedUsd) : "—"} sub="delta positions" />

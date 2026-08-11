@@ -316,16 +316,25 @@ func liveEngineAccountProvider(bridge *delta.Bridge, ctrl *liveengine.Controller
 			// Long options: max loss is the premium paid (mark × size), not margin.
 			openRisk += p.MarkPrice * p.Size * delta.DeltaContractSizeBTC
 		}
+		// ROI against the first wallet balance ever recorded, not against the
+		// configured desk equity — the desk risks $10 of a wallet holding $61,
+		// and dividing by the risk budget would report a return on money that
+		// was never the denominator.
+		baseline, inceptionAt, roiUSD, roiPct := liveengine.AccountROI(equity)
 		return liveengine.AccountView{
-			EquityUSD:     equity,
-			TradableUSD:   ctrl.TradableEquityUSD(equity),
-			CeilingUSD:    liveengine.MaxTradableUSD,
-			AvailableUSD:  equity - marginUsed,
-			MarginUsedUSD: marginUsed,
-			OpenRiskUSD:   openRisk,
-			Source:        "delta:/v2/wallet+positions",
-			AsOf:          now,
-			Stale:         false,
+			EquityUSD:          equity,
+			InceptionEquityUSD: baseline,
+			InceptionAt:        inceptionAt,
+			ROIUSD:             roiUSD,
+			ROIPct:             roiPct,
+			TradableUSD:        ctrl.TradableEquityUSD(equity),
+			CeilingUSD:         liveengine.MaxTradableUSD,
+			AvailableUSD:       equity - marginUsed,
+			MarginUsedUSD:      marginUsed,
+			OpenRiskUSD:        openRisk,
+			Source:             "delta:/v2/wallet+positions",
+			AsOf:               now,
+			Stale:              false,
 		}, nil
 	}
 }

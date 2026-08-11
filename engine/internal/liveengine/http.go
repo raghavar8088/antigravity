@@ -13,17 +13,29 @@ import (
 // every value labeled with its source and age so the UI never shows a stale
 // number as if it were fresh.
 type AccountView struct {
-	EquityUSD         float64   `json:"equityUsd"`
-	TradableUSD       float64   `json:"tradableUsd"` // min(equity, ceiling)
-	CeilingUSD        float64   `json:"ceilingUsd"`
-	AvailableUSD      float64   `json:"availableUsd"`
-	MarginUsedUSD     float64   `json:"marginUsedUsd"`
-	OpenRiskUSD       float64   `json:"openRiskUsd"`
-	RealizedTodayUSD  float64   `json:"realizedTodayUsd"`
-	DistanceToBreaker float64   `json:"distanceToBreakerPct"`
-	Source            string    `json:"source"`
-	AsOf              time.Time `json:"asOf"`
-	Stale             bool      `json:"stale"`
+	EquityUSD        float64 `json:"equityUsd"`
+	TradableUSD      float64 `json:"tradableUsd"` // min(equity, ceiling)
+	CeilingUSD       float64 `json:"ceilingUsd"`
+	AvailableUSD     float64 `json:"availableUsd"`
+	MarginUsedUSD    float64 `json:"marginUsedUsd"`
+	OpenRiskUSD      float64 `json:"openRiskUsd"`
+	RealizedTodayUSD float64 `json:"realizedTodayUsd"`
+	// InceptionEquityUSD is the wallet balance first recorded, and ROI is
+	// measured against it.
+	//
+	// Recorded rather than assumed: without a baseline there is no honest ROI,
+	// and picking one — the configured desk equity, say — would divide by a
+	// number that was never in the wallet and report a return that never
+	// happened. Zero means no baseline has been captured yet, and the UI must
+	// show no ROI rather than treat it as a starting balance of nothing.
+	InceptionEquityUSD float64   `json:"inceptionEquityUsd"`
+	InceptionAt        time.Time `json:"inceptionAt,omitempty"`
+	ROIUSD             float64   `json:"roiUsd"`
+	ROIPct             float64   `json:"roiPct"`
+	DistanceToBreaker  float64   `json:"distanceToBreakerPct"`
+	Source             string    `json:"source"`
+	AsOf               time.Time `json:"asOf"`
+	Stale              bool      `json:"stale"`
 }
 
 // ReconciliationView reports engine state vs. Delta truth. Mismatch is shown loudly.
