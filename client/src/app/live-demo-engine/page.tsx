@@ -212,6 +212,8 @@ type PerpTrade = {
   realisedPnl?: number;
   /** Round-trip taker fees, booked by the bridge. */
   feesUsd?: number;
+  /** Position size in USD — the denominator that makes edge comparable. */
+  notionalUsd?: number;
   /** Realised risk / planned risk on a stop-out. 1.00 = closed on the stop. */
   stopOvershoot?: number;
   exitReason?: string;
@@ -262,6 +264,8 @@ type LeaderRow = {
   /** Signals refused pre-trade because the symbol's tick grid is too coarse. */
   gridRefusals: number;
   lastStopTicks: number;
+  /** Total notional traded, summed across fills. */
+  notionalUsd: number;
   allowed: boolean;
   live: boolean;
   reason: string;
@@ -302,16 +306,12 @@ const LEADER_MIN_SAMPLE = 10;
 /** Rows shown before the board is expanded. */
 const LEADER_PREVIEW_ROWS = 25;
 
-/**
- * Average net result per fill, in whatever currency the row carries.
- *
- * Per trade because total net measures how OFTEN a stream fired as much as how
- * well it did, and because at one contract per order the notional differs by
- * symbol — ranking on totals would rank by coin price.
- */
-function edgePerTrade(r: { netUsd: number; trades: number }): number {
-  return r.trades > 0 ? r.netUsd / r.trades : 0;
+function edgePct(r: { netUsd: number; notionalUsd: number }): number {
+  return r.notionalUsd > 0 ? (r.netUsd / r.notionalUsd) * 100 : 0;
 }
+
+/** Delta's round-trip taker cost, for comparison against edge. */
+const ROUND_TRIP_FEE_PCT = 0.118;
 
 function fmtMoney(v: number | undefined): string {
   if (v === undefined || Number.isNaN(v)) return "—";
@@ -1126,6 +1126,7 @@ export default function LiveEnginePage() {
         enabled: !(perp.disabledStrategies ?? []).includes(`${name}|${symbol.toUpperCase()}`),
         gridRefusals: 0,
         lastStopTicks: 0,
+        notionalUsd: 0,
         allowed: true,
         // The scalp desk's promotion gate passes none of these; the bridge
         // trades them on owner instruction, not on a gate verdict.
@@ -1162,6 +1163,7 @@ export default function LiveEnginePage() {
         // back rather than by inventing a pre-fee figure.
         const fees = t.feesUsd ?? 0;
         row.feesUsd += fees;
+        row.notionalUsd += t.notionalUsd ?? 0;
         // Accumulated as a sum here and divided at the end — averaging an
         // average as trades arrive would weight the earliest stop-out most.
         if (t.stopOvershoot && t.stopOvershoot > 0) {
@@ -1220,7 +1222,7 @@ export default function LiveEnginePage() {
       const tb = tierOf(b);
       if (ta !== tb) return ta - tb;
       if (ta === 2) return a.strategy.localeCompare(b.strategy);
-      return edgePerTrade(b) - edgePerTrade(a);
+      return edgePct(b) - edgePct(a);
     });
     return rows;
   }, [perp, perpTrades]);
@@ -1239,30 +1241,38 @@ export default function LiveEnginePage() {
       { id: "strat", header: "Strategy", cell: (r) => r.strategy },
       {
         id: "edge",
-        header: "Edge / fill",
+        header: "Edge %",
         align: "right",
-        // The number the board is sorted on, shown rather than implied. A
-        // ranking whose basis is invisible is one you have to trust; this one
-        // can be checked.
-        cell: (r) =>
-          r.trades === 0 ? (
-            <span style={{ opacity: 0.5 }} title="no fills yet — nothing to rank">
-              —
-            </span>
-          ) : (
+        // Net as a share of the notional traded — the number the board is
+        // sorted on, and the one that says whether a stream is profitable.
+        //
+        // Shown against the round-trip fee, because "positive" is not the bar:
+        // a stream must clear 0.118% before it has earned anything at all.
+        cell: (r) => {
+          if (r.trades === 0 || r.notionalUsd <= 0) {
+            return <span style={{ opacity: 0.5 }} title="no fills yet — nothing to measure">—</span>;
+          }
+          const pct = edgePct(r);
+          const beatsFees = pct > ROUND_TRIP_FEE_PCT;
+          return (
             <span
-              className={pnlTone(edgePerTrade(r))}
+              className={pnlTone(pct)}
               style={{ fontWeight: r.trades >= LEADER_MIN_SAMPLE ? 700 : 400 }}
               title={
-                r.trades >= LEADER_MIN_SAMPLE
-                  ? `Average net per fill across ${r.trades} fills.`
-                  : `Average net per fill across only ${r.trades} fill(s) — ranked below streams with ${LEADER_MIN_SAMPLE}+, however good it looks.`
+                `${fmtMoney(r.netUsd)} on ${fmtMoney(r.notionalUsd)} traded across ${r.trades} fill(s). ` +
+                (beatsFees
+                  ? `Clears the ${ROUND_TRIP_FEE_PCT}% round-trip fee.`
+                  : `Does NOT clear the ${ROUND_TRIP_FEE_PCT}% round-trip fee — trading costs more than this earns.`) +
+                (r.trades < LEADER_MIN_SAMPLE
+                  ? ` Only ${r.trades} fill(s), so it ranks below streams with ${LEADER_MIN_SAMPLE}+.`
+                  : "")
               }
             >
-              {fmtMoney(edgePerTrade(r))}
+              {`${pct >= 0 ? "+" : ""}${pct.toFixed(3)}%`}
               {r.trades < LEADER_MIN_SAMPLE && <span style={{ opacity: 0.6, fontWeight: 400 }}> ?</span>}
             </span>
-          ),
+          );
+        },
       },
       { id: "trades", header: "Fills", align: "right", cell: (r) => r.trades || "—" },
       {
@@ -1270,12 +1280,6 @@ export default function LiveEnginePage() {
         header: "WR %",
         align: "right",
         cell: (r) => (r.trades > 0 ? r.winRatePct.toFixed(1) : "—"),
-      },
-      {
-        id: "gross",
-        header: "Gross $",
-        align: "right",
-        cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.grossUsd)}>{fmtMoney(r.grossUsd)}</span> : "—"),
       },
       {
         id: "fees",
@@ -1760,7 +1764,7 @@ export default function LiveEnginePage() {
             title="Strategy Leaderboard"
             subtitle={
               leaderRows.some((r) => r.trades > 0)
-                ? `best first by net per fill · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
+                ? `best first by edge % · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
                 : "best first by average net per fill · streams under 10 fills rank below proven ones, however good they look"
