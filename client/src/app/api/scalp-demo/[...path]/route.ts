@@ -100,6 +100,11 @@ const MUTATION_PATHS = [
   // the live page, so a path allowed there must be allowed here or the demo
   // desk gets a control that renders and reaches nothing.
   "/scalp/live/strategy",
+  // "Clear live data". Allowed on the live proxy but missing here, so the demo
+  // page's button rendered and reached nothing — found by the reachability
+  // guard when the demo page was regenerated, which is the second dead control
+  // that check has caught.
+  "/scalp/live/clear-history",
 ];
 
 function isAllowed(pathname: string): boolean {
