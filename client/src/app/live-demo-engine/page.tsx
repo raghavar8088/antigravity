@@ -1722,7 +1722,7 @@ export default function LiveEnginePage() {
             title="Strategy Leaderboard"
             subtitle={
               leaderRows.some((r) => r.trades > 0)
-                ? `${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} perpetual strategies have filled · realized ${fmtMoney(
+                ? `best first by net per fill · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
                 : "best first by average net per fill · streams under 10 fills rank below proven ones, however good they look"
@@ -1755,7 +1755,16 @@ export default function LiveEnginePage() {
           <DeskDataTable
             columns={leaderColumns}
             rows={leaderRows}
-            getRowKey={(r) => r.strategy}
+            // Keyed by STREAM, not by strategy.
+            //
+            // Rows became per (strategy, symbol) and this key did not follow,
+            // so 143 rows shared about 90 keys — ANTI_M1_Break_D30_T20_Long
+            // alone appears on three symbols. React reconciles by key, so the
+            // duplicates made it reuse DOM nodes and render stale rows in stale
+            // order: the array was sorted correctly and the table showed the
+            // previous ordering, which looked exactly like a sort that had not
+            // been applied.
+            getRowKey={(r) => `${r.strategy}|${r.symbol}`}
             stickyHeader
             empty={
               <span style={{ color: "var(--desk-on-surface-variant)" }}>
