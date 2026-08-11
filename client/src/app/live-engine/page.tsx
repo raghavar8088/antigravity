@@ -271,6 +271,28 @@ function setUsdInrRate(rate: number | null): void {
  * P&L is a 95x misstatement that looks completely ordinary — the symbol always
  * tells the truth about which currency the number actually is.
  */
+/**
+ * Fills a stream needs before its record is ranked on merit rather than filed
+ * as unproven.
+ *
+ * Ten is not enough to conclude anything — the promotion gate asks for 200 —
+ * but it is enough to separate "this has a record" from "this fired once and
+ * won". The board's job here is ordering, not certification, and the Gate
+ * column still says what the evidence is worth.
+ */
+const LEADER_MIN_SAMPLE = 10;
+
+/**
+ * Average net result per fill, in whatever currency the row carries.
+ *
+ * Per trade because total net measures how OFTEN a stream fired as much as how
+ * well it did, and because at one contract per order the notional differs by
+ * symbol — ranking on totals would rank by coin price.
+ */
+function edgePerTrade(r: { netUsd: number; trades: number }): number {
+  return r.trades > 0 ? r.netUsd / r.trades : 0;
+}
+
 function fmtMoney(v: number | undefined): string {
   if (v === undefined || Number.isNaN(v)) return "—";
   if (usdInrRate === null) {
@@ -1154,11 +1176,30 @@ export default function LiveEnginePage() {
       feeDragPct: r.grossUsd > 0 ? (r.feesUsd / r.grossUsd) * 100 : 0,
     }));
 
-    // Traded strategies first, worst-to-best by net so losses are not buried
-    // below a scroll; untraded rows last.
+    // Best performer first.
+    //
+    // Ranked on EDGE PER TRADE, not on total net. Total net rewards whichever
+    // stream happened to fill most often, and in fixed-size mode it also
+    // rewards whichever symbol is expensive — one LABUSD contract is 48x one
+    // SOLVUSD contract, so a Net $ ranking would sort by coin price.
+    //
+    // Sample size decides the TIER, not the sort within it. A single lucky fill
+    // can show a huge per-trade edge, and no amount of arithmetic weighting
+    // makes one observation comparable to thirty — so streams that have not
+    // reached a usable sample rank below those that have, however good they
+    // look. That is the difference between "best" and "luckiest", and this desk
+    // has been fooled by the second often enough.
+    const tierOf = (r: LeaderRow): number => {
+      if (r.trades === 0) return 2; // no evidence at all
+      if (r.trades < LEADER_MIN_SAMPLE) return 1; // some, not enough to rank on
+      return 0;
+    };
     rows.sort((a, b) => {
-      if ((a.trades > 0) !== (b.trades > 0)) return a.trades > 0 ? -1 : 1;
-      return a.netUsd - b.netUsd;
+      const ta = tierOf(a);
+      const tb = tierOf(b);
+      if (ta !== tb) return ta - tb;
+      if (ta === 2) return a.strategy.localeCompare(b.strategy);
+      return edgePerTrade(b) - edgePerTrade(a);
     });
     return rows;
   }, [perp, perpTrades]);
@@ -1175,6 +1216,33 @@ export default function LiveEnginePage() {
         ),
       },
       { id: "strat", header: "Strategy", cell: (r) => r.strategy },
+      {
+        id: "edge",
+        header: "Edge / fill",
+        align: "right",
+        // The number the board is sorted on, shown rather than implied. A
+        // ranking whose basis is invisible is one you have to trust; this one
+        // can be checked.
+        cell: (r) =>
+          r.trades === 0 ? (
+            <span style={{ opacity: 0.5 }} title="no fills yet — nothing to rank">
+              —
+            </span>
+          ) : (
+            <span
+              className={pnlTone(edgePerTrade(r))}
+              style={{ fontWeight: r.trades >= LEADER_MIN_SAMPLE ? 700 : 400 }}
+              title={
+                r.trades >= LEADER_MIN_SAMPLE
+                  ? `Average net per fill across ${r.trades} fills.`
+                  : `Average net per fill across only ${r.trades} fill(s) — ranked below streams with ${LEADER_MIN_SAMPLE}+, however good it looks.`
+              }
+            >
+              {fmtMoney(edgePerTrade(r))}
+              {r.trades < LEADER_MIN_SAMPLE && <span style={{ opacity: 0.6, fontWeight: 400 }}> ?</span>}
+            </span>
+          ),
+      },
       { id: "trades", header: "Fills", align: "right", cell: (r) => r.trades || "—" },
       {
         id: "wr",
@@ -1640,7 +1708,7 @@ export default function LiveEnginePage() {
                 ? `${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} perpetual strategies have filled · realized ${fmtMoney(
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
-                : "every strategy enabled on the perpetual desk, ranked once it has real fills"
+                : "best first by average net per fill · streams under 10 fills rank below proven ones, however good they look"
             }
             actions={
               /* Two-step, and the second step states the count and the
