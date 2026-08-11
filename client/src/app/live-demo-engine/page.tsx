@@ -305,6 +305,44 @@ function setUsdInrRate(rate: number | null): void {
  * won". The board's job here is ordering, not certification, and the Gate
  * column still says what the evidence is worth.
  */
+/** Columns the Strategy Leaderboard can be sorted by. */
+type LeaderSortKey =
+  | "avgRoi"
+  | "profitPct"
+  | "trades"
+  | "winRatePct"
+  | "feesUsd"
+  | "netUsd"
+  | "stopOvershoot"
+  | "feeDragPct";
+
+/**
+ * Sortable column header, same behaviour and glyphs as the Options Selling
+ * desk so the two boards are operated the same way.
+ */
+function LeaderSortHeader({
+  label, k, sortKey, sortDir, onSort,
+}: {
+  label: string;
+  k: LeaderSortKey;
+  sortKey: LeaderSortKey;
+  sortDir: "asc" | "desc";
+  onSort: (k: LeaderSortKey) => void;
+}) {
+  const active = sortKey === k;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(k)}
+      className="ml-auto inline-flex items-center gap-1 transition-colors"
+      style={{ color: active ? "var(--desk-primary)" : "inherit" }}
+    >
+      {label}
+      <span style={{ fontSize: 8, lineHeight: 1 }}>{active ? (sortDir === "desc" ? "▼" : "▲") : "▲▼"}</span>
+    </button>
+  );
+}
+
 const LEADER_MIN_SAMPLE = 10;
 
 /** Rows shown before the board is expanded. */
@@ -610,6 +648,21 @@ export default function LiveEnginePage() {
   const [state, setState] = useState<LiveState | null>(null);
   const [fx, setFx] = useState<{ rate: number; asOf: string | null } | null>(null);
   const [showAllStrategies, setShowAllStrategies] = useState(false);
+  const [leaderSort, setLeaderSort] = useState<LeaderSortKey>("avgRoi");
+  const [leaderSortDir, setLeaderSortDir] = useState<"asc" | "desc">("desc");
+  const toggleLeaderSort = useCallback((k: LeaderSortKey) => {
+    setLeaderSort((prev) => {
+      if (prev === k) {
+        setLeaderSortDir((d) => (d === "desc" ? "asc" : "desc"));
+        return prev;
+      }
+      // A new column starts on its most useful end — descending — rather than
+      // inheriting the previous column's direction, which silently shows the
+      // WORST rows first on a board people read top-down.
+      setLeaderSortDir("desc");
+      return k;
+    });
+  }, []);
   /**
    * Why a panel is empty, keyed by panel, rendered in that panel's own empty
    * state. "No rows" and "this venue has no such desk" look identical on screen
@@ -1280,25 +1333,57 @@ export default function LiveEnginePage() {
     // reached a usable sample rank below those that have, however good they
     // look. That is the difference between "best" and "luckiest", and this desk
     // has been fooled by the second often enough.
+    // Unfilled rows always sink, whichever column is sorted. They have no value
+    // for any metric, and letting them float on a 0 would put 114 empty rows
+    // above every real result the moment someone sorts ascending.
+    const metric = (r: LeaderRow): number => {
+      switch (leaderSort) {
+        case "profitPct": return profitPctOfCapital(r);
+        case "trades": return r.trades;
+        case "winRatePct": return r.winRatePct;
+        case "feesUsd": return r.feesUsd;
+        case "netUsd": return r.netUsd;
+        case "stopOvershoot": return r.stopOvershoot ?? 0;
+        case "feeDragPct": return r.feeDragPct;
+        default: return avgRoiPerTrade(r);
+      }
+    };
     rows.sort((a, b) => {
-      // Only unfilled rows are tiered now — they have nothing to rank. Streams
-      // WITH fills sort purely on average ROI, highest first, as instructed.
-      //
-      // That means a one-fill row can lead the board. It is marked "?" and the
-      // Fills column is next to it, so the thinness is visible rather than
-      // implied; ordering is the owner's call, and hiding a good-looking row
-      // behind a sample rule they did not ask for is its own kind of dishonesty.
       const aEmpty = a.trades === 0;
       const bEmpty = b.trades === 0;
       if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
       if (aEmpty) return a.strategy.localeCompare(b.strategy);
-      return avgRoiPerTrade(b) - avgRoiPerTrade(a);
+      const d = metric(a) - metric(b);
+      return leaderSortDir === "desc" ? -d : d;
     });
     return rows;
-  }, [perp, perpTrades]);
+  }, [perp, perpTrades, leaderSort, leaderSortDir]);
+
+  /** Rank in the current ordering, keyed by stream. */
+  const leaderRank = useMemo(() => {
+    const m = new Map<string, number>();
+    let n = 0;
+    for (const r of leaderRows) {
+      if (r.trades === 0) continue; // unranked: nothing to place
+      m.set(`${r.strategy}|${r.symbol}`, ++n);
+    }
+    return m;
+  }, [leaderRows]);
 
   const leaderColumns: DeskColumn<LeaderRow>[] = useMemo(
     () => [
+      {
+        id: "rank",
+        header: "#",
+        align: "right",
+        // Position in the CURRENT ordering, so it renumbers when a column is
+        // sorted rather than pretending to be a fixed identity.
+        cell: (r) => (
+          <span style={{ color: "var(--desk-on-surface-variant)" }}>
+            {r.trades === 0 ? "—" : (leaderRank.get(`${r.strategy}|${r.symbol}`) ?? "—")}
+          </span>
+        ),
+      },
       {
         id: "desk",
         header: "Desk",
@@ -1311,7 +1396,7 @@ export default function LiveEnginePage() {
       { id: "strat", header: "Strategy", cell: (r) => r.strategy },
       {
         id: "roi",
-        header: "Profit %",
+        header: <LeaderSortHeader label="Profit %" k="profitPct" sortKey={leaderSort} sortDir={leaderSortDir} onSort={toggleLeaderSort} />,
         align: "right",
         // Net profit over the capital this stream deploys — one position's
         // notional, since it holds one at a time. +104% means it has roughly
@@ -1345,7 +1430,6 @@ export default function LiveEnginePage() {
               }
             >
               {`${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`}
-              {r.trades < LEADER_MIN_SAMPLE && <span style={{ opacity: 0.6, fontWeight: 400 }}> ?</span>}
               {!beatsFees && (
                 <span className="desk-pnl-negative" title="earns less per trade than the fee costs"> ⚠</span>
               )}
@@ -1355,7 +1439,7 @@ export default function LiveEnginePage() {
       },
       {
         id: "avgroi",
-        header: "Avg ROI / trade",
+        header: <LeaderSortHeader label="Avg ROI / trade" k="avgRoi" sortKey={leaderSort} sortDir={leaderSortDir} onSort={toggleLeaderSort} />,
         align: "right",
         // The simple mean of each fill's own return: 5 trades at +5% and 5 at
         // -2% give +1.5%. Every trade counts once, so the figure describes a
@@ -1382,27 +1466,31 @@ export default function LiveEnginePage() {
               }
             >
               {`${avg >= 0 ? "+" : ""}${avg.toFixed(2)}%`}
-              {r.trades < LEADER_MIN_SAMPLE && <span style={{ opacity: 0.6, fontWeight: 400 }}> ?</span>}
             </span>
           );
         },
       },
-      { id: "trades", header: "Fills", align: "right", cell: (r) => r.trades || "—" },
+      {
+        id: "trades",
+        header: <LeaderSortHeader label="Fills" k="trades" sortKey={leaderSort} sortDir={leaderSortDir} onSort={toggleLeaderSort} />,
+        align: "right",
+        cell: (r) => r.trades || "—",
+      },
       {
         id: "wr",
-        header: "WR %",
+        header: <LeaderSortHeader label="WR %" k="winRatePct" sortKey={leaderSort} sortDir={leaderSortDir} onSort={toggleLeaderSort} />,
         align: "right",
         cell: (r) => (r.trades > 0 ? r.winRatePct.toFixed(1) : "—"),
       },
       {
         id: "fees",
-        header: "Fees $",
+        header: <LeaderSortHeader label="Fees $" k="feesUsd" sortKey={leaderSort} sortDir={leaderSortDir} onSort={toggleLeaderSort} />,
         align: "right",
         cell: (r) => (r.trades > 0 ? fmtMoney(r.feesUsd) : "—"),
       },
       {
         id: "net",
-        header: "Net $",
+        header: <LeaderSortHeader label="Net $" k="netUsd" sortKey={leaderSort} sortDir={leaderSortDir} onSort={toggleLeaderSort} />,
         align: "right",
         cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.netUsd)}>{fmtMoney(r.netUsd)}</span> : "—"),
       },
@@ -1475,7 +1563,7 @@ export default function LiveEnginePage() {
       },
       {
         id: "overshoot",
-        header: "Stop overshoot",
+        header: <LeaderSortHeader label="Stop overshoot" k="stopOvershoot" sortKey={leaderSort} sortDir={leaderSortDir} onSort={toggleLeaderSort} />,
         align: "right",
         // Realised risk over planned risk on stop-outs. 1.00x is a stop that
         // closed where it was placed.
@@ -1499,7 +1587,7 @@ export default function LiveEnginePage() {
       },
       {
         id: "drag",
-        header: "Fee drag",
+        header: <LeaderSortHeader label="Fee drag" k="feeDragPct" sortKey={leaderSort} sortDir={leaderSortDir} onSort={toggleLeaderSort} />,
         align: "right",
         // Share of GROSS PROFIT eaten by fees. This is the number that showed the
         // options desk was unviable on cheap contracts, so it is on the board
@@ -1528,7 +1616,7 @@ export default function LiveEnginePage() {
     // Profit % would then have divided by an equity of 0 and rendered +0.00%
     // for every row forever, which reads as "nothing has made any money"
     // rather than "the denominator never arrived".
-    [perp, busy, toggleStrategy],
+    [perp, busy, toggleStrategy, leaderRank, leaderSort, leaderSortDir, toggleLeaderSort],
   );
 
   const rosterColumns: DeskColumn<Eligibility>[] = useMemo(
