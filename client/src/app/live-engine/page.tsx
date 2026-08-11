@@ -287,6 +287,9 @@ function setUsdInrRate(rate: number | null): void {
  */
 const LEADER_MIN_SAMPLE = 10;
 
+/** Rows shown before the board is expanded. */
+const LEADER_PREVIEW_ROWS = 25;
+
 /**
  * Average net result per fill, in whatever currency the row carries.
  *
@@ -538,6 +541,7 @@ type PaperDesk = {
 export default function LiveEnginePage() {
   const [state, setState] = useState<LiveState | null>(null);
   const [fx, setFx] = useState<{ rate: number; asOf: string | null } | null>(null);
+  const [showAllStrategies, setShowAllStrategies] = useState(false);
   /**
    * Why a panel is empty, keyed by panel, rendered in that panel's own empty
    * state. "No rows" and "this venue has no such desk" look identical on screen
@@ -1771,7 +1775,10 @@ export default function LiveEnginePage() {
           />
           <DeskDataTable
             columns={leaderColumns}
-            rows={leaderRows}
+            // Top 25 by default. 173 rows is a scroll nobody reads to the end
+            // of, and the rows that matter are the ranked ones at the top —
+            // 115 of them have never filled and carry no information at all.
+            rows={showAllStrategies ? leaderRows : leaderRows.slice(0, LEADER_PREVIEW_ROWS)}
             // Keyed by STREAM, not by strategy.
             //
             // Rows became per (strategy, symbol) and this key did not follow,
@@ -1789,11 +1796,32 @@ export default function LiveEnginePage() {
               </span>
             }
           />
+          {leaderRows.length > LEADER_PREVIEW_ROWS && (
+            <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 12 }}>
+              <DeskButton variant="outlined" onClick={() => setShowAllStrategies((v) => !v)}>
+                {showAllStrategies
+                  ? `Show top ${LEADER_PREVIEW_ROWS} only`
+                  : `View all ${leaderRows.length} strategies`}
+              </DeskButton>
+              {/*
+                What is hidden, stated. A truncated table that does not say it
+                is truncated reads as the whole roster, and this one hides 148
+                rows — including every stream that has never filled.
+              */}
+              <span className="desk-label-md" style={{ color: "var(--desk-on-surface-variant)" }}>
+                {showAllStrategies
+                  ? `showing all ${leaderRows.length}`
+                  : `showing the top ${LEADER_PREVIEW_ROWS} of ${leaderRows.length} · ${
+                      leaderRows.length - LEADER_PREVIEW_ROWS
+                    } hidden, ${leaderRows.filter((r) => r.trades === 0).length} of which have never filled`}
+              </span>
+            </div>
+          )}
           <p style={{ marginTop: 12, fontSize: 12, color: "var(--desk-on-surface-variant)" }}>
             Built from CLOSED live positions — real fills, real fees. This is not the paper desks&rsquo;
             leaderboard: those rank strategies on model premiums, and a strategy topping one has repeatedly
-            not been the same strategy that earns here. Ranked worst net first so losses are not buried
-            below a scroll. &ldquo;Gate&rdquo; is the pre-registered go-live bar, which permission to trade
+            not been the same strategy that earns here. Ranked best first by net per fill, with streams under 10 fills below proven
+            ones however good they look. &ldquo;Gate&rdquo; is the pre-registered go-live bar, which permission to trade
             does not imply.
           </p>
         </DeskCard>
