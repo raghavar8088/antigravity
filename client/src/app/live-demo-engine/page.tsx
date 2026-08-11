@@ -306,6 +306,33 @@ const LEADER_MIN_SAMPLE = 10;
 /** Rows shown before the board is expanded. */
 const LEADER_PREVIEW_ROWS = 25;
 
+/**
+ * How profitable a stream has been overall, as a percentage of the desk's
+ * capital.
+ *
+ * This is the "+52%" / "-10%" reading: what a stream has added to, or taken
+ * from, the account. Same convention the paper desks use for each stream's
+ * contribution to their book.
+ *
+ * Every stream shares ONE balance rather than holding a slice of it, so this is
+ * a contribution to the desk, not a return on capital set aside for that
+ * stream. The column sums to the desk's total return; reading a single row as
+ * "this strategy returned 9%" would overstate it, because the same $10 backed
+ * all 173 of them.
+ */
+function roiPctOfDesk(r: { netUsd: number }, deskEquityUsd: number): number {
+  return deskEquityUsd > 0 ? (r.netUsd / deskEquityUsd) * 100 : 0;
+}
+
+/**
+ * Net as a share of the notional traded — profitability per unit of capital
+ * actually deployed, and the only figure comparable against the fee.
+ *
+ * Kept because it answers a different question from ROI. A stream can
+ * contribute little to the desk merely because it rarely fires while earning
+ * well on everything it touches, and one can look large on ROI while earning
+ * less per trade than it costs to trade.
+ */
 function edgePct(r: { netUsd: number; notionalUsd: number }): number {
   return r.notionalUsd > 0 ? (r.netUsd / r.notionalUsd) * 100 : 0;
 }
@@ -1222,7 +1249,7 @@ export default function LiveEnginePage() {
       const tb = tierOf(b);
       if (ta !== tb) return ta - tb;
       if (ta === 2) return a.strategy.localeCompare(b.strategy);
-      return edgePct(b) - edgePct(a);
+      return b.netUsd - a.netUsd;
     });
     return rows;
   }, [perp, perpTrades]);
@@ -1240,36 +1267,44 @@ export default function LiveEnginePage() {
       },
       { id: "strat", header: "Strategy", cell: (r) => r.strategy },
       {
-        id: "edge",
-        header: "Edge %",
+        id: "roi",
+        header: "Profit %",
         align: "right",
-        // Net as a share of the notional traded — the number the board is
-        // sorted on, and the one that says whether a stream is profitable.
+        // Overall profitability: what this stream has added to the desk's
+        // capital. +52% means it grew the account by half of it; -10% means it
+        // cost a tenth.
         //
-        // Shown against the round-trip fee, because "positive" is not the bar:
-        // a stream must clear 0.118% before it has earned anything at all.
+        // The tooltip carries edge-per-trade against the fee, because the two
+        // disagree in a way that matters: a stream can show a healthy Profit %
+        // while earning less on each trade than the trade costs, which is a
+        // stream that only looks good because it fired often.
         cell: (r) => {
-          if (r.trades === 0 || r.notionalUsd <= 0) {
+          if (r.trades === 0) {
             return <span style={{ opacity: 0.5 }} title="no fills yet — nothing to measure">—</span>;
           }
-          const pct = edgePct(r);
-          const beatsFees = pct > ROUND_TRIP_FEE_PCT;
+          const roi = roiPctOfDesk(r, perp?.equityUsd ?? 0);
+          const edge = edgePct(r);
+          const beatsFees = edge > ROUND_TRIP_FEE_PCT;
           return (
             <span
-              className={pnlTone(pct)}
+              className={pnlTone(roi)}
               style={{ fontWeight: r.trades >= LEADER_MIN_SAMPLE ? 700 : 400 }}
               title={
-                `${fmtMoney(r.netUsd)} on ${fmtMoney(r.notionalUsd)} traded across ${r.trades} fill(s). ` +
+                `${fmtMoney(r.netUsd)} on the desk's ${fmtMoney(perp?.equityUsd)} capital, across ${r.trades} fill(s). ` +
+                `Per trade it earns ${edge.toFixed(3)}% of notional, which ` +
                 (beatsFees
-                  ? `Clears the ${ROUND_TRIP_FEE_PCT}% round-trip fee.`
-                  : `Does NOT clear the ${ROUND_TRIP_FEE_PCT}% round-trip fee — trading costs more than this earns.`) +
+                  ? `clears the ${ROUND_TRIP_FEE_PCT}% round-trip fee.`
+                  : `does NOT clear the ${ROUND_TRIP_FEE_PCT}% round-trip fee — it costs more to trade than it earns.`) +
                 (r.trades < LEADER_MIN_SAMPLE
                   ? ` Only ${r.trades} fill(s), so it ranks below streams with ${LEADER_MIN_SAMPLE}+.`
                   : "")
               }
             >
-              {`${pct >= 0 ? "+" : ""}${pct.toFixed(3)}%`}
+              {`${roi >= 0 ? "+" : ""}${roi.toFixed(2)}%`}
               {r.trades < LEADER_MIN_SAMPLE && <span style={{ opacity: 0.6, fontWeight: 400 }}> ?</span>}
+              {r.trades > 0 && !beatsFees && (
+                <span className="desk-pnl-negative" title="earns less per trade than the fee costs"> ⚠</span>
+              )}
             </span>
           );
         },
@@ -1410,7 +1445,12 @@ export default function LiveEnginePage() {
         ),
       },
     ],
-    [],
+    // These columns close over live state. The dependency list was empty, which
+    // memoised the columns against the FIRST render — when perp is still null.
+    // Profit % would then have divided by an equity of 0 and rendered +0.00%
+    // for every row forever, which reads as "nothing has made any money"
+    // rather than "the denominator never arrived".
+    [perp, busy, toggleStrategy],
   );
 
   const rosterColumns: DeskColumn<Eligibility>[] = useMemo(
@@ -1764,7 +1804,7 @@ export default function LiveEnginePage() {
             title="Strategy Leaderboard"
             subtitle={
               leaderRows.some((r) => r.trades > 0)
-                ? `best first by edge % · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
+                ? `best first by profit % · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
                 : "best first by average net per fill · streams under 10 fills rank below proven ones, however good they look"
