@@ -1372,6 +1372,29 @@ export default function LiveEnginePage() {
     return rows;
   }, [perp, perpTrades, leaderSort, leaderSortDir]);
 
+  /**
+   * Desk-level record across every closed live trade.
+   *
+   * UNRECONCILED exits are counted separately and excluded from the win rate.
+   * Those are positions that vanished from the venue with no matching fill, so
+   * the engine booked their whole notional as the result — a placeholder, not a
+   * measured outcome. Three of them currently carry 84% of the desk's realised
+   * loss, and letting them score as wins or losses would put a number on the
+   * board that no trade produced.
+   */
+  const deskRecord = useMemo(() => {
+    const closed = perpTrades.filter((t) => t.status === "CLOSED");
+    const scored = closed.filter((t) => t.exitReason !== "UNRECONCILED");
+    const wins = scored.filter((t) => (t.realisedPnl ?? 0) > 0).length;
+    return {
+      closed: closed.length,
+      scored: scored.length,
+      wins,
+      unreconciled: closed.length - scored.length,
+      winRatePct: scored.length > 0 ? (wins / scored.length) * 100 : 0,
+    };
+  }, [perpTrades]);
+
   /** Rank in the current ordering, keyed by stream. */
   const leaderRank = useMemo(() => {
     const m = new Map<string, number>();
@@ -1934,6 +1957,24 @@ export default function LiveEnginePage() {
             <DeskMetricTile label="Available" value={account ? fmtMoney(account.availableUsd) : "—"} sub="equity − margin" />
             <DeskMetricTile label="Margin Used" value={account ? fmtMoney(account.marginUsedUsd) : "—"} sub="delta positions" />
             <DeskMetricTile label="Open Risk" value={account ? fmtMoney(account.openRiskUsd) : "—"} sub="premium at risk (long)" />
+            <DeskMetricTile
+              label="Win rate"
+              value={deskRecord.scored > 0 ? `${deskRecord.winRatePct.toFixed(1)}%` : "—"}
+              valueClassName={
+                deskRecord.scored > 0
+                  ? // 25% is breakeven at the desk's 1:3 geometry — below it the
+                    // desk loses money however green individual rows look.
+                    pnlTone(deskRecord.winRatePct - 25)
+                  : undefined
+              }
+              sub={
+                deskRecord.scored > 0
+                  ? `${deskRecord.wins} of ${deskRecord.scored} closed${
+                      deskRecord.unreconciled > 0 ? ` · ${deskRecord.unreconciled} unreconciled excluded` : ""
+                    }`
+                  : "no closed trades yet"
+              }
+            />
             <DeskMetricTile label="Realized Today" value={account ? fmtMoney(account.realizedTodayUsd) : "—"} valueClassName={account ? pnlTone(account.realizedTodayUsd) : undefined} sub="to daily breaker" />
           </div>
         </DeskCard>
