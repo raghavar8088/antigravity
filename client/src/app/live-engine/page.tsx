@@ -254,6 +254,10 @@ type LeaderRow = {
   lastStopTicks: number;
   /** Total notional traded, summed across fills. */
   notionalUsd: number;
+  /** Sum of each fill's own ROI %, for the simple (equal-weighted) average. */
+  roiPctSum: number;
+  /** Fills that had a usable notional, so the average divides by the right n. */
+  roiSamples: number;
   allowed: boolean;
   live: boolean;
   reason: string;
@@ -321,6 +325,21 @@ function capitalDeployed(r: { notionalUsd: number; trades: number }): number {
 function profitPctOfCapital(r: { netUsd: number; notionalUsd: number; trades: number }): number {
   const cap = capitalDeployed(r);
   return cap > 0 ? (r.netUsd / cap) * 100 : 0;
+}
+
+/**
+ * The simple average of each fill's own ROI — the equal-weighted mean.
+ *
+ * Five trades at +5% and five at -2% average to +1.5%, regardless of how large
+ * any one of them was. That is a different number from net over total notional,
+ * which is weighted by position size and can be carried by a single big trade.
+ *
+ * This is the "does a typical trade from this stream make money" figure, and it
+ * is the one that says whether the strategy itself is profitable rather than
+ * whether it happened to size well.
+ */
+function avgRoiPerTrade(r: { roiPctSum: number; roiSamples: number }): number {
+  return r.roiSamples > 0 ? r.roiPctSum / r.roiSamples : 0;
 }
 
 /**
@@ -1152,6 +1171,8 @@ export default function LiveEnginePage() {
         gridRefusals: 0,
         lastStopTicks: 0,
         notionalUsd: 0,
+        roiPctSum: 0,
+        roiSamples: 0,
         allowed: true,
         // The scalp desk's promotion gate passes none of these; the bridge
         // trades them on owner instruction, not on a gate verdict.
@@ -1189,6 +1210,16 @@ export default function LiveEnginePage() {
         const fees = t.feesUsd ?? 0;
         row.feesUsd += fees;
         row.notionalUsd += t.notionalUsd ?? 0;
+        // Each fill's OWN return, accumulated for a simple average.
+        //
+        // Deliberately not net/totalNotional, which weights by position size
+        // and would let one large trade decide the figure. The question here is
+        // "what does a typical trade return", so every trade counts once.
+        const tradeNotional = t.notionalUsd ?? 0;
+        if (tradeNotional > 0) {
+          row.roiPctSum += ((t.realisedPnl ?? 0) / tradeNotional) * 100;
+          row.roiSamples += 1;
+        }
         // Accumulated as a sum here and divided at the end — averaging an
         // average as trades arrive would weight the earliest stop-out most.
         if (t.stopOvershoot && t.stopOvershoot > 0) {
@@ -1237,17 +1268,19 @@ export default function LiveEnginePage() {
     // reached a usable sample rank below those that have, however good they
     // look. That is the difference between "best" and "luckiest", and this desk
     // has been fooled by the second often enough.
-    const tierOf = (r: LeaderRow): number => {
-      if (r.trades === 0) return 2; // no evidence at all
-      if (r.trades < LEADER_MIN_SAMPLE) return 1; // some, not enough to rank on
-      return 0;
-    };
     rows.sort((a, b) => {
-      const ta = tierOf(a);
-      const tb = tierOf(b);
-      if (ta !== tb) return ta - tb;
-      if (ta === 2) return a.strategy.localeCompare(b.strategy);
-      return profitPctOfCapital(b) - profitPctOfCapital(a);
+      // Only unfilled rows are tiered now — they have nothing to rank. Streams
+      // WITH fills sort purely on average ROI, highest first, as instructed.
+      //
+      // That means a one-fill row can lead the board. It is marked "?" and the
+      // Fills column is next to it, so the thinness is visible rather than
+      // implied; ordering is the owner's call, and hiding a good-looking row
+      // behind a sample rule they did not ask for is its own kind of dishonesty.
+      const aEmpty = a.trades === 0;
+      const bEmpty = b.trades === 0;
+      if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+      if (aEmpty) return a.strategy.localeCompare(b.strategy);
+      return avgRoiPerTrade(b) - avgRoiPerTrade(a);
     });
     return rows;
   }, [perp, perpTrades]);
@@ -1304,6 +1337,40 @@ export default function LiveEnginePage() {
               {!beatsFees && (
                 <span className="desk-pnl-negative" title="earns less per trade than the fee costs"> ⚠</span>
               )}
+            </span>
+          );
+        },
+      },
+      {
+        id: "avgroi",
+        header: "Avg ROI / trade",
+        align: "right",
+        // The simple mean of each fill's own return: 5 trades at +5% and 5 at
+        // -2% give +1.5%. Every trade counts once, so the figure describes a
+        // TYPICAL trade rather than the biggest one.
+        //
+        // The board is sorted on this, plainly descending, at the owner's
+        // instruction. A stream with one fill can therefore lead — the "?"
+        // marks it, because one trade is not evidence of anything.
+        cell: (r) => {
+          if (r.roiSamples === 0) {
+            return <span style={{ opacity: 0.5 }} title="no fills yet — nothing to average">—</span>;
+          }
+          const avg = avgRoiPerTrade(r);
+          return (
+            <span
+              className={pnlTone(avg)}
+              style={{ fontWeight: r.trades >= LEADER_MIN_SAMPLE ? 700 : 400 }}
+              title={
+                `Simple average across ${r.roiSamples} fill(s): each trade's own net over its own notional, ` +
+                `summed and divided by ${r.roiSamples}. Not weighted by position size, so one large trade cannot carry it.` +
+                (r.trades < LEADER_MIN_SAMPLE
+                  ? ` Only ${r.trades} fill(s) — treat this as unproven.`
+                  : "")
+              }
+            >
+              {`${avg >= 0 ? "+" : ""}${avg.toFixed(2)}%`}
+              {r.trades < LEADER_MIN_SAMPLE && <span style={{ opacity: 0.6, fontWeight: 400 }}> ?</span>}
             </span>
           );
         },
@@ -1798,7 +1865,7 @@ export default function LiveEnginePage() {
             title="Strategy Leaderboard"
             subtitle={
               leaderRows.some((r) => r.trades > 0)
-                ? `best first by profit on deployed capital · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
+                ? `best first by average ROI per trade · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
                 : "best first by average net per fill · streams under 10 fills rank below proven ones, however good they look"
