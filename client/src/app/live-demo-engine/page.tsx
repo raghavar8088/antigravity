@@ -307,31 +307,41 @@ const LEADER_MIN_SAMPLE = 10;
 const LEADER_PREVIEW_ROWS = 25;
 
 /**
- * How profitable a stream has been overall, as a percentage of the desk's
- * capital.
+ * Capital a stream actually deploys: the average size of one of its positions.
  *
- * This is the "+52%" / "-10%" reading: what a stream has added to, or taken
- * from, the account. Same convention the paper desks use for each stream's
- * contribution to their book.
- *
- * Every stream shares ONE balance rather than holding a slice of it, so this is
- * a contribution to the desk, not a return on capital set aside for that
- * stream. The column sums to the desk's total return; reading a single row as
- * "this strategy returned 9%" would overstate it, because the same $10 backed
- * all 173 of them.
+ * A stream holds one position at a time — the per-symbol cap enforces it — so
+ * the money committed to it is one position's notional, not the sum of every
+ * position it has ever opened. Summing would treat a stream that recycled $2
+ * eleven times as though it had been given $22.
  */
-function roiPctOfDesk(r: { netUsd: number }, deskEquityUsd: number): number {
-  return deskEquityUsd > 0 ? (r.netUsd / deskEquityUsd) * 100 : 0;
+function capitalDeployed(r: { notionalUsd: number; trades: number }): number {
+  return r.trades > 0 ? r.notionalUsd / r.trades : 0;
 }
 
 /**
- * Net as a share of the notional traded — profitability per unit of capital
- * actually deployed, and the only figure comparable against the fee.
+ * Total net profit as a percentage of the capital the stream deploys.
  *
- * Kept because it answers a different question from ROI. A stream can
- * contribute little to the desk merely because it rarely fires while earning
- * well on everything it touches, and one can look large on ROI while earning
- * less per trade than it costs to trade.
+ * The "+104%" / "-10%" reading: this stream has roughly doubled the money it
+ * commits, or lost a tenth of it. Return on the capital at work, which is the
+ * question "is this strategy profitable" actually asks.
+ *
+ * Deliberately NOT net over the desk's whole balance. All 173 streams share one
+ * $10, so dividing by it measures how big a slice of the desk a stream happens
+ * to represent rather than how well it uses what it is given — and it would
+ * rank a stream that fires constantly above a better one that fires rarely.
+ */
+function profitPctOfCapital(r: { netUsd: number; notionalUsd: number; trades: number }): number {
+  const cap = capitalDeployed(r);
+  return cap > 0 ? (r.netUsd / cap) * 100 : 0;
+}
+
+/**
+ * Net as a share of everything traded — profit per unit of turnover, and the
+ * only figure comparable against the fee.
+ *
+ * Kept because it answers a different question from return on capital. A stream
+ * that recycles its capital often can show a large return while earning less on
+ * each trade than the trade costs; this is the number that catches that.
  */
 function edgePct(r: { netUsd: number; notionalUsd: number }): number {
   return r.notionalUsd > 0 ? (r.netUsd / r.notionalUsd) * 100 : 0;
@@ -1249,7 +1259,7 @@ export default function LiveEnginePage() {
       const tb = tierOf(b);
       if (ta !== tb) return ta - tb;
       if (ta === 2) return a.strategy.localeCompare(b.strategy);
-      return b.netUsd - a.netUsd;
+      return profitPctOfCapital(b) - profitPctOfCapital(a);
     });
     return rows;
   }, [perp, perpTrades]);
@@ -1270,28 +1280,29 @@ export default function LiveEnginePage() {
         id: "roi",
         header: "Profit %",
         align: "right",
-        // Overall profitability: what this stream has added to the desk's
-        // capital. +52% means it grew the account by half of it; -10% means it
-        // cost a tenth.
+        // Net profit over the capital this stream deploys — one position's
+        // notional, since it holds one at a time. +104% means it has roughly
+        // doubled the money it commits; -10% means it lost a tenth of it.
         //
-        // The tooltip carries edge-per-trade against the fee, because the two
-        // disagree in a way that matters: a stream can show a healthy Profit %
-        // while earning less on each trade than the trade costs, which is a
-        // stream that only looks good because it fired often.
+        // The tooltip carries profit per unit TRADED against the fee, because
+        // the two disagree in the case that matters: a stream recycling its
+        // capital often can show a large return while losing money on every
+        // individual trade.
         cell: (r) => {
-          if (r.trades === 0) {
+          if (r.trades === 0 || r.notionalUsd <= 0) {
             return <span style={{ opacity: 0.5 }} title="no fills yet — nothing to measure">—</span>;
           }
-          const roi = roiPctOfDesk(r, perp?.equityUsd ?? 0);
+          const pct = profitPctOfCapital(r);
           const edge = edgePct(r);
           const beatsFees = edge > ROUND_TRIP_FEE_PCT;
           return (
             <span
-              className={pnlTone(roi)}
+              className={pnlTone(pct)}
               style={{ fontWeight: r.trades >= LEADER_MIN_SAMPLE ? 700 : 400 }}
               title={
-                `${fmtMoney(r.netUsd)} on the desk's ${fmtMoney(perp?.equityUsd)} capital, across ${r.trades} fill(s). ` +
-                `Per trade it earns ${edge.toFixed(3)}% of notional, which ` +
+                `${fmtMoney(r.netUsd)} net on ${fmtMoney(capitalDeployed(r))} of deployed capital, ` +
+                `recycled across ${r.trades} fill(s) (${fmtMoney(r.notionalUsd)} traded in total). ` +
+                `Per unit traded it earns ${edge.toFixed(3)}%, which ` +
                 (beatsFees
                   ? `clears the ${ROUND_TRIP_FEE_PCT}% round-trip fee.`
                   : `does NOT clear the ${ROUND_TRIP_FEE_PCT}% round-trip fee — it costs more to trade than it earns.`) +
@@ -1300,9 +1311,9 @@ export default function LiveEnginePage() {
                   : "")
               }
             >
-              {`${roi >= 0 ? "+" : ""}${roi.toFixed(2)}%`}
+              {`${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`}
               {r.trades < LEADER_MIN_SAMPLE && <span style={{ opacity: 0.6, fontWeight: 400 }}> ?</span>}
-              {r.trades > 0 && !beatsFees && (
+              {!beatsFees && (
                 <span className="desk-pnl-negative" title="earns less per trade than the fee costs"> ⚠</span>
               )}
             </span>
@@ -1804,7 +1815,7 @@ export default function LiveEnginePage() {
             title="Strategy Leaderboard"
             subtitle={
               leaderRows.some((r) => r.trades > 0)
-                ? `best first by profit % · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
+                ? `best first by profit on deployed capital · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
                 : "best first by average net per fill · streams under 10 fills rank below proven ones, however good they look"
