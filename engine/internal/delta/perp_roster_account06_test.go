@@ -17,6 +17,19 @@ func TestPaperAccount06_SharesNoStreamWithTheOtherBooks(t *testing.T) {
 		if id == PaperAccount06 {
 			continue
 		}
+		// Account 01 is excluded because it MIRRORS the live roster, and on
+		// 2026-08-11 the owner promoted 98 streams — most of them Account 06's
+		// — from paper to live. Comparing against it would assert that no
+		// stream is ever promoted, which is the opposite of what these books
+		// exist to enable: a book that can never graduate is not a candidate
+		// pool, it is a waiting room.
+		//
+		// The guarantee that still matters is independence from the other PAPER
+		// books, where a shared pair really does mean the same result counted
+		// twice.
+		if id == PaperAccount01 {
+			continue
+		}
 		for _, st := range ScalpPaperStreamsFor(id) {
 			k := perpStreamKey(st.Strategy, st.Symbol)
 			held[k] = append(held[k], id)

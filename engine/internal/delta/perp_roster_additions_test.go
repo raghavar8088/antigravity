@@ -13,8 +13,9 @@ func TestDefaultScalpLiveStreams_AdditionsDoNotDisplaceTheOriginals(t *testing.T
 		got[perpStreamKey(s.Strategy, s.Symbol)] = true
 	}
 
-	if len(defaultScalpLiveStreams) != 45 {
-		t.Fatalf("roster has %d streams, want 45 (31 original + 14 added)", len(defaultScalpLiveStreams))
+	// 31 original + 14 added 2026-08-10 + 98 added 2026-08-11.
+	if len(defaultScalpLiveStreams) != 143 {
+		t.Fatalf("roster has %d streams, want 143", len(defaultScalpLiveStreams))
 	}
 
 	// A sample of the original book, including the stream that was open when
@@ -31,6 +32,12 @@ func TestDefaultScalpLiveStreams_AdditionsDoNotDisplaceTheOriginals(t *testing.T
 	}
 
 	for _, add := range []struct{ strategy, symbol string }{
+		// 2026-08-11 additions, including the three new symbols.
+		{"ANTI_D20_RSI_Reversion", "MUBARAKUSD"},
+		{"ANTI_M1_VWAP_Rev_40bp_Long", "BEATUSD"},
+		{"Hidden_Liquidity_Detection", "LABUSD"},
+		{"M1_PinBar_W2_Short", "BLESSUSD"},
+		{"ANTI_M1_InsideBar_V20_Short", "GRIFFAINUSD"},
 		{"ANTI_M1_HMA21_Flip_Long", "BLESSUSD"},
 		{"ANTI_Recurrence_Quantification_Signal", "TSTUSD"},
 		{"ANTI_Ornstein_Uhlenbeck_Reversion", "BMTUSD"},
