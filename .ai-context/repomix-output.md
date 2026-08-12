@@ -1808,6 +1808,7 @@ The content is organized as follows:
   scalp_prelive/paperpersist.go
   scalp_prelive/profile_test.go
   scalp_prelive/risk_fraction_test.go
+  scalp_prelive/sizing_mode_test.go
   scalp_prelive/symbols_test.go
   scalp_prelive/symbols_venue_test.go
   scalp_prelive/symbols.go

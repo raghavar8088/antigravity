@@ -217,7 +217,19 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	if rf := scalpLiveRiskFraction(); rf != 0.02 {
 		b.SetRiskPerTradeFraction(rf)
 	}
-	if n := scalpLiveFixedContracts(); n > 0 {
+	// Exactly ONE sizing mode is announced, and it is the one that will run.
+	//
+	// Both were applied before, so the boot log printed "FIXED SIZE: every order
+	// is 1 contract" AND "target position size $3.00". The behaviour was
+	// correct — PlanPerpOrder checks the target first — but an operator reading
+	// the first line concluded the deploy had failed when positions showed size
+	// 1. Two truthful lines describing incompatible modes is worse than either
+	// alone, because the reader has no way to know which one wins.
+	if v := scalpLiveTargetNotionalUSD(); v > 0 {
+		if n := scalpLiveFixedContracts(); n > 0 {
+			log.Printf("[PERP LIVE] SCALP_LIVE_FIXED_CONTRACTS=%d ignored — a target position size is set and takes precedence", n)
+		}
+	} else if n := scalpLiveFixedContracts(); n > 0 {
 		b.SetFixedContracts(n)
 	}
 	if n := scalpLiveMaxConcurrent(); n > 0 {
