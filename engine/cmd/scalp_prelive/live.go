@@ -83,6 +83,25 @@ func scalpLiveMaxConcurrent() int {
 	return n
 }
 
+// scalpLiveTargetNotionalUSD sizes each order to roughly this position value.
+//
+// Overrides the fixed contract count. One contract is not a consistent bet: per
+// contract cost spans 744x across the roster, so the same "1" is $0.014 of
+// SAGAUSD and $10.40 of BEATUSD, and a stop-out costs accordingly. Sizing to a
+// common value is what makes per-stream results comparable.
+func scalpLiveTargetNotionalUSD() float64 {
+	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_TARGET_NOTIONAL_USD"))
+	if raw == "" {
+		return 0
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || v <= 0 {
+		log.Printf("[PERP LIVE] SCALP_LIVE_TARGET_NOTIONAL_USD=%q is not a positive number — keeping fixed-contract sizing", raw)
+		return 0
+	}
+	return v
+}
+
 // scalpLiveFixedContracts sends a constant contract count and ignores risk
 // sizing entirely. 0 means size from risk, which is the default.
 //
@@ -200,6 +219,10 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	}
 	if n := scalpLiveFixedContracts(); n > 0 {
 		b.SetFixedContracts(n)
+	}
+	// After fixed-contracts, so the target wins when both are set.
+	if v := scalpLiveTargetNotionalUSD(); v > 0 {
+		b.SetTargetNotionalUSD(v)
 	}
 	if n := scalpLiveMaxConcurrent(); n > 0 {
 		b.SetMaxConcurrentPositions(n)

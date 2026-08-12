@@ -75,6 +75,23 @@ type PerpRiskConfig struct {
 	// setting. Win rate, stop overshoot and fee drag are ratios and stay
 	// comparable, which is what this mode exists to measure.
 	FixedContracts int
+
+	// TargetNotionalUSD sizes each order to roughly this position value,
+	// overriding FixedContracts when set.
+	//
+	// One contract means wildly different risk per symbol: per-contract cost
+	// spans 744x across the roster, from $0.014 of SAGAUSD to $10.40 of
+	// BEATUSD. A stop-out on the cheap end costs a fraction of a rupee and on
+	// the dear end costs twenty, so results were not comparable and the desk's
+	// P&L was decided by whichever expensive coin happened to trade.
+	//
+	// Sizing to a common value makes each position carry similar risk, which is
+	// what makes per-stream results mean anything.
+	//
+	// Symbols whose single contract already exceeds the target stay at one
+	// contract — Delta has no fractional contracts, so one is the floor and
+	// those positions simply run large.
+	TargetNotionalUSD float64
 	// MaxNotionalUSD is a hard per-order ceiling, independent of the above.
 	MaxNotionalUSD float64
 	// MaxAggregateLeverage caps notional across ALL open positions at once.
@@ -192,6 +209,60 @@ func PlanPerpOrder(
 	stopFrac := math.Abs(entry-stop) / entry
 	if stopFrac <= 0 {
 		return PerpOrderPlan{}, fmt.Errorf("delta: stop distance is zero")
+	}
+
+	// Target-notional mode: size to a common position value.
+	//
+	// Unlike fixed-size, this DOES respect the aggregate cap below rather than
+	// bypassing it. A $3 target across ten concurrent positions is $30, exactly
+	// the book ceiling, so the cap is load-bearing here — skipping it would let
+	// the book run to whatever the roster asked for.
+	if cfg.TargetNotionalUSD > 0 {
+		prod, ok := reg.Lookup(symbol)
+		if !ok {
+			return PerpOrderPlan{}, fmt.Errorf("delta: %s is not a known product", symbol)
+		}
+		perContract := prod.NotionalPerContract(entry)
+		if perContract <= 0 {
+			return PerpOrderPlan{}, fmt.Errorf("delta: %s has no usable contract value", symbol)
+		}
+		// Rounded, with a floor of one. Rounding down would send zero contracts
+		// for every symbol dearer than the target; the floor keeps those
+		// tradable at their minimum instead of silently dropping them.
+		contracts := int(math.Round(cfg.TargetNotionalUSD / perContract))
+		if contracts < 1 {
+			contracts = 1
+		}
+		notional := float64(contracts) * perContract
+
+		// The book ceiling still binds. A position that does not fit is refused
+		// rather than shrunk: shrinking a target-sized order reintroduces the
+		// dust it exists to prevent.
+		if cfg.MaxAggregateLeverage > 0 {
+			ceiling := cfg.EquityUSD * cfg.MaxAggregateLeverage
+			if room := ceiling - openNotionalUSD; notional > room {
+				return PerpOrderPlan{}, fmt.Errorf(
+					"%w: %s needs $%.2f but only $%.2f is left against a $%.2f ceiling",
+					ErrAggregateExposureReached, symbol, notional, room, ceiling)
+			}
+		}
+
+		side := OrderSide("buy")
+		if !long {
+			side = OrderSide("sell")
+		}
+		return PerpOrderPlan{
+			Symbol:      prod.Symbol,
+			ProductID:   prod.ProductID,
+			Side:        side,
+			Contracts:   contracts,
+			LimitPrice:  entry,
+			StopPrice:   stop,
+			TargetPrice: target,
+			NotionalUSD: notional,
+			RiskUSD:     float64(contracts) * math.Abs(entry-stop) * prod.ContractValue,
+			Leverage:    float64(cfg.LeverageForOrder),
+		}, nil
 	}
 
 	// Fixed-size mode short-circuits the risk maths and every notional cap.

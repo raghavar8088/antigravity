@@ -931,6 +931,8 @@ The content is organized as follows:
   delta/perp_strategy_switch.go
   delta/perp_stream_switch_test.go
   delta/perp_stream_view.go
+  delta/perp_target_notional_test.go
+  delta/perp_target_notional.go
   delta/perp_vol_wire.go
   delta/perp_volatility_test.go
   delta/perp_volatility.go
