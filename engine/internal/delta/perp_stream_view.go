@@ -27,4 +27,9 @@ type PerpStreamView struct {
 type gridBlock struct {
 	Refusals      int
 	LastStopTicks float64
+	// Consecutive counts refusals since this stream last opened a position.
+	// Reset by any fill, because a stream that still trades is not dead — with
+	// volatility-scaled stops the SAME stream clears the tick grid when the
+	// market is moving and fails when it is quiet.
+	Consecutive int
 }

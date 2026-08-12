@@ -408,11 +408,40 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		k := perpStreamKey(strategy, symbol)
 		gb := b.gridBlocked[k]
 		gb.Refusals++
+		gb.Consecutive++
 		gb.LastStopTicks = ticks
 		b.gridBlocked[k] = gb
+		dead := gb.Consecutive >= gridAutoDisableAfter && !b.strategyOff[k]
 		b.mu.Unlock()
+
+		// A stream the grid keeps refusing is switched off, so it stops
+		// occupying a roster slot it cannot use.
+		//
+		// On CONSECUTIVE refusals, not the first. Stops are volatility-scaled,
+		// so one stream clears the tick grid when the market moves and fails
+		// when it is quiet — measured live, both streams that had ever been
+		// refused had also traded, and one of them was net positive. Switching
+		// off at the first refusal would silence working strategies.
+		//
+		// Reversible: the row toggle turns it back on, and any fill resets the
+		// counter.
+		if dead {
+			log.Printf("[PERP LIVE] %s on %s switched OFF automatically — %d consecutive grid refusals, last stop %.1f ticks",
+				strategy, symbol, gb.Consecutive, ticks)
+			b.SetStrategyEnabled(strategy, symbol, false)
+		}
 		return nil
 	}
+
+	// The stream reached sizing, so the grid is not blocking it. Clear the
+	// streak here rather than on fill: an order refused for capacity is still
+	// evidence the grid was passable.
+	b.mu.Lock()
+	if gb, ok := b.gridBlocked[perpStreamKey(strategy, symbol)]; ok && gb.Consecutive > 0 {
+		gb.Consecutive = 0
+		b.gridBlocked[perpStreamKey(strategy, symbol)] = gb
+	}
+	b.mu.Unlock()
 
 	plan, err := PlanPerpOrder(b.reg, cfg, symbol, long, entry, stop, target, openCount, openNotional)
 	if err != nil {

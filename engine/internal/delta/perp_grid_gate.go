@@ -21,6 +21,16 @@ import (
 // symbol with the same problem is excluded without anyone noticing it arrived.
 const minEntryStopTicks = 20
 
+// gridAutoDisableAfter is how many CONSECUTIVE grid refusals switch a stream
+// off automatically.
+//
+// Not one. Stops are volatility-scaled, so the same stream clears the tick grid
+// in a moving market and fails in a quiet one: measured live, both streams that
+// had ever been refused had also traded, and one was net positive. Five in a
+// row without a single order reaching sizing is a stream the grid genuinely
+// cannot hold, not a quiet patch.
+const gridAutoDisableAfter = 5
+
 // stopSurvivesGrid reports why a stop cannot be traded on this symbol's price
 // grid, or "" when it can.
 //

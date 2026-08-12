@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[0,1,2],"files":1,"symbols":22,"top_files":[{"file":"engine/cmd/scalp_prelive/live.go","symbols":22}]}}
+{"engine-delta":{"communities":[0,1,2,3,4,5,6,7,8],"files":4,"symbols":59,"top_files":[{"file":"engine/internal/delta/perp_bridge.go","symbols":47},{"file":"engine/internal/delta/perp_grid_autodisable_test.go","symbols":7},{"file":"engine/internal/delta/perp_grid_gate.go","symbols":3},{"file":"engine/internal/delta/perp_stream_view.go","symbols":2}]}}
