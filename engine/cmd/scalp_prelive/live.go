@@ -220,12 +220,14 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	if n := scalpLiveFixedContracts(); n > 0 {
 		b.SetFixedContracts(n)
 	}
-	// After fixed-contracts, so the target wins when both are set.
-	if v := scalpLiveTargetNotionalUSD(); v > 0 {
-		b.SetTargetNotionalUSD(v)
-	}
 	if n := scalpLiveMaxConcurrent(); n > 0 {
 		b.SetMaxConcurrentPositions(n)
+	}
+	// LAST, so its log line reports the concurrency actually in force. Called
+	// before the cap was applied it read the default and reported a book
+	// requirement three times smaller than the real one.
+	if v := scalpLiveTargetNotionalUSD(); v > 0 {
+		b.SetTargetNotionalUSD(v)
 	}
 	// Volatility-scaled stops. On by default: a 0.60% stop against a 1.13%
 	// median minute range produced 9 of 9 stop-outs and not one trade that
