@@ -225,12 +225,24 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	// the first line concluded the deploy had failed when positions showed size
 	// 1. Two truthful lines describing incompatible modes is worse than either
 	// alone, because the reader has no way to know which one wins.
-	if v := scalpLiveTargetNotionalUSD(); v > 0 {
-		if n := scalpLiveFixedContracts(); n > 0 {
+	switch v, n := scalpLiveTargetNotionalUSD(), scalpLiveFixedContracts(); {
+	case v > 0:
+		if n > 0 {
 			log.Printf("[PERP LIVE] SCALP_LIVE_FIXED_CONTRACTS=%d ignored — a target position size is set and takes precedence", n)
 		}
-	} else if n := scalpLiveFixedContracts(); n > 0 {
+	case n > 0:
 		b.SetFixedContracts(n)
+	default:
+		// Risk-based sizing: every position stakes the same amount, so a
+		// stop-out costs the same whatever the symbol.
+		//
+		// Announced explicitly. When neither override was set this said nothing
+		// at all, which is the same silence that made a reader conclude a
+		// deploy had failed: a desk should state how it sizes, not leave it to
+		// be inferred from position sizes.
+		log.Printf("[PERP LIVE] risk-based sizing: each position risks %.3f%% of equity ($%.4f) — "+
+			"notional varies with each symbol's stop width so the RISK is equal",
+			scalpLiveRiskFraction()*100, scalpLiveEquityUSD()*scalpLiveRiskFraction())
 	}
 	if n := scalpLiveMaxConcurrent(); n > 0 {
 		b.SetMaxConcurrentPositions(n)
