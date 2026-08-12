@@ -402,6 +402,25 @@ export default function ScalpDeskPage() {
     { id: "strategy", header: "Strategy", cell: (r) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{r.strategy}</span> },
     { id: "symbol", header: "Symbol", cell: (r) => r.symbol.replace("USDT", "") },
     {
+      id: "route",
+      header: "Route",
+      // Whether this exact (strategy, symbol) STREAM is on the live engine's
+      // roster — not whether the strategy name appears somewhere on it.
+      //
+      // The distinction matters: ANTI_Recurrence_Quantification_Signal is live
+      // on eight symbols and not on twenty others, so matching by name alone
+      // would mark every row of it LIVE and tell an operator that real money
+      // follows a stream it has never touched.
+      cell: (r) =>
+        liveStreamSet.has(`${r.strategy}|${r.symbol}`) ? (
+          <DeskChip tone="warning" title="this exact stream is on the live engine's roster">
+            LIVE
+          </DeskChip>
+        ) : (
+          <span style={{ color: "var(--desk-on-surface-variant)" }}>NO</span>
+        ),
+    },
+    {
       id: "capital",
       align: "right",
       header: "Capital",
