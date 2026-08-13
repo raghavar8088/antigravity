@@ -657,6 +657,8 @@ export default function LiveEnginePage() {
   const [state, setState] = useState<LiveState | null>(null);
   const [fx, setFx] = useState<{ rate: number; asOf: string | null } | null>(null);
   const [showAllStrategies, setShowAllStrategies] = useState(false);
+  /** "all" | "on" | "off" — filters the board by the LIVE switch. */
+  const [liveFilter, setLiveFilter] = useState<"all" | "on" | "off">("all");
   const [leaderSort, setLeaderSort] = useState<LeaderSortKey>("avgRoi");
   const [leaderSortDir, setLeaderSortDir] = useState<"asc" | "desc">("desc");
   const toggleLeaderSort = useCallback((k: LeaderSortKey) => {
@@ -1395,16 +1397,31 @@ export default function LiveEnginePage() {
     };
   }, [perpTrades]);
 
+  /**
+   * The rows actually shown, after the LIVE filter.
+   *
+   * Filtered BEFORE ranking, so # numbers what is on screen. Ranking first and
+   * filtering after would leave gaps — row 1, 4, 17 — which reads as a broken
+   * table rather than a filtered one.
+   */
+  const visibleLeaderRows = useMemo(
+    () =>
+      liveFilter === "all"
+        ? leaderRows
+        : leaderRows.filter((r) => (liveFilter === "on" ? r.enabled : !r.enabled)),
+    [leaderRows, liveFilter],
+  );
+
   /** Rank in the current ordering, keyed by stream. */
   const leaderRank = useMemo(() => {
     const m = new Map<string, number>();
     let n = 0;
-    for (const r of leaderRows) {
+    for (const r of visibleLeaderRows) {
       if (r.trades === 0) continue; // unranked: nothing to place
       m.set(`${r.strategy}|${r.symbol}`, ++n);
     }
     return m;
-  }, [leaderRows]);
+  }, [visibleLeaderRows]);
 
   const leaderColumns: DeskColumn<LeaderRow>[] = useMemo(
     () => [
@@ -2075,12 +2092,39 @@ export default function LiveEnginePage() {
               )
             }
           />
+          {/*
+            LIVE filter. With 10 streams switched on and 163 off, "which of
+            these can actually place an order" is the question this board is
+            most often asked, and scrolling 173 rows is not an answer.
+
+            Counts sit on the buttons: a filter that hides rows without saying
+            how many is the same silence as a truncated table that will not
+            admit it is truncated.
+          */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+            <span className="desk-label-md" style={{ color: "var(--desk-on-surface-variant)" }}>
+              Live
+            </span>
+            {([
+              ["all", "All", leaderRows.length],
+              ["on", "On", leaderRows.filter((r) => r.enabled).length],
+              ["off", "Off", leaderRows.filter((r) => !r.enabled).length],
+            ] as const).map(([key, label, count]) => (
+              <DeskButton
+                key={key}
+                variant={liveFilter === key ? "filled" : "outlined"}
+                onClick={() => setLiveFilter(key)}
+              >
+                {`${label} (${count})`}
+              </DeskButton>
+            ))}
+          </div>
           <DeskDataTable
             columns={leaderColumns}
             // Top 25 by default. 173 rows is a scroll nobody reads to the end
             // of, and the rows that matter are the ranked ones at the top —
             // 115 of them have never filled and carry no information at all.
-            rows={showAllStrategies ? leaderRows : leaderRows.slice(0, LEADER_PREVIEW_ROWS)}
+            rows={showAllStrategies ? visibleLeaderRows : visibleLeaderRows.slice(0, LEADER_PREVIEW_ROWS)}
             // Keyed by STREAM, not by strategy.
             //
             // Rows became per (strategy, symbol) and this key did not follow,
@@ -2098,12 +2142,12 @@ export default function LiveEnginePage() {
               </span>
             }
           />
-          {leaderRows.length > LEADER_PREVIEW_ROWS && (
+          {visibleLeaderRows.length > LEADER_PREVIEW_ROWS && (
             <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 12 }}>
               <DeskButton variant="outlined" onClick={() => setShowAllStrategies((v) => !v)}>
                 {showAllStrategies
                   ? `Show top ${LEADER_PREVIEW_ROWS} only`
-                  : `View all ${leaderRows.length} strategies`}
+                  : `View all ${visibleLeaderRows.length} strategies`}
               </DeskButton>
               {/*
                 What is hidden, stated. A truncated table that does not say it
@@ -2112,10 +2156,10 @@ export default function LiveEnginePage() {
               */}
               <span className="desk-label-md" style={{ color: "var(--desk-on-surface-variant)" }}>
                 {showAllStrategies
-                  ? `showing all ${leaderRows.length}`
-                  : `showing the top ${LEADER_PREVIEW_ROWS} of ${leaderRows.length} · ${
-                      leaderRows.length - LEADER_PREVIEW_ROWS
-                    } hidden, ${leaderRows.filter((r) => r.trades === 0).length} of which have never filled`}
+                  ? `showing all ${visibleLeaderRows.length}`
+                  : `showing the top ${LEADER_PREVIEW_ROWS} of ${visibleLeaderRows.length} · ${
+                      visibleLeaderRows.length - LEADER_PREVIEW_ROWS
+                    } hidden, ${visibleLeaderRows.filter((r) => r.trades === 0).length} of which have never filled`}
               </span>
             </div>
           )}
