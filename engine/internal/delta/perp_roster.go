@@ -287,6 +287,24 @@ var defaultScalpLiveStreams = []PerpStream{
 	{Strategy: "ANTI_M1_RSI2_5_95_T50_Short", Symbol: "TSTUSD"},
 	{Strategy: "ANTI_Structural_Break_Detection", Symbol: "TSTUSD"},
 	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "ARCUSD"},
+	// Added 2026-08-11 at the owner's direction, alongside everything above.
+	//
+	// This is a much larger selection than the previous two and its evidence is
+	// much thinner: most of these streams have single-digit trade counts and
+	// many have NONE at all. They are recorded because the owner chose them;
+	// the gates decide what actually executes.
+	//
+	// Adding streams does not increase throughput. Ten positions may be open at
+	// once and only one per symbol, so a longer list changes WHICH streams
+	// compete for those slots, not how many trade. On a roster this size the
+	// slot goes to whichever stream signals first, which is a property of
+	// signal frequency rather than of quality.
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "XANUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "AVAAIUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "MMTUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "KAITOUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "BEATUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine

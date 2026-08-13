@@ -13,9 +13,9 @@ func TestDefaultScalpLiveStreams_AdditionsDoNotDisplaceTheOriginals(t *testing.T
 		got[perpStreamKey(s.Strategy, s.Symbol)] = true
 	}
 
-	// 31 original + 14 (2026-08-10) + 98 + 30 (2026-08-11).
-	if len(defaultScalpLiveStreams) != 173 {
-		t.Fatalf("roster has %d streams, want 173", len(defaultScalpLiveStreams))
+	// 31 original + 14 (08-10) + 98 + 30 (08-11) + 6 (08-13).
+	if len(defaultScalpLiveStreams) != 179 {
+		t.Fatalf("roster has %d streams, want 179", len(defaultScalpLiveStreams))
 	}
 
 	// A sample of the original book, including the stream that was open when
