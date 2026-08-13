@@ -1386,6 +1386,18 @@ export default function LiveEnginePage() {
   }, [perpTrades]);
 
   /**
+   * Streams holding a position right now, keyed by (strategy, symbol).
+   *
+   * Read from the OPEN positions the engine reports, not from the trade
+   * history, so the badge shows what is at risk this second rather than what
+   * once was.
+   */
+  const openStreamKeys = useMemo(
+    () => new Set((perp?.openPositions ?? []).map((t) => `${t.strategy}|${t.symbol}`)),
+    [perp],
+  );
+
+  /**
    * The rows actually shown, after the LIVE filter.
    *
    * Filtered BEFORE ranking, so # numbers what is on screen. Ranking first and
@@ -1428,11 +1440,23 @@ export default function LiveEnginePage() {
       {
         id: "desk",
         header: "Desk",
-        cell: (r) => (
-          <DeskChip tone={r.desk === "scalp" ? "warning" : "default"}>
-            {r.desk === "scalp" ? "PERP" : "OPTION"}
-          </DeskChip>
-        ),
+        // Green when this stream is holding a position right now.
+        //
+        // The board is otherwise a record of what HAS happened; this is the one
+        // cell that says what is happening. Worth the colour: with 8 streams
+        // enabled and 10 slots, knowing which are actually in the market is the
+        // difference between a roster and a position.
+        cell: (r) => {
+          const holding = openStreamKeys.has(`${r.strategy}|${r.symbol}`);
+          return (
+            <DeskChip
+              tone={holding ? "success" : r.desk === "scalp" ? "warning" : "default"}
+              title={holding ? "holding a position right now" : undefined}
+            >
+              {r.desk === "scalp" ? "PERP" : "OPTION"}
+            </DeskChip>
+          );
+        },
       },
       { id: "strat", header: "Strategy", cell: (r) => r.strategy },
       {
@@ -1657,7 +1681,7 @@ export default function LiveEnginePage() {
     // Profit % would then have divided by an equity of 0 and rendered +0.00%
     // for every row forever, which reads as "nothing has made any money"
     // rather than "the denominator never arrived".
-    [perp, busy, toggleStrategy, leaderRank, leaderSort, leaderSortDir, toggleLeaderSort],
+    [perp, busy, toggleStrategy, leaderRank, leaderSort, leaderSortDir, toggleLeaderSort, openStreamKeys],
   );
 
   const rosterColumns: DeskColumn<Eligibility>[] = useMemo(
