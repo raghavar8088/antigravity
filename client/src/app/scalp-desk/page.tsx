@@ -160,6 +160,24 @@ type OpenPos = {
  * later const is legal until it executes. The page compiled, built, and threw
  * on load.
  */
+/**
+ * The number a given column sorts on, including the derived ones.
+ *
+ * MODULE scope, not inside the component. Declared as a const beside the
+ * columns it serves, it sat in the temporal dead zone when the sort comparator
+ * — which runs earlier in the render — called it, and the page threw before
+ * painting. tsc and the production build both passed, because a TDZ violation
+ * is a runtime failure, not a type error.
+ *
+ * This is the second time this exact fault has crashed this page; qualPct below
+ * was hoisted for the same reason.
+ */
+function leaderboardMetric(r: LbRow, k: SortKey): number {
+  if (k === "qual") return qualPct(r);
+  const v = r[k];
+  return typeof v === "number" ? v : 0;
+}
+
 function qualPct(r: LbRow): number {
     if (!r.n) return 0;
     const trades = Math.min(r.n / 200, 1);
@@ -415,13 +433,6 @@ export default function ScalpDeskPage() {
         ),
     },
   ];
-
-  /** The number a given column sorts on, including the derived ones. */
-  const leaderboardMetric = (r: LbRow, k: SortKey): number => {
-    if (k === "qual") return qualPct(r);
-    const v = r[k];
-    return typeof v === "number" ? v : 0;
-  };
 
   const leaderboardColumns: DeskColumn<LbRow>[] = [
     {
