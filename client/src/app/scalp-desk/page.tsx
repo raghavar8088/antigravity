@@ -59,7 +59,20 @@ const SYMBOLS = ["ALL", "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "
 const GATE_RULES = ["≥ 200 live trades", "PF ≥ 1.2", "max DD ≤ 25%", "both halves net-positive"];
 const MIN_N_OPTS = [0, 5, 20, 50, 100, 200];
 
-type SortKey = "n" | "wr_pct" | "pf" | "net_usd" | "max_dd_pct" | "missed" | "live_net_usd" | "live_fee_drag_pct";
+type SortKey =
+  | "n"
+  | "wr_pct"
+  | "pf"
+  | "net_usd"
+  | "max_dd_pct"
+  | "missed"
+  | "live_net_usd"
+  | "live_fee_drag_pct"
+  | "live_gross_usd"
+  | "live_fees_usd"
+  | "live_roi_pct"
+  // Computed, not a field on the row — see leaderboardMetric.
+  | "qual";
 type Side = "ALL" | "LONG" | "SHORT";
 
 function fmtUSD(v: number): string {
@@ -264,7 +277,12 @@ export default function ScalpDeskPage() {
         .filter((r) => q === "" || r.strategy.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q))
         .slice()
         .sort((a, b) => {
-          const d = a[sortKey] - b[sortKey];
+          // Via a metric function rather than a[sortKey], because two sortable
+          // columns are DERIVED: Qualified % is computed from several fields,
+          // and Capital is 100 + net. Indexing the row directly would have made
+          // those columns silently unsortable — the arrows would move and the
+          // order would not.
+          const d = leaderboardMetric(a, sortKey) - leaderboardMetric(b, sortKey);
           return sortDir === "desc" ? -d : d;
         }),
     [rows, symbol, minN, gateOnly, profitOnly, side, q, minWR, minNet, maxDrag, minQual, sortKey, sortDir],
@@ -398,7 +416,26 @@ export default function ScalpDeskPage() {
     },
   ];
 
+  /** The number a given column sorts on, including the derived ones. */
+  const leaderboardMetric = (r: LbRow, k: SortKey): number => {
+    if (k === "qual") return qualPct(r);
+    const v = r[k];
+    return typeof v === "number" ? v : 0;
+  };
+
   const leaderboardColumns: DeskColumn<LbRow>[] = [
+    {
+      id: "sl",
+      header: "#",
+      align: "right",
+      // Position in the CURRENT ordering, taken from the render index rather
+      // than stored on the row: sorting or filtering renumbers it, which is
+      // what a serial number on a sortable table should do. A number that
+      // survived a re-sort would be a rank pretending to be an identity.
+      cell: (_r, i) => (
+        <span style={{ color: "var(--desk-on-surface-variant)" }}>{i + 1}</span>
+      ),
+    },
     { id: "strategy", header: "Strategy", cell: (r) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{r.strategy}</span> },
     { id: "symbol", header: "Symbol", cell: (r) => r.symbol.replace("USDT", "") },
     {
@@ -423,7 +460,7 @@ export default function ScalpDeskPage() {
     {
       id: "capital",
       align: "right",
-      header: "Capital",
+      header: <SortableHeader label="Capital" k="live_net_usd" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       // What $100 on this stream alone would be worth, on live terms.
       //
       // The Net $ column further right is the same $100 basis but with MAKER fees —
@@ -443,7 +480,7 @@ export default function ScalpDeskPage() {
     {
       id: "qual",
       align: "right",
-      header: "Qualified %",
+      header: <SortableHeader label="Qualified %" k="qual" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       // Progress toward the pre-registered gate, not a verdict. Dominated by
       // the trade count, which is the only gate term variance cannot fake.
       cell: (r) => {
@@ -460,13 +497,13 @@ export default function ScalpDeskPage() {
     {
       id: "gross",
       align: "right",
-      header: "Gross",
+      header: <SortableHeader label="Gross" k="live_gross_usd" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       cell: (r) => <span className={pnlToneClass(r.live_gross_usd ?? 0)}>{fmtUSD(r.live_gross_usd ?? 0)}</span>,
     },
     {
       id: "fees",
       align: "right",
-      header: "− Taker Fees",
+      header: <SortableHeader label="− Taker Fees" k="live_fees_usd" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       cell: (r) => <span className="desk-pnl-negative">{fmtUSD(-(r.live_fees_usd ?? 0))}</span>,
     },
     {
@@ -483,7 +520,7 @@ export default function ScalpDeskPage() {
     {
       id: "roi",
       align: "right",
-      header: "ROI %",
+      header: <SortableHeader label="ROI %" k="live_roi_pct" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       cell: (r) => (
         <span className={pnlToneClass(r.live_roi_pct ?? 0)}>
           {`${(r.live_roi_pct ?? 0) >= 0 ? "+" : ""}${(r.live_roi_pct ?? 0).toFixed(1)}%`}
