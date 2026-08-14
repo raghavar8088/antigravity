@@ -1805,6 +1805,8 @@ The content is organized as follows:
   pre_live/main.go
   pre_live/mongo.go
   run_backtest/main.go
+  scalp_prelive/htf_store_test.go
+  scalp_prelive/htf_store.go
   scalp_prelive/live_test.go
   scalp_prelive/live.go
   scalp_prelive/livesim_test.go

@@ -209,9 +209,13 @@ type symbolState struct {
 }
 
 type desk struct {
-	mu       sync.Mutex
-	symbols  []*symbolState
-	entries  []scalers.RegistryEntry
+	mu      sync.Mutex
+	symbols []*symbolState
+	entries []scalers.RegistryEntry
+	// htf serves 1h/4h/1d candles fetched from the venue. Resampling the 1m
+	// ring cannot reach those lengths — it holds 4.2 days — so without this
+	// 96 of the 160 strategies could never evaluate.
+	htf      *htfStore
 	combos   map[string]*comboState // strategy|symbol
 	recent   []closedTrade          // ring of last 500
 	tradesF  *os.File
@@ -640,8 +644,28 @@ func (d *desk) poll() {
 				// signal until enough candles exist, rather than computing a
 				// 55-period average over four.
 				Candles30m: tail(resample(ss.bars, 30*time.Minute, cutoff), 96),
-				Candles4h:  tail(resample(ss.bars, 4*time.Hour, cutoff), 30),
-				Candles1d:  tail(resample(ss.bars, 24*time.Hour, cutoff), 120),
+			}
+			// 1h/4h/1d come from the VENUE when available, because resampling
+			// the ring gives 100/25/4 candles against the 120 each needs.
+			// Resampled values remain the fallback rather than nothing: a short
+			// series makes the strategy decline, which is correct, whereas a nil
+			// one would look identical to a symbol nobody watches.
+			if d.htf != nil {
+				if c, ok := d.htf.Get(ss.sym, scalers.TF1h); ok {
+					ctx.Candles1h = c
+				}
+				if c, ok := d.htf.Get(ss.sym, scalers.TF4h); ok {
+					ctx.Candles4h = c
+				}
+				if c, ok := d.htf.Get(ss.sym, scalers.TF1d); ok {
+					ctx.Candles1d = c
+				}
+			}
+			if len(ctx.Candles4h) == 0 {
+				ctx.Candles4h = tail(resample(ss.bars, 4*time.Hour, cutoff), 30)
+			}
+			if len(ctx.Candles1d) == 0 {
+				ctx.Candles1d = tail(resample(ss.bars, 24*time.Hour, cutoff), 120)
 			}
 			d.processBar(ss, ctx, b)
 		}
@@ -1301,6 +1325,24 @@ func main() {
 	}
 	log.Println(gateDesc)
 	d.load()
+
+	// Higher-timeframe candles from the venue.
+	//
+	// Started before the bar loop so the store begins filling immediately, and
+	// run in the background so no bar ever waits on a network call. Until a
+	// series arrives the strategies on that timeframe decline to signal, which
+	// is correct — they cannot compute their indicators — and the [HTF] log
+	// line reports how many are actually tradable rather than merely fetched.
+	d.htf = newHTFStore(perpUniverseBaseURL())
+	go d.htf.Run(context.Background(), func() []string {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		out := make([]string, 0, len(d.symbols))
+		for _, ss := range d.symbols {
+			out = append(out, ss.sym)
+		}
+		return out
+	})
 
 	// Restore the paper books before any bar is processed, so a trade closing on
 	// the first tick lands on the real balance rather than a fresh $100.
