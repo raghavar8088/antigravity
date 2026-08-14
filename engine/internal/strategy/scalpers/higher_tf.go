@@ -45,17 +45,21 @@ func (t HigherTF) Step() time.Duration {
 // built on these timeframes must refuse to signal below this count rather than
 // emit a confident number from a short window.
 func (t HigherTF) MinCandles() int {
-	switch t {
-	case TF15m, TF30m:
-		return 120
-	case TF1h:
-		return 100
-	case TF4h:
-		return 80
-	case TF1d:
-		return 60
-	}
-	return 0
+	// 120 on EVERY timeframe, set by the SLOWEST indicator in the packs rather
+	// than by what feels reasonable per timeframe.
+	//
+	// The longest warm-up is EMA55, which mtfEMA seeds with an SMA and needs
+	// 2n = 110 candles for. The earlier values here — 100 for 1h, 80 for 4h, 60
+	// for 1d — sat BELOW that, so every EMA55 family on those timeframes would
+	// have had ok=false forever and returned no signal. Silent, and identical in
+	// appearance to a strategy that simply found no setups: exactly the failure
+	// that left Candles4h nil and unread for weeks.
+	//
+	// The cost is honest: 4h needs 20 days of history and 1d needs 120 days
+	// before they can trade. A strategy that cannot compute its own indicators
+	// is not ready, and saying so late is better than signalling early on a
+	// half-warmed average.
+	return 120
 }
 
 // CandlesFor returns the series for this timeframe, and whether enough of it

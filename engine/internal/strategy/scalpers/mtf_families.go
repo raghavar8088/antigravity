@@ -214,6 +214,24 @@ func BuildMTFPack() []RegistryEntry {
 		{"Breakout55", func(l bool) func(string, []Candle, float64) Signal {
 			return mtfDonchianBreakout(l, 55)
 		}},
+
+		// Candlestick patterns. Each is paired with a confirmation in
+		// mtf_patterns.go — pattern alone is what fires constantly and wins
+		// rarely, which is what the retired 1m versions of these showed.
+		{"Engulfing", patEngulfing},
+		{"PinBar", patPinBar},
+		{"InsideBarBreak", patInsideBarBreak},
+		{"ThreeBarReversal", patThreeBarReversal},
+		{"Star", patStar},
+		{"DojiBreak", patDojiBreak},
+
+		// Chart structure. Swing-based, so they need candles on both sides of a
+		// point to confirm it — none of these can recognise a pattern on the
+		// bar that is still forming.
+		{"DoubleTopBottom", patDoubleTopBottom},
+		{"StructureBreak", patStructureBreak},
+		{"TriangleBreak", patTriangleBreak},
+		{"LevelRetest", patLevelRetest},
 	}
 	out := make([]RegistryEntry, 0, len(tfs)*len(fams)*2)
 	for _, tf := range tfs {

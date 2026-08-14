@@ -1469,6 +1469,7 @@ The content is organized as follows:
   strategy/scalpers/family3_orderflow.go
   strategy/scalpers/family4_ml_proxy.go
   strategy/scalpers/family5_derivatives_macro.go
+  strategy/scalpers/higher_tf_test.go
   strategy/scalpers/higher_tf.go
   strategy/scalpers/hunt_pack_test.go
   strategy/scalpers/hunt_pack.go
@@ -1496,6 +1497,8 @@ The content is organized as follows:
   strategy/scalpers/mtf_indicators.go
   strategy/scalpers/mtf_pack_test.go
   strategy/scalpers/mtf_pack.go
+  strategy/scalpers/mtf_patterns_test.go
+  strategy/scalpers/mtf_patterns.go
   strategy/scalpers/new10_batch.go
   strategy/scalpers/new10_batch2.go
   strategy/scalpers/overfit_demo_thisweek_widerr.go
