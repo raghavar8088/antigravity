@@ -13,7 +13,17 @@ func bridgeFixture(t *testing.T) *PerpBridge {
 	t.Helper()
 	reg := registryFrom(t, realPerpTickers)
 	b := NewPerpBridge(&Client{}, reg, 100)
-	b.AllowList().Set(ScalpLiveStrategies(), []string{"ADAUSD", "BNBUSD"})
+	// Explicit fixture streams rather than the shipped roster.
+	//
+	// These tests are about the allow-list MECHANISM — that only listed streams
+	// trade — not about whatever the default roster happens to contain. Wiring
+	// them to the default meant emptying the roster broke tests that have
+	// nothing to do with its contents, and would have masked a real mechanism
+	// regression behind a roster edit.
+	b.AllowList().SetPairs([]PerpStream{
+		{Strategy: "FIXTURE_A", Symbol: "ADAUSD"},
+		{Strategy: "FIXTURE_B", Symbol: "BNBUSD"},
+	})
 	return b
 }
 
@@ -251,11 +261,12 @@ func TestPerpBridge_StatsReportTheRiskPosture(t *testing.T) {
 	if s.RiskPerTrade > 2.01 {
 		t.Errorf("risk per trade $%.2f on a $100 account", s.RiskPerTrade)
 	}
-	// The roster grows as the owner selects more; what matters is that Stats
-	// reports exactly what ScalpLiveStrategies ships, with nothing lost or
-	// invented between the two.
-	if len(s.Strategies) != len(ScalpLiveStrategies()) {
-		t.Errorf("Stats reports %d strategies, allow-list ships %d", len(s.Strategies), len(ScalpLiveStrategies()))
+	// Stats must report exactly what THIS bridge's allow-list holds, with
+	// nothing lost or invented between the two. Compared against the bridge
+	// rather than the shipped roster: the two are independent, and tying them
+	// together made an empty default roster fail a test about reporting.
+	if len(s.Strategies) != b.AllowList().Count() {
+		t.Errorf("Stats reports %d strategies, allow-list holds %d", len(s.Strategies), b.AllowList().Count())
 	}
 	if s.Armed {
 		t.Error("stats report armed on a fresh bridge")

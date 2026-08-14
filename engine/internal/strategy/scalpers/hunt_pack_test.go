@@ -1,37 +1,49 @@
 package scalpers
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The scalp desk shipped running BuildScalp100 — 100 of the 151 strategies
 // registered in this application. The other 51 were built and never run, so the
 // hunt could not have found them however good they were.
 
-func TestBuildHuntPack_IncludesEveryRegisteredPack(t *testing.T) {
+// The desk trades exactly the packs BuildHuntPack registers, and no others.
+//
+// Rewritten 2026-08-14. It previously asserted that Scalp100, Delta20 and
+// Curated were all reachable — correct while they were registered, and exactly
+// backwards once they were removed at the owner's direction. A test that
+// asserts the presence of packs the desk has deliberately retired would have to
+// be deleted or ignored on every future roster change; asserting what IS
+// registered survives that.
+func TestBuildHuntPack_RegistersTheMTFPackOnly(t *testing.T) {
 	pack := BuildHuntPack()
+	mtf := BuildMTFPack()
 
-	if len(pack) <= len(BuildScalp100()) {
-		t.Fatalf("hunt pack has %d strategies, no more than Scalp100's %d — the extra packs are missing",
-			len(pack), len(BuildScalp100()))
+	if len(pack) != len(mtf) {
+		t.Fatalf("hunt pack has %d strategies, MTF pack has %d — something else is registered", len(pack), len(mtf))
 	}
 
 	names := make(map[string]bool, len(pack))
 	for _, e := range pack {
 		names[e.Name] = true
+		if !strings.HasPrefix(e.Name, "MTF_") {
+			t.Errorf("%s is registered but is not from the MTF pack", e.Name)
+		}
+	}
+	for _, e := range mtf {
+		if !names[e.Name] {
+			t.Errorf("%s is in the MTF pack but not reachable from the hunt pack", e.Name)
+		}
 	}
 
-	// Every strategy from every source pack must be reachable.
-	for _, src := range []struct {
-		name    string
-		entries []RegistryEntry
-	}{
-		{"Scalp100", BuildScalp100()},
-		{"Delta20", BuildDelta20Pack()},
-		{"Curated", BuildCuratedScalpers()},
-	} {
-		for _, e := range src.entries {
-			if !names[e.Name] {
-				t.Errorf("%s strategy %q is missing from the hunt pack", src.name, e.Name)
-			}
+	// The retired packs must still BUILD — they are the record of what was
+	// tried, and re-registering one should be a single line rather than an
+	// archaeology exercise.
+	for _, b := range []func() []RegistryEntry{BuildScalp100, BuildDelta20Pack, BuildCuratedScalpers} {
+		if len(b()) == 0 {
+			t.Error("a retired pack no longer builds; it should remain in the tree, just unregistered")
 		}
 	}
 }

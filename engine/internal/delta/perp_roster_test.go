@@ -77,6 +77,13 @@ func TestScalpLiveStreams_MatchTheOwnerSelectionExactly(t *testing.T) {
 	got := ScalpLiveStreams()
 	src := defaultScalpPaperStreams03
 
+	// The roster is intentionally empty from 2026-08-14 — the packs these
+	// streams named were removed from the desk. Skipping rather than asserting
+	// containment against nothing, and saying so, because a silent pass here
+	// would look like the invariant still held.
+	if len(got) == 0 {
+		t.Skip("live roster is intentionally empty; nothing has earned live capital under the new pack")
+	}
 	if len(got) < len(src) {
 		t.Fatalf("live roster has %d streams, fewer than Account 03's %d — an addition dropped part of the book",
 			len(got), len(src))
@@ -121,11 +128,17 @@ func TestScalpLiveStreams_MatchTheOwnerSelectionExactly(t *testing.T) {
 // The cross product is the bug this replaces. Three selected rows must enable
 // three streams — not the six that strategies x symbols produces.
 func TestPerpAllowList_PairsDoNotCrossProduct(t *testing.T) {
+	// Two strategies x two symbols, of which only two PAIRS are selected. The
+	// cross product would invent the other two, which is the bug this pins.
+	fixturePairs := []PerpStream{
+		{Strategy: "FIX_Alpha", Symbol: "ADAUSD"},
+		{Strategy: "FIX_Beta", Symbol: "BNBUSD"},
+	}
 	a := NewPerpAllowList()
-	a.SetPairs(ScalpLiveStreams())
+	a.SetPairs(fixturePairs)
 
 	// Every selected stream is permitted.
-	for _, st := range ScalpLiveStreams() {
+	for _, st := range fixturePairs {
 		if !a.Allowed(st.Strategy, st.Symbol) {
 			t.Errorf("selected stream %v was blocked", st)
 		}
@@ -135,13 +148,16 @@ func TestPerpAllowList_PairsDoNotCrossProduct(t *testing.T) {
 	// names and real symbols already on the roster, so it is a stream that
 	// genuinely exists on the paper desk — which is exactly why permitting it
 	// unasked would go unnoticed.
+	// Built from the list this allow-list was actually given, so the assertion
+	// holds regardless of what the shipped roster contains — an empty default
+	// must not make this pass vacuously OR fail spuriously.
 	strategies, symbols := map[string]bool{}, map[string]bool{}
-	for _, st := range ScalpLiveStreams() {
+	for _, st := range fixturePairs {
 		strategies[st.Strategy] = true
 		symbols[strings.ToUpper(st.Symbol)] = true
 	}
 	selected := map[string]bool{}
-	for _, st := range ScalpLiveStreams() {
+	for _, st := range fixturePairs {
 		selected[perpStreamKey(st.Strategy, st.Symbol)] = true
 	}
 	invented := 0
@@ -161,7 +177,7 @@ func TestPerpAllowList_PairsDoNotCrossProduct(t *testing.T) {
 	}
 
 	// Symbol matching stays case-insensitive, and an unknown strategy is denied.
-	first := ScalpLiveStreams()[0]
+	first := fixturePairs[0]
 	if !a.Allowed(first.Strategy, strings.ToLower(first.Symbol)) {
 		t.Error("lowercase symbol was rejected")
 	}

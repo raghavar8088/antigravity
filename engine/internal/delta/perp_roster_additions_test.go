@@ -5,105 +5,54 @@ import (
 	"testing"
 )
 
-// The 2026-08-10 additions must be present AND the original 31 untouched.
+// The live roster is intentionally EMPTY from 2026-08-14.
 //
-// The owner's instruction was explicit: add alongside, do not replace. Every
-// previous roster change on this desk was a replacement, so an append that
-// quietly drops the old book is the mistake worth guarding against.
-func TestDefaultScalpLiveStreams_AdditionsDoNotDisplaceTheOriginals(t *testing.T) {
-	got := map[string]bool{}
-	for _, s := range defaultScalpLiveStreams {
-		got[perpStreamKey(s.Strategy, s.Symbol)] = true
-	}
-
-	// 31 original + 14 (08-10) + 98 + 30 (08-11) + 6 (08-13).
-	if len(defaultScalpLiveStreams) != 130 {
-		t.Fatalf("roster has %d streams, want 130", len(defaultScalpLiveStreams))
-	}
-
-	// A sample of the original book, including the stream that was open when
-	// the additions were made.
-	for _, orig := range []struct{ strategy, symbol string }{
-		// Survivors only. COOKIEUSD, MUBARAKUSD, BMTUSD, MMTUSD and KAITOUSD
-		// were removed on 2026-08-14 for recorded grid refusals, so pinning
-		// streams on them would assert the roster still carries symbols that
-		// cannot hold a protected position.
-		{"ANTI_M1_NR7_Expand_T20_Long", "LABUSD"},
-		{"ANTI_Ornstein_Uhlenbeck_Reversion", "SOLVUSD"},
-		{"ANTI_M1_InsideBar_V20_Short", "AVAAIUSD"},
-	} {
-		if !got[perpStreamKey(orig.strategy, orig.symbol)] {
-			t.Errorf("original stream %s on %s was lost", orig.strategy, orig.symbol)
-		}
-	}
-
-	for _, add := range []struct{ strategy, symbol string }{
-		// 2026-08-11 additions, including the three new symbols.
-		{"ANTI_M1_VWAP_Rev_40bp_Long", "BEATUSD"},
-		{"Hidden_Liquidity_Detection", "LABUSD"},
-		{"M1_PinBar_W2_Short", "BLESSUSD"},
-		{"ANTI_M1_InsideBar_V20_Short", "GRIFFAINUSD"},
-		{"ANTI_M1_HMA21_Flip_Long", "BLESSUSD"},
-		{"ANTI_Recurrence_Quantification_Signal", "TSTUSD"},
-		{"ANTI_M1_HMA34_Flip_Short", "XANUSD"},
-		{"M1_VWAP_Rev_70bp_Short", "LABUSD"},
-	} {
-		if !got[perpStreamKey(add.strategy, add.symbol)] {
-			t.Errorf("added stream %s on %s is missing", add.strategy, add.symbol)
-		}
-	}
-}
-
-// No stream may sit on a symbol the grid gate has refused.
+// Every stream it held named a Scalp100, Delta20 or Curated strategy, and those
+// packs were removed from the desk the same day. A roster of names that no
+// longer exist is worse than an empty one: it looks populated and can never
+// produce a signal.
 //
-// Those symbols tick too coarsely for the stops these strategies want, so a
-// signal there can never become a protected position — the stream occupies a
-// roster slot it cannot use. Removed 2026-08-14 on RECORDED refusals, not on a
-// computed estimate: the estimate reported a 0.000% p90 range for ten symbols,
-// which was a fetch returning flat candles rather than a quiet market, and
-// would have deleted XANUSD after 51 real trades.
-func TestDefaultScalpLiveStreams_NoGridBlockedSymbols(t *testing.T) {
-	blocked := map[string]bool{
-		"COOKIEUSD": true, "MUBARAKUSD": true, "BMTUSD": true,
-		"MMTUSD": true, "KAITOUSD": true,
-	}
-	for _, s := range defaultScalpLiveStreams {
-		if blocked[strings.ToUpper(s.Symbol)] {
-			t.Errorf("%s on %s: symbol has recorded grid refusals and cannot hold a stop", s.Strategy, s.Symbol)
-		}
+// The replacement pack is deliberately not promoted here. It has no live record,
+// and promoting on design rather than performance is the procedure that produced
+// the 900-trade record it replaces.
+func TestDefaultScalpLiveStreams_IsEmptyPendingAnEarnedRoster(t *testing.T) {
+	if len(defaultScalpLiveStreams) != 0 {
+		t.Errorf("roster has %d streams; it should be empty until streams earn live capital on their own results",
+			len(defaultScalpLiveStreams))
 	}
 }
 
-// A duplicated stream would double a strategy's weight on one symbol while
-// looking like two independent results on the board.
-func TestDefaultScalpLiveStreams_NoDuplicates(t *testing.T) {
-	seen := map[string]bool{}
-	for _, s := range defaultScalpLiveStreams {
-		k := perpStreamKey(s.Strategy, s.Symbol)
-		if seen[k] {
-			t.Errorf("duplicate stream: %s on %s", s.Strategy, s.Symbol)
+// THE safety property: an empty allow-list must permit NOTHING.
+//
+// The opposite reading — empty means unrestricted — is the single most
+// dangerous way this could fail, because it would route every strategy on every
+// symbol to real money the moment the roster was cleared. PerpAllowList
+// documents nil as "allow nothing" precisely for this; the test makes it a fact
+// rather than a comment.
+func TestPerpAllowList_EmptyPermitsNothing(t *testing.T) {
+	a := NewPerpAllowList()
+	a.SetPairs(nil)
+	for _, c := range []struct{ strategy, symbol string }{
+		{"MTF_15m_TrendPullback_Long", "TSTUSD"},
+		{"ANTI_Recurrence_Quantification_Signal", "BEATUSD"},
+		{"anything", "ANYUSD"},
+	} {
+		if a.Allowed(c.strategy, c.symbol) {
+			t.Errorf("empty allow-list permitted %s on %s — clearing the roster would arm everything",
+				c.strategy, c.symbol)
 		}
-		seen[k] = true
+	}
+	if n := a.Count(); n != 0 {
+		t.Errorf("empty allow-list reports %d entries", n)
 	}
 }
 
-// Two additions drop the ANTI_ prefix. That is not a typo — M1_VWAP_Rev_40bp_
-// Short and its 70bp sibling are the ORIGINAL strategies, not the mirrors, and
-// silently "correcting" them to ANTI_ would trade the opposite signal.
-func TestDefaultScalpLiveStreams_KeepsNonAntiNamesExact(t *testing.T) {
-	want := map[string]bool{
-		perpStreamKey("M1_VWAP_Rev_40bp_Short", "LABUSD"): false,
-		perpStreamKey("M1_VWAP_Rev_70bp_Short", "LABUSD"): false,
-	}
-	for _, s := range defaultScalpLiveStreams {
-		k := perpStreamKey(s.Strategy, s.Symbol)
-		if _, ok := want[k]; ok {
-			want[k] = true
-		}
-	}
-	for k, found := range want {
-		if !found {
-			t.Errorf("%s missing — a non-ANTI name may have been rewritten to its mirror", k)
-		}
+// A stream routed via SCALP_LIVE_STREAMS must still be honoured, so an empty
+// default does not mean the desk cannot be pointed at anything.
+func TestScalpLiveStreams_OverrideStillWorksWithAnEmptyDefault(t *testing.T) {
+	t.Setenv("SCALP_LIVE_STREAMS", "MTF_1h_TrendPullback_Long:TSTUSD")
+	got := ScalpLiveStreams()
+	if len(got) != 1 || got[0].Strategy != "MTF_1h_TrendPullback_Long" || !strings.EqualFold(got[0].Symbol, "TSTUSD") {
+		t.Fatalf("override produced %v", got)
 	}
 }

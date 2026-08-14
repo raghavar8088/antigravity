@@ -51,225 +51,24 @@ import (
 // selected from the right tail of 2,416 streams on in-sample data. Being on
 // this list is permission, not evidence.
 var defaultScalpLiveStreams = []PerpStream{
-	// Replaced 2026-08-09 at the owner's direction with Account 03's book.
+	// EMPTY, from 2026-08-14.
 	//
-	// Account 03's record at promotion: 99 trades, $111.93 on $100 (+11.93%),
-	// win rate 34.3%, gross $24.39 against $12.50 of taker fees — 51% of
-	// everything it earned went to the venue. That is the best evidence this
-	// application has produced, and it is still not much: 23 of the 31 streams
-	// had traded, most on 1-16 trades against a gate that asks for 200.
+	// Every stream this list held named a strategy from the Scalp100, Delta20
+	// or Curated packs, and those were removed from the desk on the same day.
+	// Leaving them would have left a 130-row roster whose every entry pointed
+	// at a strategy that no longer exists — a live allow-list that looks
+	// populated and can never produce a signal, which is the exact shape of
+	// failure this desk has hit repeatedly.
 	//
-	// Symbol liquidity checked before promotion. All ten clear the bar where a
-	// ~$110 position is invisible in the book; the thinnest, AVAAIUSD at $118k a
-	// day, puts a position at 0.09% of daily turnover against the 5% that
-	// disqualified MOVEUSD.
+	// The multi-timeframe pack that replaced them is deliberately NOT promoted
+	// here. It has no live record at all. Promoting a roster on the strength of
+	// how it was designed rather than how it performed is the procedure that
+	// produced the 900-trade record this replaces; the streams that earn real
+	// capital should be chosen from their own out-of-sample results, and the
+	// harness to do that already exists.
 	//
-	// What this does NOT establish: that these streams beat the previous six.
-	// They were selected from the top of a leaderboard ranking 27,784 streams,
-	// and the same selection has now been made five times. The honest read is
-	// that Account 03 is the best-performing sample of a right tail, not a
-	// demonstrated edge.
-	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "BANKUSD"},
-	{Strategy: "ANTI_D20_HeikinAshi_Flip", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "BLESSUSD"},
-	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "SOLVUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V20_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "AVAAIUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "AVAAIUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "SOLVUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "SAGAUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "SAGAUSD"},
-	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "AVAAIUSD"},
-	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAAIUSD"},
-	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
-	// Added 2026-08-10 at the owner's direction, alongside the 31 above rather
-	// than replacing them. Selected off the paper leaderboard on the same
-	// terms: gross, minus taker fees, equals net on the book's balance.
-	//
-	// Two symbols are new to the live desk. XANUSD trades $1.8M a day and
-	// prices at 1e-06, giving ~76 ticks of stop room. BMTUSD trades $44M but
-	// ticks at 1e-05 on a $0.025 price, so its stop is ~16 ticks and the
-	// pre-trade grid gate will refuse it — added as instructed, and it will
-	// show as blocked rather than trade.
-	//
-	// Six of these fourteen land on symbols the grid gate already refuses
-	// (SAGAUSD 9.7t, MUBARAKUSD 14.5t, LABUSD 7.7t, BMTUSD 15.8t). They are
-	// recorded here so the roster says what was chosen; the gate decides what
-	// executes, and the board reports which is which.
-	//
-	// Only two carry a sample worth the word: ANTI_Recurrence_Quantification_
-	// Signal on TSTUSD (70 trades) and ANTI_Ornstein_Uhlenbeck_Reversion on
-	// BMTUSD (58). The other twelve are 3-15 trades against a gate that asks
-	// for 200, and one — ANTI_M1_HMA21_Flip_Short on XANUSD — is NEGATIVE on
-	// the board it was picked from. Being on this list is permission, not
-	// evidence.
-	{Strategy: "ANTI_M1_HMA21_Flip_Long", Symbol: "BLESSUSD"},
-	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "SAGAUSD"},
-	{Strategy: "ANTI_M1_MACD_Align_Long", Symbol: "BLESSUSD"},
-	{Strategy: "M1_VWAP_Rev_40bp_Short", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_RSI_Div_Short", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "TSTUSD"},
-	{Strategy: "M1_VWAP_Rev_70bp_Short", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "XANUSD"},
-	// Added 2026-08-11 at the owner's direction, alongside everything above.
-	//
-	// This is a much larger selection than the previous two and its evidence is
-	// much thinner: most of these streams have single-digit trade counts and
-	// many have NONE at all. They are recorded because the owner chose them;
-	// the gates decide what actually executes.
-	//
-	// Adding streams does not increase throughput. Ten positions may be open at
-	// once and only one per symbol, so a longer list changes WHICH streams
-	// compete for those slots, not how many trade. On a roster this size the
-	// slot goes to whichever stream signals first, which is a property of
-	// signal frequency rather than of quality.
-	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "SAGAUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T20_Short", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_HMA21_Flip_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_MACD_Align_Short", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_Structural_Break_Detection", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_M1_ThreeCrows_Short", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_M1_MACD_Align_Short", Symbol: "LISTAUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "GRIFFAINUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_MACD_Align_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_Burst_K4_Short", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "VELVETUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V20_Long", Symbol: "VELVETUSD"},
-	{Strategy: "M1_RSI_Div_Short", Symbol: "SAGAUSD"},
-	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "LISTAUSD"},
-	{Strategy: "ANTI_M1_Break_D30_T20_Short", Symbol: "LISTAUSD"},
-	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "COAIUSD"},
-	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "XANUSD"},
-	{Strategy: "ANTI_D20_Stoch_Cross", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_MACD_Align_Short", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T20_Short", Symbol: "LISTAUSD"},
-	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "COAIUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "BLESSUSD"},
-	{Strategy: "ANTI_D20_Stoch_Cross", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_D20_ZScore_Reversion", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_M1_BB_Rev_CMF0_Short", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LISTAUSD"},
-	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "SAGAUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LISTAUSD"},
-	{Strategy: "ANTI_M1_Break_D60_T50_Short", Symbol: "NEIROUSD"},
-	{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_DoubleBottom_20bp_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_EMA_Cross_T20_Long", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_EMA_Cross_T20_Short", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_EMA_Cross_T50_Short", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_FailedBreak_60_Long", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_M1_FailedBreak_60_Short", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "COAIUSD"},
-	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "NEIROUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "COAIUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "LISTAUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "SOLVUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "LISTAUSD"},
-	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "SOLVUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T20_Long", Symbol: "SAGAUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T20_Short", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "BILLUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T50_Short", Symbol: "XANUSD"},
-	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "NEIROUSD"},
-	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "NEIROUSD"},
-	{Strategy: "ANTI_M1_RSI_Div_Short", Symbol: "COAIUSD"},
-	{Strategy: "ANTI_M1_RSI_Div_Short", Symbol: "SIRENUSD"},
-	{Strategy: "ANTI_M1_ThreeCrows_Short", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_M1_ThreeSoldiers_Long", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "COAIUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "COAIUSD"},
-	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "NEIROUSD"},
-	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "SKYAIUSD"},
-	{Strategy: "ANTI_Structural_Break_Detection", Symbol: "SKYAIUSD"},
-	{Strategy: "Hidden_Liquidity_Detection", Symbol: "LABUSD"},
-	{Strategy: "M1_Burst_K4_Short", Symbol: "BEATUSD"},
-	{Strategy: "M1_PinBar_W2_Short", Symbol: "BLESSUSD"},
-	// Added 2026-08-11 at the owner's direction, alongside everything above.
-	//
-	// This is a much larger selection than the previous two and its evidence is
-	// much thinner: most of these streams have single-digit trade counts and
-	// many have NONE at all. They are recorded because the owner chose them;
-	// the gates decide what actually executes.
-	//
-	// Adding streams does not increase throughput. Ten positions may be open at
-	// once and only one per symbol, so a longer list changes WHICH streams
-	// compete for those slots, not how many trade. On a roster this size the
-	// slot goes to whichever stream signals first, which is a property of
-	// signal frequency rather than of quality.
-	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_M1_RSI_Div_Long", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_M1X_VWAP_TrendPull_Short", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_M1_RSI2_5_95_T50_Short", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_BB_Rev_CMF0_Long", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_FailedBreak_30_Long", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "SAGAUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "BEATUSD"},
-	{Strategy: "ANTI_M1_HMA34_Flip_Long", Symbol: "TSTUSD"},
-	{Strategy: "Ornstein_Uhlenbeck_Reversion", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_BB_Rev_CMF5_Long", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_NR7_Expand_T20_Short", Symbol: "LABUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Long", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "AIOUSD"},
-	{Strategy: "ANTI_M1_Break_D30_T20_Short", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_FailedBreak_60_Long", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_M1_RSI2_5_95_T50_Short", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_Structural_Break_Detection", Symbol: "TSTUSD"},
-	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "ARCUSD"},
-	// Added 2026-08-11 at the owner's direction, alongside everything above.
-	//
-	// This is a much larger selection than the previous two and its evidence is
-	// much thinner: most of these streams have single-digit trade counts and
-	// many have NONE at all. They are recorded because the owner chose them;
-	// the gates decide what actually executes.
-	//
-	// Adding streams does not increase throughput. Ten positions may be open at
-	// once and only one per symbol, so a longer list changes WHICH streams
-	// compete for those slots, not how many trade. On a roster this size the
-	// slot goes to whichever stream signals first, which is a property of
-	// signal frequency rather than of quality.
-	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "XANUSD"},
-	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "AVAAIUSD"},
-	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "BLESSUSD"},
-	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "BEATUSD"},
-	// 2026-08-14: streams on grid-blocked symbols removed.
-	//
-	// Each of these symbols had RECORDED refusals from the pre-trade grid gate —
-	// its tick size is too coarse for the stops these strategies want, so a
-	// signal could never become a protected position. They were occupying roster
-	// slots they could not use.
-	//
-	// Driven by the refusal counter, not by a computed tick estimate: that
-	// estimate reported a p90 one-minute range of exactly 0.000% for ten
-	// symbols, which is a fetch returning flat candles rather than a quiet
-	// market. XANUSD was among them and has traded 51 times. Removing on that
-	// number would have deleted working symbols on the strength of an
-	// uncalculated zero.
-
+	// SCALP_LIVE_STREAMS overrides this at runtime for anyone who wants to
+	// route a specific stream before then.
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
