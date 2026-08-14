@@ -1,1 +1,1 @@
-{"engine-delta":{"communities":[0,1,2,3,4,5],"files":3,"symbols":40,"top_files":[{"file":"engine/internal/delta/perp_roster.go","symbols":21},{"file":"engine/internal/delta/perp_roster_test.go","symbols":14},{"file":"engine/internal/delta/perp_roster_additions_test.go","symbols":5}]}}
+{"engine-strategy":{"communities":[0],"files":1,"symbols":2,"top_files":[{"file":"engine/internal/strategy/scalpers/hunt_pack.go","symbols":2}]}}

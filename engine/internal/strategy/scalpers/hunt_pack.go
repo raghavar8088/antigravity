@@ -23,6 +23,15 @@ func BuildHuntPack() []RegistryEntry {
 		{"Scalp100", BuildScalp100()},
 		{"Delta20", BuildDelta20Pack()},
 		{"Curated", BuildCuratedScalpers()},
+		// Multi-timeframe indicator pack: 15m/30m/1h/4h/1d.
+		//
+		// Added because the 1m packs above produced a 25-29% win rate over 900+
+		// live trades against a 30-36% breakeven, with gross P&L flat and fees
+		// taking 42-92% of the loss. These trade the same instruments on longer
+		// horizons, where the same 0.118% round trip is a far smaller share of
+		// the move — the one lever that improves the economics without needing
+		// a better prediction.
+		{"MTF", BuildMTFPack()},
 	}
 
 	seen := make(map[string]string, 160)
