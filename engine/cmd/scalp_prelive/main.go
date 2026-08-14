@@ -628,6 +628,20 @@ func (d *desk) poll() {
 				Candles5m:  tail(resample(ss.bars, 5*time.Minute, cutoff), 100),
 				Candles15m: tail(resample(ss.bars, 15*time.Minute, cutoff), 60),
 				Candles1h:  tail(resample(ss.bars, time.Hour, cutoff), 72),
+				// 30m/4h/1d were declared on MarketContext and never filled.
+				// A strategy reading Candles4h got nil and returned no signal
+				// forever, which is indistinguishable from a strategy that
+				// simply found no setups — the silent-nothing failure this desk
+				// keeps producing.
+				//
+				// The 1m ring holds 6000 bars (~4.2 days), so 15m/30m/1h have
+				// full history, 4h has ~25 candles, and 1d has ~4. The higher
+				// packs enforce their own warm-up minimums and will decline to
+				// signal until enough candles exist, rather than computing a
+				// 55-period average over four.
+				Candles30m: tail(resample(ss.bars, 30*time.Minute, cutoff), 96),
+				Candles4h:  tail(resample(ss.bars, 4*time.Hour, cutoff), 30),
+				Candles1d:  tail(resample(ss.bars, 24*time.Hour, cutoff), 120),
 			}
 			d.processBar(ss, ctx, b)
 		}
