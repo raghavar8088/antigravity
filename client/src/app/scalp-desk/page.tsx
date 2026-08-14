@@ -336,7 +336,14 @@ export default function ScalpDeskPage() {
   const engineStatus: DeskEngineStatus = !health ? "syncing" : health.ok ? "live" : "degraded";
 
   const livePositions = useMemo(() => positions.filter((p) => p.live), [positions]);
-  const shownPositions = liveOnly ? livePositions : positions;
+  // The "live strategies only" filter is meaningless when NOTHING is routed
+  // live, and applying it then hides every position behind a toggle whose label
+  // gives no hint that it is the cause. The live roster is currently empty by
+  // design — the retired packs were removed and nothing has earned real capital
+  // under the new one — so the filter falls back to showing all streams and
+  // says why, rather than rendering an empty table over 19 open positions.
+  const noLiveRouted = livePositions.length === 0;
+  const shownPositions = liveOnly && !noLiveRouted ? livePositions : positions;
 
   const openPnl = useMemo(
     () => shownPositions.reduce((a, p) => a + (p.mark > 0 ? p.pnlAt1000 : 0), 0),
@@ -688,6 +695,7 @@ export default function ScalpDeskPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
                   {livePositions.length} live-routed · {positions.length} total
+                  {liveOnly && noLiveRouted && positions.length > 0 ? " · showing all" : ""}
                 </span>
                 <span
                   className={`desk-mono desk-label-md ${pnlToneClass(openPnl)}`}
@@ -714,11 +722,15 @@ export default function ScalpDeskPage() {
               </div>
             }
           />
+          {liveOnly && noLiveRouted && positions.length > 0 && (
+            <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "8px 0 0" }}>
+              No stream is routed to real money right now, so this shows <strong>all {positions.length} paper
+              positions</strong>. The live roster is empty until strategies earn capital on their own results.
+            </p>
+          )}
           {shownPositions.length === 0 ? (
             <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "8px 0 0" }}>
-              {liveOnly
-                ? "None of the live-routed strategies hold a position right now."
-                : "No open positions."}
+              No open positions.
             </p>
           ) : (
             <DeskDataTable
