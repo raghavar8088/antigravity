@@ -85,7 +85,18 @@ func TestScalpLiveStreams_MatchTheOwnerSelectionExactly(t *testing.T) {
 	for _, st := range got {
 		inRoster[perpStreamKey(st.Strategy, st.Symbol)] = true
 	}
+	// Streams on grid-blocked symbols are EXPECTED to be absent: they were
+	// removed on 2026-08-14 because the gate had recorded refusals against
+	// them, so containment now means "everything from Account 03 that can
+	// actually hold a stop".
+	gridBlocked := map[string]bool{
+		"COOKIEUSD": true, "MUBARAKUSD": true, "BMTUSD": true,
+		"MMTUSD": true, "KAITOUSD": true,
+	}
 	for _, st := range src {
+		if gridBlocked[strings.ToUpper(st.Symbol)] {
+			continue
+		}
 		if !inRoster[perpStreamKey(st.Strategy, st.Symbol)] {
 			t.Errorf("%v is in Account 03's book but not on the live roster", st)
 		}
