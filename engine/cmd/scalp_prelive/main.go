@@ -1287,11 +1287,17 @@ func main() {
 	}
 	log.Printf("hunt pack: %d signal strategies + %d mirrors = %d streams/symbol",
 		len(d.entries), len(d.streamNames())-len(d.entries), len(d.streamNames()))
-	// Guard against an empty or accidentally-truncated pack rather than pinning
-	// an exact count: the pack is meant to grow as strategies are registered,
-	// and a hard 100 would fail the build every time one was added.
-	if len(d.entries) < 100 {
-		log.Fatalf("hunt pack has only %d strategies; expected at least the 100-strategy Scalp100 baseline", len(d.entries))
+	// Guard against an EMPTY pack — a desk that loads no strategies would run,
+	// consume the feed and never trade, which is indistinguishable from a quiet
+	// market.
+	//
+	// The floor was 100, pinned to the Scalp100 baseline. When that pack was
+	// retired on 2026-08-14 and replaced by the 60-strategy MTF pack, the guard
+	// crash-looped the desk on a size it was never meant to police: it was
+	// written to catch truncation and instead blocked an intentional
+	// replacement. A count from a retired pack is not a safety property.
+	if len(d.entries) == 0 {
+		log.Fatalf("hunt pack is empty; the desk would consume the feed and never trade")
 	}
 	log.Println(gateDesc)
 	d.load()
@@ -1542,14 +1548,26 @@ func (d *desk) manageMirror(strategy, symbol string, bar scalers.Candle, barIdx 
 // antiEnabled is resolved once at boot. Reading the environment on every fill
 // would let a mid-session change desynchronise a pair — mirroring some fills and
 // not others, which is worse than mirroring none.
+//
+// Default OFF from 2026-08-14. The inversion premise does not survive fees: an
+// original nets -g-f, so its mirror nets +g-f, and the mirror only profits
+// where the original's GROSS loss exceeds the fee. Measured gross across 900+
+// live trades was flat, so g is about zero and BOTH sides lose f — which is
+// exactly why every mirror clustered at a 25-29% win rate.
+//
+// Leaving it defaulted on would have auto-generated ANTI_MTF_* for a pack whose
+// tests assert it contains no mirrors: the desk would have created the very
+// thing the pack was designed to exclude.
+//
+// ANTI_STRATEGIES=true restores them.
 var antiEnabled = func() bool {
 	raw := strings.TrimSpace(os.Getenv("ANTI_STRATEGIES"))
 	if raw == "" {
-		return true
+		return false
 	}
 	v, err := strconv.ParseBool(raw)
 	if err != nil {
-		return true
+		return false
 	}
 	return v
 }()

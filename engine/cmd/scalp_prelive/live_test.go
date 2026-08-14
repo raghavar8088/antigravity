@@ -117,6 +117,10 @@ func TestScalpLive_SymbolsDefaultToTheSelectedSet(t *testing.T) {
 // resolved, the desk traded, and nothing errored. This pins that a mirror's
 // fill reaches the live path too.
 func TestScalpLive_MirrorFillsReachTheLivePath(t *testing.T) {
+	// Mirrors default off; this test is about the mechanism, not the default.
+	prevAnti := antiEnabled
+	antiEnabled = true
+	t.Cleanup(func() { antiEnabled = prevAnti })
 	var offered []string
 	observeFill = func(strategy, symbol string, pos *position) { offered = append(offered, strategy) }
 	t.Cleanup(func() { observeFill = nil })

@@ -8,6 +8,19 @@ import (
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
 
+// withMirrors enables the mirror mechanism for one test.
+//
+// antiEnabled defaults to FALSE from 2026-08-14 — the inversion premise does
+// not survive fees — but the mechanism still exists and must keep working for
+// anyone who re-enables it. It is resolved once at boot into a package var, so
+// t.Setenv cannot reach it; the var is set directly and restored.
+func withMirrors(t *testing.T) {
+	t.Helper()
+	prev := antiEnabled
+	antiEnabled = true
+	t.Cleanup(func() { antiEnabled = prev })
+}
+
 // An anti-strategy is only meaningful if it is the exact inverse of a trade its
 // original actually took. The previous attempt inverted the SIGNAL and let the
 // mirror post its own post-only limit, which under this desk's fill rule
@@ -85,6 +98,7 @@ func origState(d *desk) *comboState   { return d.combos[comboKey("TEST_Strat", "
 
 // The core guarantee: a fill opens both halves, on the same bar, at one price.
 func TestMirrorOpensOnTheOriginalsFill(t *testing.T) {
+	withMirrors(t)
 	d, _ := newMirrorDesk(t, scalers.DirectionLong)
 	hist := flatBars(30, 100000)
 
@@ -164,6 +178,7 @@ func TestMirrorOpensOnTheOriginalsFill(t *testing.T) {
 // Both sides of a pair must now carry a FAVOURABLE payoff. The old design
 // guaranteed one of them a bad one, by construction.
 func TestMirrorAndOriginalBothClearTheHouseRatio(t *testing.T) {
+	withMirrors(t)
 	d, _ := newMirrorDesk(t, scalers.DirectionLong)
 	hist := flatBars(30, 100000)
 	step(d, hist[len(hist)-1], hist)
@@ -200,6 +215,7 @@ func TestMirrorAndOriginalBothClearTheHouseRatio(t *testing.T) {
 
 // A short original must mirror to a long, with the same swap.
 func TestMirrorInvertsShorts(t *testing.T) {
+	withMirrors(t)
 	d, _ := newMirrorDesk(t, scalers.DirectionShort)
 	hist := flatBars(30, 100000)
 	step(d, hist[len(hist)-1], hist)
@@ -243,6 +259,7 @@ func TestMirrorInvertsShorts(t *testing.T) {
 // evidence about its original — they are two strategies now, not one bet read
 // two ways.
 func TestPairIsNoLongerAnExactInverse(t *testing.T) {
+	withMirrors(t)
 	d, _ := newMirrorDesk(t, scalers.DirectionLong)
 	hist := flatBars(30, 100000)
 	step(d, hist[len(hist)-1], hist)
@@ -296,6 +313,7 @@ func TestPairIsNoLongerAnExactInverse(t *testing.T) {
 // ambiguous bar; the test exists so the behaviour is a decision rather than a
 // surprise, and so nobody "fixes" it into a fabricated inverse later.
 func TestPairOnAnAmbiguousBarTakesBothStops(t *testing.T) {
+	withMirrors(t)
 	d, _ := newMirrorDesk(t, scalers.DirectionLong)
 	hist := flatBars(30, 100000)
 	step(d, hist[len(hist)-1], hist)
@@ -339,6 +357,7 @@ func TestPairOnAnAmbiguousBarTakesBothStops(t *testing.T) {
 // about the other. That is the price of both legs carrying a payoff worth
 // taking.
 func TestMirrorTradesASubsetOfTheOriginalsSignals(t *testing.T) {
+	withMirrors(t)
 	d, st := newMirrorDesk(t, scalers.DirectionLong)
 	hist := flatBars(30, 100000)
 	last := hist[len(hist)-1].OpenTime
@@ -394,6 +413,7 @@ func TestMirrorTradesASubsetOfTheOriginalsSignals(t *testing.T) {
 // The desk must report the mirrors it runs. Enumerating d.entries alone left
 // half the desk off its own leaderboard.
 func TestStreamNamesIncludesMirrors(t *testing.T) {
+	withMirrors(t)
 	d, _ := newMirrorDesk(t, scalers.DirectionLong)
 	names := d.streamNames()
 	if len(names) != 2*len(d.entries) {
