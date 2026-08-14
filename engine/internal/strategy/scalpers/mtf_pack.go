@@ -115,6 +115,96 @@ func mtfSignal(name string, dir Direction, price, atrFrac, rr float64, reason st
 	}
 }
 
+// mtfSignalToTarget builds a signal from a STRUCTURAL target price rather than
+// a reward multiple.
+//
+// This is the difference between asking "what ratio would I like" and "where is
+// this trade actually going". A fixed 3R target on a range only 1.5R tall can
+// never be reached, and the trade is a stop-out with extra steps; a 2R target on
+// a breakout with a 5R measured move leaves most of the move on the table. The
+// ratio should FALL OUT of the setup, not be imposed on it.
+//
+// Every family that has a classical measured move now supplies one:
+//
+//	mean reversion  -> the mean it is reverting to
+//	breakout        -> the height of the range that broke, projected
+//	chart pattern   -> the pattern's own measured move
+//	trend continuation -> the prior swing extreme
+//
+// Only SqueezeExpansion keeps a multiple, because a volatility expansion has no
+// structural destination — inventing one would be dressing an assumption as a
+// measurement.
+func mtfSignalToTarget(name string, dir Direction, price, atrFrac, targetPrice float64, reason string) Signal {
+	if atrFrac <= 0 || price <= 0 || targetPrice <= 0 {
+		return NoSignal(name)
+	}
+	stopFrac := atrFrac * mtfStopATRMultiple
+
+	// The target must be on the correct side of entry. A "target" behind the
+	// entry is a structure read backwards, and it would produce a trade whose
+	// take-profit is already hit.
+	var targetFrac float64
+	if dir == DirectionLong {
+		if targetPrice <= price {
+			return NoSignal(name)
+		}
+		targetFrac = (targetPrice - price) / price
+	} else {
+		if targetPrice >= price {
+			return NoSignal(name)
+		}
+		targetFrac = (price - targetPrice) / price
+	}
+
+	rr := targetFrac / stopFrac
+	// Below 1:1 the structure is not offering enough to justify the risk the
+	// volatility demands, whatever the pattern looks like.
+	if rr < 1.0 {
+		return NoSignal(name)
+	}
+	// Above 8:1 the "structure" is almost always a stale extreme far from
+	// price, not a destination this trade will reach inside its time stop.
+	if rr > 8.0 {
+		return NoSignal(name)
+	}
+	if targetFrac*100 < roundTripFeePct*minTargetFeeMultiple {
+		return NoSignal(name)
+	}
+
+	var sl float64
+	if dir == DirectionLong {
+		sl = price * (1 - stopFrac)
+	} else {
+		sl = price * (1 + stopFrac)
+	}
+	return Signal{
+		Strategy:   name,
+		Direction:  dir,
+		Confidence: 0.6,
+		StopLoss:   sl,
+		TakeProfit: targetPrice,
+		Reason: fmt.Sprintf("%s | stop %.2f%% target %.2f%% = 1:%.2f (%.1fx fee)",
+			reason, stopFrac*100, targetFrac*100, rr, targetFrac*100/roundTripFeePct),
+		Timestamp: time.Now().UTC(),
+	}
+}
+
+// priorSwing returns the most recent confirmed swing extreme, for trend
+// continuation targets.
+func priorSwing(c []Candle, high bool) (float64, bool) {
+	highs, lows := swingPoints(c, 3)
+	if high {
+		if len(highs) == 0 {
+			return 0, false
+		}
+		return c[highs[len(highs)-1]].High, true
+	}
+	if len(lows) == 0 {
+		return 0, false
+	}
+	return c[lows[len(lows)-1]].Low, true
+}
+
 // mtfStopATRMultiple places the stop outside normal candle noise.
 //
 // 1.5 ATR: below roughly 1 ATR the stop sits inside the range a single ordinary

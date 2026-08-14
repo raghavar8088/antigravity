@@ -69,15 +69,26 @@ func patEngulfing(long bool) func(string, []Candle, float64) Signal {
 			if !ok || price < ema {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 2.5,
-				fmt.Sprintf("bullish engulfing above EMA55 on %.1fx volume", vr))
+			// A reversal candle runs to the last structure above it, not to a
+			// multiple. With no swing high above, there is nothing for this
+			// trade to reach and it is declined rather than given a number.
+			tgt, okT := priorSwing(c, true)
+			if !okT {
+				return NoSignal(name)
+			}
+			return mtfSignalToTarget(name, DirectionLong, price, atr, tgt,
+				fmt.Sprintf("bullish engulfing above EMA55 on %.1fx volume, target prior swing high", vr))
 		}
 		ok := pBear(last) && pBull(prev) && last.Close < prev.Open && last.Open > prev.Close
 		if !ok || price > ema {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 2.5,
-			fmt.Sprintf("bearish engulfing below EMA55 on %.1fx volume", vr))
+		tgt, okT := priorSwing(c, false)
+		if !okT {
+			return NoSignal(name)
+		}
+		return mtfSignalToTarget(name, DirectionShort, price, atr, tgt,
+			fmt.Sprintf("bearish engulfing below EMA55 on %.1fx volume, target prior swing low", vr))
 	}
 }
 
@@ -105,8 +116,9 @@ func patPinBar(long bool) func(string, []Candle, float64) Signal {
 			if last.Low > lo || last.Close < lo {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 2.5,
-				"hammer rejecting the 20-candle low and closing back inside")
+			// Rejecting the low of a range projects to the other side of it.
+			return mtfSignalToTarget(name, DirectionLong, price, atr, hi,
+				"hammer rejecting the 20-candle low, target the opposite band")
 		}
 		if pUpWick(last) < pRange(last)*0.55 || bodyFrac(last) > 0.35 {
 			return NoSignal(name)
@@ -114,8 +126,8 @@ func patPinBar(long bool) func(string, []Candle, float64) Signal {
 		if last.High < hi || last.Close > hi {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 2.5,
-			"shooting star rejecting the 20-candle high and closing back inside")
+		return mtfSignalToTarget(name, DirectionShort, price, atr, lo,
+			"shooting star rejecting the 20-candle high, target the opposite band")
 	}
 }
 
@@ -146,14 +158,17 @@ func patInsideBarBreak(long bool) func(string, []Candle, float64) Signal {
 			if last.Close <= inside.High || last.Close <= mother.High {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atrNow, 3.0,
-				"inside bar in compression, broken upward")
+			// Measured move: the mother bar range projected from the break.
+			return mtfSignalToTarget(name, DirectionLong, price, atrNow,
+				mother.High+(mother.High-mother.Low),
+				"inside bar broken upward, target = mother bar range")
 		}
 		if last.Close >= inside.Low || last.Close >= mother.Low {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atrNow, 3.0,
-			"inside bar in compression, broken downward")
+		return mtfSignalToTarget(name, DirectionShort, price, atrNow,
+			mother.Low-(mother.High-mother.Low),
+			"inside bar broken downward, target = mother bar range")
 	}
 }
 
@@ -178,8 +193,9 @@ func patThreeBarReversal(long bool) func(string, []Candle, float64) Signal {
 			if rsi < 30 || rsi > 50 {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 2.5,
-				fmt.Sprintf("three-bar reversal up, RSI recovering to %.0f", rsi))
+			// The reversal targets where the three-bar move began.
+			return mtfSignalToTarget(name, DirectionLong, price, atr, a.High,
+				fmt.Sprintf("three-bar reversal up, RSI %.0f, target the origin of the drop", rsi))
 		}
 		if !pBull(a) || !pBull(b) || !pBear(d) || d.Close > a.Open {
 			return NoSignal(name)
@@ -187,8 +203,8 @@ func patThreeBarReversal(long bool) func(string, []Candle, float64) Signal {
 		if rsi > 70 || rsi < 50 {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 2.5,
-			fmt.Sprintf("three-bar reversal down, RSI cooling to %.0f", rsi))
+		return mtfSignalToTarget(name, DirectionShort, price, atr, a.Low,
+			fmt.Sprintf("three-bar reversal down, RSI %.0f, target the origin of the rally", rsi))
 	}
 }
 
@@ -214,14 +230,14 @@ func patStar(long bool) func(string, []Candle, float64) Signal {
 			if !pBear(a) || !pBull(d) || d.Close < mid {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 3.0,
-				"morning star closing past the midpoint of the down thrust")
+			return mtfSignalToTarget(name, DirectionLong, price, atr, a.Open,
+				"morning star, target the origin of the down thrust")
 		}
 		if !pBull(a) || !pBear(d) || d.Close > mid {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 3.0,
-			"evening star closing past the midpoint of the up thrust")
+		return mtfSignalToTarget(name, DirectionShort, price, atr, a.Open,
+			"evening star, target the origin of the up thrust")
 	}
 }
 
@@ -247,14 +263,16 @@ func patDojiBreak(long bool) func(string, []Candle, float64) Signal {
 			if !pBull(last) || last.Close <= doji.High {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 2.5,
-				fmt.Sprintf("doji resolved upward on %.1fx volume", vr))
+			return mtfSignalToTarget(name, DirectionLong, price, atr,
+				doji.High+(doji.High-doji.Low)*3,
+				fmt.Sprintf("doji resolved upward on %.1fx volume, target 3x the doji range", vr))
 		}
 		if !pBear(last) || last.Close >= doji.Low {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 2.5,
-			fmt.Sprintf("doji resolved downward on %.1fx volume", vr))
+		return mtfSignalToTarget(name, DirectionShort, price, atr,
+			doji.Low-(doji.High-doji.Low)*3,
+			fmt.Sprintf("doji resolved downward on %.1fx volume, target 3x the doji range", vr))
 	}
 }
 
@@ -324,8 +342,11 @@ func patDoubleTopBottom(long bool) func(string, []Candle, float64) Signal {
 			if neck <= 0 || price <= neck {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 3.0,
-				"double bottom, neckline broken")
+			// Classical measured move: the pattern own height projected from
+			// the neckline. This is the target the pattern itself defines.
+			return mtfSignalToTarget(name, DirectionLong, price, atr,
+				neck+(neck-math.Min(a, b)),
+				"double bottom, target = pattern height from the neckline")
 		}
 		if len(highs) < 2 {
 			return NoSignal(name)
@@ -342,8 +363,9 @@ func patDoubleTopBottom(long bool) func(string, []Candle, float64) Signal {
 		if neck == math.MaxFloat64 || price >= neck {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 3.0,
-			"double top, neckline broken")
+		return mtfSignalToTarget(name, DirectionShort, price, atr,
+			neck-(math.Max(a, b)-neck),
+			"double top, target = pattern height from the neckline")
 	}
 }
 
@@ -373,14 +395,15 @@ func patStructureBreak(long bool) func(string, []Candle, float64) Signal {
 			if hLast <= hPrev || lLast <= lPrev || price <= hLast {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 3.0,
-				"higher-high / higher-low structure, last swing high broken")
+			// The trend own leg length is the measure of what it does next.
+			return mtfSignalToTarget(name, DirectionLong, price, atr, hLast+(hLast-lLast),
+				"HH/HL structure broken, target = last leg projected")
 		}
 		if hLast >= hPrev || lLast >= lPrev || price >= lLast {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 3.0,
-			"lower-high / lower-low structure, last swing low broken")
+		return mtfSignalToTarget(name, DirectionShort, price, atr, lLast-(hLast-lLast),
+			"LH/LL structure broken, target = last leg projected")
 	}
 }
 
@@ -420,14 +443,17 @@ func patTriangleBreak(long bool) func(string, []Candle, float64) Signal {
 			if price <= lateHi {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 3.0,
-				fmt.Sprintf("range compressed to %.0f%% then broke up", late/early*100))
+			// A triangle projects the width it STARTED from, not the width it
+			// narrowed to. The compression is stored energy; targeting the
+			// narrow end would take profit before the move it compressed for.
+			return mtfSignalToTarget(name, DirectionLong, price, atr, lateHi+early,
+				fmt.Sprintf("compressed to %.0f%% then broke up, target = original range width", late/early*100))
 		}
 		if price >= lateLo {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 3.0,
-			fmt.Sprintf("range compressed to %.0f%% then broke down", late/early*100))
+		return mtfSignalToTarget(name, DirectionShort, price, atr, lateLo-early,
+			fmt.Sprintf("compressed to %.0f%% then broke down, target = original range width", late/early*100))
 	}
 }
 
@@ -470,8 +496,9 @@ func patLevelRetest(long bool) func(string, []Candle, float64) Signal {
 			if !pBull(last) {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 2.5,
-				"broken resistance retested and held as support")
+			// A flipped level projects the range it broke out of.
+			return mtfSignalToTarget(name, DirectionLong, price, atr, hi+(hi-lo),
+				"broken resistance held as support, target = range height")
 		}
 		broke := false
 		for _, x := range recent {
@@ -485,7 +512,7 @@ func patLevelRetest(long bool) func(string, []Candle, float64) Signal {
 		if !pBear(last) {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 2.5,
-			"broken support retested and held as resistance")
+		return mtfSignalToTarget(name, DirectionShort, price, atr, lo-(hi-lo),
+			"broken support held as resistance, target = range height")
 	}
 }

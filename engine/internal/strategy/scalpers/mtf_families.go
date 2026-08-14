@@ -32,14 +32,25 @@ func mtfTrendPullback(long bool) func(string, []Candle, float64) Signal {
 			if emaFast <= emaSlow || price >= emaFast*1.004 || last.Close <= last.Open {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 2.5,
-				fmt.Sprintf("uptrend ADX %.0f, pullback to EMA21", adx))
+			// Target: the swing high the trend last made. A continuation trade
+			// is a bet the trend resumes to where it was already going, not to
+			// an arbitrary multiple of today's volatility.
+			tgt, ok := priorSwing(c, true)
+			if !ok {
+				return NoSignal(name)
+			}
+			return mtfSignalToTarget(name, DirectionLong, price, atr, tgt,
+				fmt.Sprintf("uptrend ADX %.0f, pullback to EMA21, target prior swing high", adx))
 		}
 		if emaFast >= emaSlow || price <= emaFast*0.996 || last.Close >= last.Open {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 2.5,
-			fmt.Sprintf("downtrend ADX %.0f, pullback to EMA21", adx))
+		tgt, ok := priorSwing(c, false)
+		if !ok {
+			return NoSignal(name)
+		}
+		return mtfSignalToTarget(name, DirectionShort, price, atr, tgt,
+			fmt.Sprintf("downtrend ADX %.0f, pullback to EMA21, target prior swing low", adx))
 	}
 }
 
@@ -70,14 +81,18 @@ func mtfDonchianBreakout(long bool, lookback int) func(string, []Candle, float64
 			if price <= hi {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 3.0,
-				fmt.Sprintf("close above %d-candle high on %.1fx volume", lookback, vr))
+			// Measured move: a breakout classically travels the height of the
+			// range it left. Using the channel's own height means a break out
+			// of a tight range takes a modest target and a break out of a wide
+			// one takes a large one — which is what actually happens.
+			return mtfSignalToTarget(name, DirectionLong, price, atr, hi+(hi-lo),
+				fmt.Sprintf("close above %d-candle high on %.1fx volume, target = channel height", lookback, vr))
 		}
 		if price >= lo {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 3.0,
-			fmt.Sprintf("close below %d-candle low on %.1fx volume", lookback, vr))
+		return mtfSignalToTarget(name, DirectionShort, price, atr, lo-(hi-lo),
+			fmt.Sprintf("close below %d-candle low on %.1fx volume, target = channel height", lookback, vr))
 	}
 }
 
@@ -103,14 +118,17 @@ func mtfBollingerFade(long bool) func(string, []Candle, float64) Signal {
 			if price > lower || rsi > 32 {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 2.0,
-				fmt.Sprintf("lower band in range ADX %.0f, RSI %.0f", adx, rsi))
+			// The target IS the mean. A mean-reversion trade that reaches past
+			// the mean is no longer mean reversion, and one that targets less
+			// has left the thesis unfinished.
+			return mtfSignalToTarget(name, DirectionLong, price, atr, mid,
+				fmt.Sprintf("lower band in range ADX %.0f, RSI %.0f, target the 20-period mean", adx, rsi))
 		}
 		if price < upper || rsi < 68 {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 2.0,
-			fmt.Sprintf("upper band in range ADX %.0f, RSI %.0f", adx, rsi))
+		return mtfSignalToTarget(name, DirectionShort, price, atr, mid,
+			fmt.Sprintf("upper band in range ADX %.0f, RSI %.0f, target the 20-period mean", adx, rsi))
 	}
 }
 
@@ -178,14 +196,22 @@ func mtfRSITrendReset(long bool) func(string, []Candle, float64) Signal {
 			if price <= emaSlow || rsi < 40 || rsi > 52 {
 				return NoSignal(name)
 			}
-			return mtfSignal(name, DirectionLong, price, atr, 2.5,
-				fmt.Sprintf("uptrend intact, RSI reset to %.0f", rsi))
+			tgt, ok := priorSwing(c, true)
+			if !ok {
+				return NoSignal(name)
+			}
+			return mtfSignalToTarget(name, DirectionLong, price, atr, tgt,
+				fmt.Sprintf("uptrend intact, RSI reset to %.0f, target prior swing high", rsi))
 		}
 		if price >= emaSlow || rsi > 60 || rsi < 48 {
 			return NoSignal(name)
 		}
-		return mtfSignal(name, DirectionShort, price, atr, 2.5,
-			fmt.Sprintf("downtrend intact, RSI reset to %.0f", rsi))
+		tgt, ok := priorSwing(c, false)
+		if !ok {
+			return NoSignal(name)
+		}
+		return mtfSignalToTarget(name, DirectionShort, price, atr, tgt,
+			fmt.Sprintf("downtrend intact, RSI reset to %.0f, target prior swing low", rsi))
 	}
 }
 

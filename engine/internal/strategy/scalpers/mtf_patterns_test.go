@@ -81,29 +81,42 @@ func TestPatternFamilies_RefuseShortHistory(t *testing.T) {
 // A clean bullish engulfing above the trend must be recognised — otherwise the
 // refusal tests above would pass on a family that never fires at all.
 func TestPatEngulfing_RecognisesTheRealThing(t *testing.T) {
-	// 130 candles: EMA55 needs 110 to compute at all, which is what the
-	// MinCandles fix encodes.
-	c := mtfCandles(130, 100, 0.002, 0.001) // steady uptrend, low noise
+	// The series must RISE, PULL BACK, then engulf.
+	//
+	// A steadily rising series has no swing high above the last bar, and the
+	// family now correctly declines: with structural targets there is nothing
+	// for the trade to reach. That is a real behaviour change — the family
+	// trades pullbacks within a trend rather than continuation at new highs —
+	// and this test has to reflect it rather than assert the old behaviour.
+	c := mtfCandles(130, 100, 0.002, 0.001)
 	n := len(c)
 
-	// Levels are derived from where the series ACTUALLY is, not hardcoded.
-	// Fixed numbers put the pattern below a drifting EMA55 and the family
-	// correctly refused it — the test was wrong, not the strategy.
+	// Carve a pullback into the last 12 bars so a confirmed swing high sits
+	// above the entry.
+	peak := c[n-13].Close
+	for i := n - 12; i < n; i++ {
+		drop := peak * (1 - 0.02*float64(i-(n-13))/12.0)
+		c[i].Open, c[i].Close = drop, drop
+		c[i].High, c[i].Low = drop*1.001, drop*0.999
+	}
+
 	base := c[n-3].Close
 	prev := &c[n-2]
-	prev.Open, prev.Close = base*1.010, base*1.002
-	prev.High, prev.Low = base*1.012, base*1.000
+	prev.Open, prev.Close = base*1.004, base*0.998
+	prev.High, prev.Low = base*1.005, base*0.997
 
 	last := &c[n-1]
-	last.Open, last.Close = base*1.001, base*1.020
-	last.High, last.Low = base*1.021, base*1.000
-	last.Volume = c[n-3].Volume * 3
+	last.Open, last.Close = base*0.997, base*1.008
+	last.High, last.Low = base*1.009, base*0.996
+	last.Volume = c[n-20].Volume * 3
 
 	price := last.Close
 	s := patEngulfing(true)("T", c, price)
 	if s.Direction != DirectionLong {
 		ema, _ := mtfEMA(c, 55)
-		t.Fatalf("clean bullish engulfing not recognised (price %.4f, EMA55 %.4f): %q", price, ema, s.Reason)
+		sw, ok := priorSwing(c, true)
+		t.Fatalf("clean bullish engulfing not recognised (price %.4f, EMA55 %.4f, swing %.4f ok=%v): %q",
+			price, ema, sw, ok, s.Reason)
 	}
 	if s.StopLoss >= price || s.TakeProfit <= price {
 		t.Errorf("levels inverted: stop %.4f target %.4f", s.StopLoss, s.TakeProfit)

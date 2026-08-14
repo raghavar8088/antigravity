@@ -1499,6 +1499,7 @@ The content is organized as follows:
   strategy/scalpers/mtf_pack.go
   strategy/scalpers/mtf_patterns_test.go
   strategy/scalpers/mtf_patterns.go
+  strategy/scalpers/mtf_target_test.go
   strategy/scalpers/new10_batch.go
   strategy/scalpers/new10_batch2.go
   strategy/scalpers/overfit_demo_thisweek_widerr.go
