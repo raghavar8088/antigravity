@@ -157,11 +157,86 @@ const (
 	PaperAccount04 = "04"
 	PaperAccount05 = "05"
 	PaperAccount06 = "06"
+	// PaperAccountGold is the Gold Desk's book. Named rather than numbered
+	// because it is not another candidate roster competing with 01-06: it holds
+	// a different asset, and the numbered books would silently absorb it into a
+	// leaderboard that compares crypto scalps against each other.
+	PaperAccountGold = "GOLD"
 )
+
+// GoldSymbols are the metal-backed perpetuals on Delta.
+//
+// XAUT (Tether Gold) and PAXG (PAX Gold) are TOKENS redeemable for a troy ounce,
+// not interbank XAU/USD. They track spot gold closely and they are the only gold
+// this venue can actually fill, but the basis is real and occasionally wide —
+// the two quoted $15 apart (0.34%) at the time this was written, for an
+// instrument that is nominally the same ounce of gold. Anything comparing this
+// desk to a forex gold chart has to account for that.
+//
+// Silver (SLVONUSD) is listed here too and deliberately excluded: the desk was
+// asked for gold, and adding a second metal would make every result a question
+// about which metal rather than about the strategy.
+func GoldSymbols() []string {
+	return []string{"XAUTUSD", "PAXGUSD"}
+}
+
+// IsGoldSymbol reports whether a symbol belongs to the Gold Desk.
+func IsGoldSymbol(symbol string) bool {
+	u := strings.ToUpper(strings.TrimSpace(symbol))
+	for _, g := range GoldSymbols() {
+		if u == g {
+			return true
+		}
+	}
+	return false
+}
+
+// goldPaperStreams is the Gold book's watch list, registered at boot.
+//
+// Registered rather than hardcoded because the roster IS "every strategy the
+// desk runs, on gold" — and that set is owned by the strategy pack, which
+// changes. A hand-copied list would drift the moment a strategy is added or
+// removed, and drift here does not fail loudly: it produces a board with rows
+// for strategies that no longer exist and no rows for the ones that do.
+var (
+	goldPaperMu      sync.RWMutex
+	goldPaperStreams []PerpStream
+)
+
+// SetGoldPaperStreams registers the Gold book's watch list. Called once at boot
+// by the desk, which is the only component that knows both the strategy pack
+// and the resolved symbol universe.
+func SetGoldPaperStreams(streams []PerpStream) {
+	goldPaperMu.Lock()
+	defer goldPaperMu.Unlock()
+	goldPaperStreams = make([]PerpStream, 0, len(streams))
+	seen := map[string]bool{}
+	for _, st := range streams {
+		if !IsGoldSymbol(st.Symbol) {
+			continue // a non-gold stream in the gold book is a wiring bug, not a preference
+		}
+		k := perpStreamKey(st.Strategy, st.Symbol)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		goldPaperStreams = append(goldPaperStreams, PerpStream{Strategy: st.Strategy, Symbol: strings.ToUpper(st.Symbol)})
+	}
+	log.Printf("[GOLD DESK] watch list registered: %d streams across %v", len(goldPaperStreams), GoldSymbols())
+}
+
+// GoldPaperStreams returns the Gold book's watch list.
+func GoldPaperStreams() []PerpStream {
+	goldPaperMu.RLock()
+	defer goldPaperMu.RUnlock()
+	out := make([]PerpStream, len(goldPaperStreams))
+	copy(out, goldPaperStreams)
+	return out
+}
 
 // PaperAccountIDs is every book, in display order.
 func PaperAccountIDs() []string {
-	return []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04, PaperAccount05, PaperAccount06}
+	return []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04, PaperAccount05, PaperAccount06, PaperAccountGold}
 }
 
 // defaultScalpPaperStreams02 is Account 02's watch list.
@@ -519,6 +594,13 @@ func ScalpPaperStreamsFor(account string) []PerpStream {
 		src = defaultScalpPaperStreams05
 	case PaperAccount06:
 		src = defaultScalpPaperStreams06
+	case PaperAccountGold:
+		// Returned directly: it is already deduped and gold-filtered by
+		// SetGoldPaperStreams, and an empty list here means the desk has not
+		// registered one yet — which must stay empty rather than falling through
+		// to the crypto default below and quietly filling a gold book with
+		// altcoin streams.
+		return GoldPaperStreams()
 	}
 	if src != nil {
 		out := make([]PerpStream, 0, len(src))

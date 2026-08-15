@@ -157,6 +157,7 @@ The content is organized as follows:
   app/crypto-fno/page.tsx
   app/favicon.ico
   app/globals.css
+  app/gold-desk/page.tsx
   app/layout.tsx
   app/live-demo-engine/page.tsx
   app/live-engine-paper/page.tsx
@@ -889,6 +890,7 @@ The content is organized as follows:
   delta/fees_test.go
   delta/fees.go
   delta/flexnum_test.go
+  delta/gold_book_test.go
   delta/live_bridge_test.go
   delta/live_bridge.go
   delta/live_exit_policy_test.go

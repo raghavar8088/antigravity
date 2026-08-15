@@ -82,6 +82,10 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/live-engine-paper", label: "Live Engine Paper Desk", icon: ic.trend },
   // Sits directly below Live Engine: it is the paper counterpart to that desk —
   // same Delta chain, same margin reality, no real money.
+  // Gold sits with the trading desks rather than under the crypto group: it
+  // runs on the same venue and the same engine, but it is a different asset and
+  // its results must not be read as part of the crypto leaderboard.
+  { href: "/gold-desk", label: "Gold Desk", icon: ic.target },
   { href: "/crypto-fno", label: "Crypto F&O", icon: ic.layers },
   { href: "/btc-pre-live", label: "BTC Pre-Live Engine", icon: ic.trend },
   { href: "/scalp-desk", label: "Crypto Scalp Desk", icon: ic.bolt },

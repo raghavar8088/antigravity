@@ -437,7 +437,12 @@ export default function LiveEnginePaperDeskPage() {
         return;
       }
       const body = (await r.json()) as { accounts?: PaperDesk[] };
-      setBooks(body.accounts ?? []);
+      // The GOLD book rides in the same payload and belongs to the Gold Desk,
+      // not here. Excluded rather than shown as a seventh tab: these books are
+      // competing hypotheses about which CRYPTO streams deserve capital, and a
+      // gold book sitting among them invites a comparison between assets that
+      // says nothing about either.
+      setBooks((body.accounts ?? []).filter((b) => b.account !== "GOLD"));
       setError("");
       setUpdatedAt(fmtISTClock(Date.now()));
     } catch {

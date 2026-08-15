@@ -1360,6 +1360,45 @@ func main() {
 	log.Printf("[SCALP] universe: %d symbols x %d streams = %d total streams",
 		len(d.symbols), len(d.streamNames()), len(d.symbols)*len(d.streamNames()))
 
+	// Register the Gold Desk's watch list: every stream this desk runs, on the
+	// gold symbols that actually resolved into the universe.
+	//
+	// Derived here rather than written down in the roster because the answer is
+	// "whatever the pack currently builds", and that changes. It is also the only
+	// place both halves are known: internal/delta owns the book, the strategy
+	// pack owns the names, and resolveSymbols decides which symbols the venue
+	// actually gave us this boot.
+	//
+	// Intersected with the resolved universe on purpose. Registering a stream on
+	// a symbol the desk is not polling would seed a row that can never fill, and
+	// a permanently idle row is indistinguishable on screen from a strategy that
+	// simply has not signalled yet.
+	{
+		present := map[string]bool{}
+		for _, ss := range d.symbols {
+			present[strings.ToUpper(ss.sym)] = true
+		}
+		gold := make([]delta.PerpStream, 0, len(d.streamNames())*2)
+		missing := make([]string, 0, 2)
+		for _, gs := range delta.GoldSymbols() {
+			if !present[gs] {
+				missing = append(missing, gs)
+				continue
+			}
+			for _, name := range d.streamNames() {
+				gold = append(gold, delta.PerpStream{Strategy: name, Symbol: gs})
+			}
+		}
+		if len(missing) > 0 {
+			// Loud, because the Gold Desk page would otherwise render an empty
+			// board that looks like "no signals yet" rather than "this symbol
+			// never entered the universe".
+			log.Printf("[GOLD DESK] ⚠️  %v not in the resolved universe — no gold streams for %v this boot "+
+				"(check the SCALP_MIN_TURNOVER_USD floor and Delta's product list)", missing, missing)
+		}
+		delta.SetGoldPaperStreams(gold)
+	}
+
 	// One shared feed for the whole desk: 8 pollers serve all 800 streams.
 	// Backfill covers the ~75h of 1m context the strategies need (72 closed 1h
 	// bars), so the feed itself does the bootstrap that used to be a per-symbol
