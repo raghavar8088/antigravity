@@ -1810,6 +1810,8 @@ The content is organized as follows:
   pre_live/main.go
   pre_live/mongo.go
   run_backtest/main.go
+  scalp_prelive/empty_json_helper_test.go
+  scalp_prelive/empty_json_test.go
   scalp_prelive/htf_store_test.go
   scalp_prelive/htf_store.go
   scalp_prelive/live_test.go

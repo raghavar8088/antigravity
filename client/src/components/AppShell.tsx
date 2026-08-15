@@ -80,6 +80,13 @@ const PRIMARY_NAV: NavItem[] = [
   // whether those same strategies deserve it. Same allow-list, same Delta
   // prices, same taker fees, same margin rules — paper money only.
   { href: "/live-engine-paper", label: "Live Engine Paper Desk", icon: ic.trend },
+  // Closes the Live Engine group. It is the Crypto Scalp Desk's strategies on
+  // the highest-volume currencies only — a separate engine process on a
+  // fourteen-symbol universe, so those streams compete for fill slots with each
+  // other rather than with ~220 thinly-traded perpetuals. Placed here rather
+  // than beside the scalp desk because it is a candidate feeder for the live
+  // desk, and the scalp desk stays where it is as the control arm.
+  { href: "/high-volume-crypto", label: "High Volume Crypto Trading", icon: ic.bolt },
   // Sits directly below Live Engine: it is the paper counterpart to that desk —
   // same Delta chain, same margin reality, no real money.
   // Gold sits with the trading desks rather than under the crypto group: it
@@ -106,6 +113,19 @@ const API_GROUPS: NavSection[] = [
       { href: "/api/scalp/scalp/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
       { href: "/api/scalp/scalp/trades?n=100", label: "Trade History JSON", icon: ic.code, external: true },
       { href: "/api/scalp/scalp/health", label: "Engine Health JSON", icon: ic.code, external: true },
+    ],
+  },
+  {
+    // The same four endpoints on the high-volume process. Separate group rather
+    // than extra rows in Scalp Lab: the two desks answer with the same JSON
+    // shape from different universes, and a reader who mistakes one for the
+    // other has no way to notice from the payload alone.
+    title: "High Volume",
+    items: [
+      { href: "/api/scalp-highvol/scalp/leaderboard", label: "Leaderboard JSON", icon: ic.code, external: true },
+      { href: "/api/scalp-highvol/scalp/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
+      { href: "/api/scalp-highvol/scalp/trades?n=100", label: "Trade History JSON", icon: ic.code, external: true },
+      { href: "/api/scalp-highvol/scalp/health", label: "Engine Health JSON", icon: ic.code, external: true },
     ],
   },
   {

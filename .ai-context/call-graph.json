@@ -1,1 +1,1 @@
-{"engine/cmd/scalp_prelive/main.go::.processBar()":["engine/cmd/scalp_prelive/paperdesk.go::paperOnBar()"],"engine/cmd/scalp_prelive/main.go::main()":["engine/cmd/scalp_prelive/paperdesk.go::paperSeedBook()"],"engine/cmd/scalp_prelive/paperdesk.go::.onSignal()":["engine/cmd/scalp_prelive/main.go::min()"]}
+{"engine/cmd/scalp_prelive/empty_json_test.go::TestTradesHandler_NormalisesBeforeWriting()":["engine/cmd/scalp_prelive/empty_json_helper_test.go::readSourceFile()"]}

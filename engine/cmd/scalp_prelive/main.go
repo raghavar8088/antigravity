@@ -1157,7 +1157,19 @@ func (d *desk) serve(port int) {
 		if start < 0 {
 			start = 0
 		}
-		writeJSON(w, d.recent[start:])
+		// An EMPTY list, never null.
+		//
+		// d.recent is a nil slice until the first trade closes, and Go marshals
+		// nil as `null`. Every client here treats this payload as an array and
+		// calls .map on it, so `null` threw and took the whole Scalp Desk page
+		// down with it. It only surfaced after the trade history was cleared,
+		// because until then there was always at least one trade — the failure
+		// was latent from the first day and waiting for an empty desk.
+		out := d.recent[start:]
+		if out == nil {
+			out = []closedTrade{}
+		}
+		writeJSON(w, out)
 	}))
 	// ── mutations ────────────────────────────────────────────────────────────
 	// Both are token-gated like every other non-health endpoint, and POST-only so
