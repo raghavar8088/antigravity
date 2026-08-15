@@ -15,10 +15,18 @@ import (
 // The replacement pack is deliberately not promoted here. It has no live record,
 // and promoting on design rather than performance is the procedure that produced
 // the 900-trade record it replaces.
-func TestDefaultScalpLiveStreams_IsEmptyPendingAnEarnedRoster(t *testing.T) {
-	if len(defaultScalpLiveStreams) != 0 {
-		t.Errorf("roster has %d streams; it should be empty until streams earn live capital on their own results",
-			len(defaultScalpLiveStreams))
+func TestDefaultScalpLiveStreams_HoldsOnlyMTFStreams(t *testing.T) {
+	if len(defaultScalpLiveStreams) != 10 {
+		t.Errorf("roster has %d streams, want the 10 promoted 2026-08-15", len(defaultScalpLiveStreams))
+	}
+	// Every retired pack name must stay off it. The Scalp100/Delta20/Curated
+	// strategies no longer exist on the desk, so a roster entry naming one
+	// would be an allow-list row that can never produce a signal.
+	for _, st := range defaultScalpLiveStreams {
+		if !strings.HasPrefix(st.Strategy, "MTF_") {
+			t.Errorf("%s on %s is not from the MTF pack — the desk no longer builds it",
+				st.Strategy, st.Symbol)
+		}
 	}
 }
 

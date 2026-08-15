@@ -69,6 +69,28 @@ var defaultScalpLiveStreams = []PerpStream{
 	//
 	// SCALP_LIVE_STREAMS overrides this at runtime for anyone who wants to
 	// route a specific stream before then.
+	// Added 2026-08-11 at the owner's direction, alongside everything above.
+	//
+	// This is a much larger selection than the previous two and its evidence is
+	// much thinner: most of these streams have single-digit trade counts and
+	// many have NONE at all. They are recorded because the owner chose them;
+	// the gates decide what actually executes.
+	//
+	// Adding streams does not increase throughput. Ten positions may be open at
+	// once and only one per symbol, so a longer list changes WHICH streams
+	// compete for those slots, not how many trade. On a roster this size the
+	// slot goes to whichever stream signals first, which is a property of
+	// signal frequency rather than of quality.
+	{Strategy: "MTF_4h_SqueezeExpansion_Short", Symbol: "CROSSUSD"},
+	{Strategy: "MTF_4h_LevelRetest_Long", Symbol: "AIOTUSD"},
+	{Strategy: "MTF_4h_TriangleBreak_Long", Symbol: "LINKUSD"},
+	{Strategy: "MTF_4h_DoubleTopBottom_Long", Symbol: "AIOUSD"},
+	{Strategy: "MTF_4h_RSITrendReset_Short", Symbol: "BLESSUSD"},
+	{Strategy: "MTF_1h_TrendPullback_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "GIGGLEUSD"},
+	{Strategy: "MTF_4h_TriangleBreak_Long", Symbol: "AIOTUSD"},
+	{Strategy: "MTF_1h_LevelRetest_Short", Symbol: "SKYAIUSD"},
+	{Strategy: "MTF_1d_PinBar_Short", Symbol: "CROSSUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine

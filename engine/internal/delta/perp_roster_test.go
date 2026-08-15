@@ -62,66 +62,51 @@ func TestPerpAllowList_GatesOnSymbolToo(t *testing.T) {
 // six live streams and three pairings nobody selected could reach the venue.
 //
 // Replaced 2026-08-07 with the three rows selected on live terms.
-func TestScalpLiveStreams_MatchTheOwnerSelectionExactly(t *testing.T) {
-	// The roster CONTAINS Account 03's book, promoted 2026-08-09, plus 14
-	// streams the owner added on 2026-08-10 alongside it.
-	//
-	// This asserted equality until then. The addition deliberately broke that,
-	// so the invariant is now containment: nothing from Account 03 may be
-	// dropped by an "add these too" change. Every previous roster edit on this
-	// desk was a wholesale replacement, which is precisely why an append that
-	// quietly loses the existing book is the failure worth pinning.
-	//
-	// Checked against the source rather than a second literal list: two
-	// hand-maintained copies would drift, and the drift would be silent.
+// The live roster is EXACT (strategy, symbol) streams, never a cross product.
+//
+// Rewritten 2026-08-15. It previously asserted the roster contained Account 03's
+// book — correct while the desk ran the Scalp100/Delta20/Curated packs, and
+// meaningless once those were retired: it would now be asserting that the
+// allow-list holds strategy names the desk no longer builds, which is exactly
+// the dead-reference state the roster was emptied to avoid.
+//
+// What still matters is the property the cross product violated: three chosen
+// rows must not become six live streams.
+func TestScalpLiveStreams_AreExactPairsNotACrossProduct(t *testing.T) {
 	got := ScalpLiveStreams()
-	src := defaultScalpPaperStreams03
-
-	// The roster is intentionally empty from 2026-08-14 — the packs these
-	// streams named were removed from the desk. Skipping rather than asserting
-	// containment against nothing, and saying so, because a silent pass here
-	// would look like the invariant still held.
 	if len(got) == 0 {
-		t.Skip("live roster is intentionally empty; nothing has earned live capital under the new pack")
+		t.Skip("live roster is empty; nothing to route")
 	}
-	if len(got) < len(src) {
-		t.Fatalf("live roster has %d streams, fewer than Account 03's %d — an addition dropped part of the book",
-			len(got), len(src))
-	}
-	inRoster := map[string]bool{}
+
+	a := NewPerpAllowList()
+	a.SetPairs(got)
+
+	strategies, symbols := map[string]bool{}, map[string]bool{}
+	selected := map[string]bool{}
 	for _, st := range got {
-		inRoster[perpStreamKey(st.Strategy, st.Symbol)] = true
-	}
-	// Streams on grid-blocked symbols are EXPECTED to be absent: they were
-	// removed on 2026-08-14 because the gate had recorded refusals against
-	// them, so containment now means "everything from Account 03 that can
-	// actually hold a stop".
-	gridBlocked := map[string]bool{
-		"COOKIEUSD": true, "MUBARAKUSD": true, "BMTUSD": true,
-		"MMTUSD": true, "KAITOUSD": true,
-	}
-	for _, st := range src {
-		if gridBlocked[strings.ToUpper(st.Symbol)] {
-			continue
-		}
-		if !inRoster[perpStreamKey(st.Strategy, st.Symbol)] {
-			t.Errorf("%v is in Account 03's book but not on the live roster", st)
+		strategies[st.Strategy] = true
+		symbols[strings.ToUpper(st.Symbol)] = true
+		selected[perpStreamKey(st.Strategy, st.Symbol)] = true
+		if !a.Allowed(st.Strategy, st.Symbol) {
+			t.Errorf("selected stream %v was blocked", st)
 		}
 	}
 
-	// Every previously live stream must be gone — the promotion REPLACED the
-	// roster rather than extending it.
-	for _, gone := range []PerpStream{
-		{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "ADAUSD"},
-		{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAXUSD"},
-		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAXUSD"},
-		{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LIGHTUSD"},
-		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LIGHTUSD"},
-		{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "XAIUSD"},
-	} {
-		if inRoster[perpStreamKey(gone.Strategy, gone.Symbol)] {
-			t.Errorf("%v was replaced but is still on the live roster", gone)
+	// Any pairing the cross product would invent must be denied.
+	invented := 0
+	for st := range strategies {
+		for sym := range symbols {
+			if selected[perpStreamKey(st, sym)] {
+				continue
+			}
+			invented++
+			if a.Allowed(st, sym) {
+				t.Errorf("unselected pairing %s|%s reached the venue — the cross product is back", st, sym)
+			}
 		}
+	}
+	if invented == 0 {
+		t.Skip("every strategy x symbol combination happens to be selected; nothing to test")
 	}
 }
 
