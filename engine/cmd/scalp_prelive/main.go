@@ -643,6 +643,7 @@ func (d *desk) poll() {
 				// packs enforce their own warm-up minimums and will decline to
 				// signal until enough candles exist, rather than computing a
 				// 55-period average over four.
+				Candles10m: tail(resample(ss.bars, 10*time.Minute, cutoff), 200),
 				Candles30m: tail(resample(ss.bars, 30*time.Minute, cutoff), 96),
 			}
 			// 1h/4h/1d come from the VENUE when available, because resampling

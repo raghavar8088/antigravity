@@ -13,6 +13,9 @@ import "time"
 type HigherTF string
 
 const (
+	TF1m  HigherTF = "1m"
+	TF5m  HigherTF = "5m"
+	TF10m HigherTF = "10m"
 	TF15m HigherTF = "15m"
 	TF30m HigherTF = "30m"
 	TF1h  HigherTF = "1h"
@@ -23,6 +26,12 @@ const (
 // Step is the candle duration for a timeframe.
 func (t HigherTF) Step() time.Duration {
 	switch t {
+	case TF1m:
+		return time.Minute
+	case TF5m:
+		return 5 * time.Minute
+	case TF10m:
+		return 10 * time.Minute
 	case TF15m:
 		return 15 * time.Minute
 	case TF30m:
@@ -72,6 +81,12 @@ func (t HigherTF) MinCandles() int {
 func (t HigherTF) CandlesFor(ctx MarketContext) ([]Candle, bool) {
 	var c []Candle
 	switch t {
+	case TF1m:
+		c = ctx.Candles1m
+	case TF5m:
+		c = ctx.Candles5m
+	case TF10m:
+		c = ctx.Candles10m
 	case TF15m:
 		c = ctx.Candles15m
 	case TF30m:

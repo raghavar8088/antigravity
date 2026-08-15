@@ -224,7 +224,12 @@ func abs(f float64) float64 {
 
 // BuildMTFPack returns every (family x timeframe x direction) strategy.
 func BuildMTFPack() []RegistryEntry {
-	tfs := []HigherTF{TF15m, TF30m, TF1h, TF4h, TF1d}
+	// Every timeframe the desk resamples. 1m/5m/10m are included because the
+	// owner asked for the full catalogue on every horizon; the 6x round-trip
+	// fee bar refuses most short-timeframe setups on its own, because the
+	// measured move is smaller than the cost of taking it. The pattern is
+	// allowed to exist everywhere and the economics decide where it trades.
+	tfs := []HigherTF{TF1m, TF5m, TF10m, TF15m, TF30m, TF1h, TF4h, TF1d}
 	type fam struct {
 		id   string
 		make func(bool) func(string, []Candle, float64) Signal
@@ -258,6 +263,20 @@ func BuildMTFPack() []RegistryEntry {
 		{"StructureBreak", patStructureBreak},
 		{"TriangleBreak", patTriangleBreak},
 		{"LevelRetest", patLevelRetest},
+
+		// Candlestick, second batch.
+		{"Marubozu", patMarubozu},
+		{"OutsideBar", patOutsideBar},
+		{"ThreeSoldiers", patThreeSoldiers},
+		{"HeikinAshiFlip", patHeikinAshiFlip},
+
+		// Chart structure, second batch.
+		{"HeadShoulders", patHeadShoulders},
+		{"TripleTopBottom", patTripleTopBottom},
+		{"DirectionalTriangle", patDirectionalTriangle},
+		{"Flag", patFlag},
+		{"OpeningRangeBreak", patOpeningRangeBreak},
+		{"FibRetrace", patFibRetrace},
 	}
 	out := make([]RegistryEntry, 0, len(tfs)*len(fams)*2)
 	for _, tf := range tfs {

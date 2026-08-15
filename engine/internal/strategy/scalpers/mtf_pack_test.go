@@ -33,9 +33,9 @@ func mtfCandles(n int, start, driftPct, noisePct float64) []Candle {
 // The pack must cover every timeframe and family, in both directions.
 func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 	p := BuildMTFPack()
-	// 6 indicator families + 10 pattern families, on 5 timeframes, both sides.
-	if len(p) != 5*16*2 {
-		t.Fatalf("pack has %d strategies, want %d (5 timeframes x 16 families x 2 sides)", len(p), 5*16*2)
+	// 6 indicator + 20 pattern families, on 8 timeframes, both sides.
+	if len(p) != 8*26*2 {
+		t.Fatalf("pack has %d strategies, want %d (8 timeframes x 26 families x 2 sides)", len(p), 8*26*2)
 	}
 	seen := map[string]bool{}
 	for _, e := range p {
@@ -49,6 +49,8 @@ func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 		"MTF_15m_TrendPullback_Long", "MTF_1d_Breakout55_Short", "MTF_4h_BollingerFade_Long",
 		"MTF_1h_Engulfing_Long", "MTF_4h_PinBar_Short", "MTF_1d_DoubleTopBottom_Long",
 		"MTF_30m_StructureBreak_Short", "MTF_15m_LevelRetest_Long", "MTF_1h_TriangleBreak_Short",
+		"MTF_5m_HeadShoulders_Short", "MTF_1m_Marubozu_Long", "MTF_10m_Flag_Long",
+		"MTF_4h_HeikinAshiFlip_Short", "MTF_1d_TripleTopBottom_Long", "MTF_30m_FibRetrace_Long",
 	} {
 		if !seen[want] {
 			t.Errorf("missing %s", want)
