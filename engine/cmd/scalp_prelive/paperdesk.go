@@ -186,6 +186,42 @@ var livePaperBooks = func() map[string]*livePaperDesk {
 	return m
 }()
 
+// paperSeedBook re-seeds one book's rows from its CURRENT configuration and
+// returns how many were added.
+//
+// livePaperBooks is a package-level var, so every book is constructed during
+// package init — before main() has resolved the symbol universe or registered
+// the Gold Desk's watch list. A book whose roster is only known at boot
+// therefore seeds zero rows and renders an empty board: not an error, not a
+// log line, just a desk that looks configured and lists nothing. That is the
+// same silent-zero shape this desk has hit repeatedly, so the fix is explicit
+// rather than a reordering that the next edit could undo.
+//
+// Only ADDS. Rows already present keep their accumulated figures, which makes
+// this safe to call after a restore and safe to call twice.
+func paperSeedBook(id string) int {
+	d := livePaperBooks[id]
+	if d == nil {
+		return 0
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	added := 0
+	for _, st := range delta.ScalpPaperStreamsFor(id) {
+		k := paperKey(st.Strategy, st.Symbol)
+		if d.accounts[k] != nil {
+			continue
+		}
+		d.accounts[k] = &paperAccount{
+			Strategy: st.Strategy,
+			Symbol:   strings.ToUpper(st.Symbol),
+			Live:     delta.PerpStreamPermitted(st.Strategy, st.Symbol),
+		}
+		added++
+	}
+	return added
+}
+
 // paperOnSignal offers a fill to every book that watches the stream.
 func paperOnSignal(strategy, symbol, dir string, entry, stop, target float64, ttl time.Duration) {
 	for id, d := range livePaperBooks {

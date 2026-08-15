@@ -1397,6 +1397,13 @@ func main() {
 				"(check the SCALP_MIN_TURNOVER_USD floor and Delta's product list)", missing, missing)
 		}
 		delta.SetGoldPaperStreams(gold)
+		// Seed the board now that the list exists. The books were constructed
+		// during package init, when the gold roster was still empty.
+		if n := paperSeedBook(delta.PaperAccountGold); n > 0 {
+			log.Printf("[GOLD DESK] seeded %d rows on the gold book", n)
+		} else if len(gold) > 0 {
+			log.Printf("[GOLD DESK] ⚠️  %d streams registered but NO rows seeded — the board will render empty", len(gold))
+		}
 	}
 
 	// One shared feed for the whole desk: 8 pollers serve all 800 streams.

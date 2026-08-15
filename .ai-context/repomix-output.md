@@ -129,6 +129,7 @@ The content is organized as follows:
   app/api/risk/summary/route.ts
   app/api/scalers/stats/route.ts
   app/api/scalp-demo/[...path]/route.ts
+  app/api/scalp-highvol/[...path]/route.ts
   app/api/scalp/[...path]/route.ts
   app/api/sep/bottom/route.ts
   app/api/sep/rankings/route.ts
@@ -158,6 +159,7 @@ The content is organized as follows:
   app/favicon.ico
   app/globals.css
   app/gold-desk/page.tsx
+  app/high-volume-crypto/page.tsx
   app/layout.tsx
   app/live-demo-engine/page.tsx
   app/live-engine-paper/page.tsx
@@ -1842,6 +1844,7 @@ The content is organized as follows:
   coding-standards.md
   dependency-map.md
   folder-structure.md
+  HIGH_VOLUME_CRYPTO.md
   LIVE_DEMO_ENGINE.md
   module-index.md
   onboarding-guide.md
