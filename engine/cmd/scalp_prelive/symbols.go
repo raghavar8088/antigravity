@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"antigravity-engine/internal/delta"
 )
 
 // Symbol universe.
@@ -181,7 +183,14 @@ func resolveSymbols(spec string) []string {
 				out = append(out, s)
 			}
 		}
-		return out
+		// The EXPLICIT list is filtered too.
+		//
+		// This is the path the High Volume desk uses — its symbols are named on
+		// the command line, not discovered — and it was running XRPUSD and
+		// LINKUSD, both of which measure under the gate. An operator naming a
+		// symbol is not evidence the contract can hold a stop, and a hand-written
+		// list is the least reviewed input this desk has.
+		return dropGridBlocked(out, "-symbols")
 	}
 
 	// Default floor raised from $0 on 2026-08-09.
@@ -215,8 +224,34 @@ func resolveSymbols(spec string) []string {
 		}
 	}
 	log.Printf("[SCALP] discovered %d Delta perpetual futures (turnover floor $%.0f)", len(syms), floor)
-	return syms
+	return dropGridBlocked(syms, "discovery")
+}
+
+// dropGridBlocked removes contracts whose price grid cannot hold a stop.
+//
+// Applied to the universe rather than only to the order path. A blocked symbol
+// left in the universe still runs every strategy, still books paper fills and
+// still ranks on the leaderboard — and the coarse grid that blocks the order
+// also flatters the paper fill, so those rows rank HIGH. Eight of the fourteen
+// streams promoted to the live roster on 2026-08-16 were selected that way.
+//
+// Loudly, and with the measurement: a universe that shrinks without saying why
+// is indistinguishable from a discovery call that half failed.
+func dropGridBlocked(symbols []string, source string) []string {
+	kept, dropped := delta.FilterGridBlockedSymbols(symbols)
+	for _, s := range dropped {
+		log.Printf("[SCALP] excluding %s (%s) — the contract cannot hold a stop: %s",
+			s, source, delta.GridBlockedReason(s))
+	}
+	if len(dropped) > 0 {
+		log.Printf("[SCALP] %d symbol(s) excluded by the tick grid; %d remain", len(dropped), len(kept))
+	}
+	return kept
 }
 
 // defaultSymbolsCSV is the original hand-picked eight, kept as the fallback.
-const defaultSymbolsCSV = "BTCUSD,ETHUSD,SOLUSD,BNBUSD,XRPUSD,DOGEUSD,ADAUSD,AVAXUSD"
+//
+// XRPUSD was removed from it on 2026-08-16: it measures 10.0 ticks, so the
+// FALLBACK list — the one used when discovery fails, i.e. when nobody is
+// watching — would have reintroduced a symbol the desk had just excluded.
+const defaultSymbolsCSV = "BTCUSD,ETHUSD,SOLUSD,BNBUSD,DOGEUSD,ADAUSD,AVAXUSD"

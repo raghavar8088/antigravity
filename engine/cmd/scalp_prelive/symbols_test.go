@@ -7,10 +7,16 @@ import (
 
 // An explicit list must keep working exactly as before — this flag has been the
 // desk's universe since it shipped.
+//
+// SEVEN, not the original eight. XRPUSD left the fallback list on 2026-08-16
+// because it measures 10.0 ticks against a 20-tick gate. This list is what the
+// desk falls back to when symbol discovery FAILS, so a blocked symbol sitting
+// in it is a blocked symbol that appears precisely when the venue is already
+// misbehaving and nobody is reading the logs.
 func TestResolveSymbols_ExplicitListIsUnchanged(t *testing.T) {
 	got := resolveSymbols(defaultSymbolsCSV)
-	if len(got) != 8 {
-		t.Fatalf("got %d symbols from the default CSV, want 8: %v", len(got), got)
+	if len(got) != 7 {
+		t.Fatalf("got %d symbols from the default CSV, want 7: %v", len(got), got)
 	}
 	if got[0] != "BTCUSD" {
 		t.Errorf("first symbol %q, want BTCUSD", got[0])
@@ -55,7 +61,7 @@ func TestSymbolUniverse_FloorIsConfigurableAndSane(t *testing.T) {
 	// A malformed floor must not silently become a large one and empty the
 	// universe; it falls back to $0 and logs.
 	got := resolveSymbols(defaultSymbolsCSV) // explicit path, floor unused
-	if len(got) != 8 {
+	if len(got) != 7 {
 		t.Errorf("a malformed floor disturbed the explicit list: %v", got)
 	}
 }

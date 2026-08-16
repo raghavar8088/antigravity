@@ -5,24 +5,23 @@ import (
 	"testing"
 )
 
-// The roster is SIX streams from 2026-08-16, replacing the ten promoted the day
+// The roster is FOUR streams from 2026-08-16, replacing the ten promoted the day
 // before.
 //
 // The count is pinned because it is an owner decision, and because the number
-// itself carries the finding: the owner selected FOURTEEN leaderboard rows and
-// eight of them were on MOVEUSD, whose 0.00001 tick against a 0.00636728 mark
-// makes the narrowest stop in the pack 5.7 ticks wide. Those eight are excluded
-// by TestPerpRoster_ThinAndCoarseSymbolsStayOffTheVenue, so a roster of six
-// where fourteen were chosen is the correct outcome rather than a dropped edit.
+// itself carries the finding: the owner selected FOURTEEN leaderboard rows, and
+// ten of them are on contracts whose price grid cannot hold a stop — eight on
+// MOVEUSD at 5.7 ticks, two on LABUSD at 19.0 against a 20-tick gate. Both
+// symbols are in gridBlockedSymbols, so a roster of four where fourteen were
+// chosen is the correct outcome rather than a dropped edit.
 //
-// If this count ever changes to fourteen without that exclusion test changing
-// too, something added MOVEUSD back and the desk gained eight rows that can
-// never fill — the populated-but-unfillable roster this file has warned about
-// through three separate rewrites.
+// If this count ever climbs without the blocklist shrinking, something routed a
+// symbol that cannot fill — the populated-but-unfillable roster this file has
+// warned about through three separate rewrites.
 func TestDefaultScalpLiveStreams_HoldsOnlyMTFStreams(t *testing.T) {
-	if len(defaultScalpLiveStreams) != 6 {
-		t.Errorf("roster has %d streams, want the 6 promoted 2026-08-16 "+
-			"(14 selected, 8 on MOVEUSD excluded by the tick grid)", len(defaultScalpLiveStreams))
+	if len(defaultScalpLiveStreams) != 4 {
+		t.Errorf("roster has %d streams, want the 4 that clear the tick grid "+
+			"(14 selected; 8 on MOVEUSD and 2 on LABUSD excluded by it)", len(defaultScalpLiveStreams))
 	}
 	// Every retired pack name must stay off it. The Scalp100/Delta20/Curated
 	// strategies no longer exist on the desk, so a roster entry naming one

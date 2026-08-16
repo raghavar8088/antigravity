@@ -52,52 +52,52 @@ import (
 // this list is permission, not evidence.
 // Replaced 2026-08-16 at the owner's direction, from the Scalp Desk leaderboard.
 //
-// The owner selected fourteen rows. Six are here. The other eight are on
-// MOVEUSD and are NOT on this list, for a reason that was measured against the
-// live venue rather than inferred:
+// The owner selected FOURTEEN rows. Four are here. The other ten are on
+// contracts whose price grid cannot hold a stop, measured against the live
+// venue by TestPerpGridAudit_AgainstTheLiveVenue rather than inferred:
 //
-//	MOVEUSD marks at 0.00636728 against a 0.00001 tick. A 0.9% stop — the
-//	narrowest this pack produces — is 5.7 TICKS wide. The grid gate needs 20.
-//	Every order on it would be refused before sizing, so putting the eight on
-//	this list would produce a roster that looks populated and can never fill.
+//	MOVEUSD  8 rows   5.7 ticks   (mark 0.00636728, tick 0.00001)
+//	LABUSD   2 rows  19.0 ticks   (mark 0.08313850, tick 0.0001)
 //
-// Its turnover is $27,833/day, rank 100 of 220. The eight leaderboard rows that
-// ranked MOVEUSD at #1, #2, #5, #6, #9, #10, #31 and #60 were paper fills on a
-// contract whose entire day's volume is $27.8k, priced at a mid the desk's fill
-// model assumes it can always get. That is why they rank so highly: the
-// contract that cannot be traded is also the one that cannot be filled against,
-// so nothing in its paper record was ever tested by a real book.
+// The gate needs 20. Both symbols are in gridBlockedSymbols, so those ten would
+// be filtered out of this list even if someone re-added them.
 //
-// LABUSD is here and is expected to refuse as well — 7.2 ticks at the same 0.9%
-// stop. It is included because the owner chose it and because the refusal will
-// be VISIBLE: the grid gate logs a reason per signal, the UI shows the count,
-// and five consecutive refusals disable the stream automatically. An assertion
-// in a comment is worth less than a refusal the desk can show, and the two
-// LABUSD rows are the cheapest way to prove the measurement above is right.
+// Why the MOVEUSD rows ranked so high is the part worth keeping. It turns over
+// $27.8k/day and the desk fills paper at the mid, so the contract that cannot
+// be traded is also the one that cannot be filled AGAINST — nothing in its
+// paper record was ever tested by a real book. It took the top two QUALIFIED
+// slots and six more besides.
 //
-// Four streams can actually reach the venue: CROSSUSD (88 ticks), BLESSUSD
-// (80), PIEVERSEUSD (76) and GIGGLEUSD (27). Three of those four were already
-// on the previous roster.
+// The four that remain clear the grid with room: CROSSUSD (89 ticks), BLESSUSD
+// (91), PIEVERSEUSD (77), GIGGLEUSD (27). Three were already on the previous
+// roster.
 //
 // What this replaces: ten streams, of which the only one that traded with any
-// frequency was MTF_1h_TrendPullback_Long on AVAAIUSD — 8 of the desk's 11
-// live fills, net negative, and switched off by the owner at 00:11 UTC. AVAAI,
-// AIOT, AIOUSD, LINKUSD and SKYAIUSD are dropped with it.
+// frequency was MTF_1h_TrendPullback_Long on AVAAIUSD — 8 of the desk's 11 live
+// fills, net negative, and switched off by the owner at 00:11 UTC. AVAAI, AIOT,
+// AIOUSD, LINKUSD and SKYAIUSD went with it; LINKUSD is now blocked outright at
+// 15.8 ticks.
 //
 // NOT qualified, and the leaderboard says so itself. Twelve of the fourteen
-// rows read "too few" in the Qualified column; the two that read YES have 33
-// and 31 trades against a gate that asks for 200, and both are on MOVEUSD.
-// Being on this list is permission, not evidence.
+// rows read "too few" in the Qualified column; the two reading YES have 33 and
+// 31 trades against a gate asking for 200, and both were on MOVEUSD. Being on
+// this list is permission, not evidence.
 var defaultScalpLiveStreams = []PerpStream{
-	// Executable — the stop clears the tick grid with room.
 	{Strategy: "MTF_4h_SqueezeExpansion_Short", Symbol: "CROSSUSD"},
 	{Strategy: "MTF_4h_RSITrendReset_Short", Symbol: "BLESSUSD"},
 	{Strategy: "MTF_1h_RSITrendReset_Long", Symbol: "PIEVERSEUSD"},
 	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "GIGGLEUSD"},
 
-	// Grid-marginal at 7.2 ticks. Expect refusals, then auto-disable.
-	{Strategy: "MTF_1h_RSITrendReset_Short", Symbol: "LABUSD"},
-	{Strategy: "MTF_10m_TrendPullback_Short", Symbol: "LABUSD"},
+	// The two LABUSD streams were here and are gone as of 2026-08-16.
+	//
+	// They were added the same day, deliberately, to make the grid refusal
+	// visible rather than asserted — the reasoning being that a refusal the desk
+	// can show beats a claim in a comment. It showed: LABUSD measures 19.0 ticks
+	// against a 20-tick gate, confirmed across three runs.
+	//
+	// Removed rather than left to refuse, because the argument for keeping them
+	// expired the moment the measurement existed. Two rows that log a refusal on
+	// every signal are not evidence any more, just noise on a roster.
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
@@ -135,10 +135,13 @@ var defaultScalpPaperStreams = []PerpStream{
 	// grid for a 0.35% stop. AVAAIUSD is the thin one and is worth watching for
 	// that reason as much as any other — paper cannot show slippage, so a
 	// result there will look better than a live one would.
-	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "COOKIEUSD"},
-	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "COOKIEUSD"},
-	{Strategy: "Ornstein_Uhlenbeck_Reversion", Symbol: "COOKIEUSD"},
-	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "COOKIEUSD"},
+	// The four COOKIEUSD candidates were removed on 2026-08-16.
+	//
+	// COOKIEUSD measures 10.3 ticks against a 20-tick gate and is in
+	// gridBlockedSymbols, so they were being filtered out of every paper list
+	// anyway — four entries that read as "being watched" and were watching
+	// nothing. It is also the symbol the grid gate's own comment was written
+	// about, which is a fitting place for this list to have kept them.
 	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "TSTUSD"},
 	{Strategy: "ANTI_M1_RSI2_10_90_T20_Long", Symbol: "TSTUSD"},
 	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Long", Symbol: "SAGAUSD"},
@@ -652,7 +655,17 @@ func ScalpPaperStreams() []PerpStream {
 			out = append(out, st)
 		}
 	}
-	return out
+	// Paper is filtered too, and that is the point rather than a side effect.
+	//
+	// The instinct is to let candidates paper-trade anything and gate only the
+	// venue. That is what produced this work: MOVEUSD paper-traded for a week,
+	// filled at the mid on a contract with no book behind it, and took the top
+	// two QUALIFIED slots on the leaderboard. Watching a market the desk can
+	// never trade does not produce a harmless record — it produces a persuasive
+	// one, because the same coarse grid that blocks the order also flatters the
+	// fill.
+	kept, _ := FilterGridBlockedStreams(out)
+	return kept
 }
 
 // PerpStreamPaperPermitted reports whether a stream may PAPER trade.
@@ -677,7 +690,7 @@ func PerpStreamPaperPermitted(strategy, symbol string) bool {
 func ScalpLiveStreams() []PerpStream {
 	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_STREAMS"))
 	if raw == "" {
-		return defaultScalpLiveStreams
+		return dropGridBlocked(defaultScalpLiveStreams, "built-in roster")
 	}
 	out := make([]PerpStream, 0, 8)
 	for _, part := range strings.Split(raw, ",") {
@@ -695,11 +708,31 @@ func ScalpLiveStreams() []PerpStream {
 			Symbol:   strings.ToUpper(strings.TrimSpace(bits[1])),
 		})
 	}
+	// The env override is filtered too.
+	//
+	// It exists to route a stream WITHOUT a redeploy, which is exactly the path
+	// that would otherwise reintroduce an excluded symbol — and the one nobody
+	// reviews, because it lives in a file on the box rather than in the repo.
+	out = dropGridBlocked(out, "SCALP_LIVE_STREAMS")
 	if len(out) == 0 {
 		log.Printf("[PERP LIVE] SCALP_LIVE_STREAMS parsed to nothing — falling back to the built-in selection")
-		return defaultScalpLiveStreams
+		return dropGridBlocked(defaultScalpLiveStreams, "built-in roster")
 	}
 	return out
+}
+
+// dropGridBlocked removes excluded symbols and says so.
+//
+// Loud rather than silent: a roster that quietly loses entries presents as
+// strategies that stopped signalling, which is a different problem with a
+// different investigation attached to it.
+func dropGridBlocked(streams []PerpStream, source string) []PerpStream {
+	kept, dropped := FilterGridBlockedStreams(streams)
+	for _, st := range dropped {
+		log.Printf("[PERP LIVE] %s: dropping %s on %s — the contract cannot hold a stop (%s)",
+			source, st.Strategy, st.Symbol, GridBlockedReason(st.Symbol))
+	}
+	return kept
 }
 
 // ScalpLiveStrategies is the distinct strategy names in the live selection,

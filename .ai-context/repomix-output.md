@@ -914,6 +914,8 @@ The content is organized as follows:
   delta/perp_fixed_contracts.go
   delta/perp_grid_audit_test.go
   delta/perp_grid_autodisable_test.go
+  delta/perp_grid_blocklist_test.go
+  delta/perp_grid_blocklist.go
   delta/perp_grid_gate_test.go
   delta/perp_grid_gate.go
   delta/perp_history_persist_test.go
