@@ -96,9 +96,24 @@ func (v *VolatilityTracker) StopFractionFor(ctx context.Context, symbol string) 
 	v.mu.Lock()
 	v.cache[symbol] = est
 	v.mu.Unlock()
+	// A zero estimate is NOT a zero stop, and the log must not say it is.
+	//
+	// On a quiet symbol every one-minute candle can print with high == low ==
+	// open == close: the contract trades, and the price does not move a single
+	// tick. p90 is then exactly 0, this function returns ok=false, and the caller
+	// keeps the strategy's own stop — which is correct. But the line read "stop
+	// set to 0.000%", which describes a stop at the entry price, and 47 of 79
+	// symbols printed it at once during a quiet Sunday session. That reads as a
+	// desk that has just disarmed every stop it owns.
+	if est.StopFraction <= 0 {
+		log.Printf("[PERP VOL] %s: 1m range median %.3f%% p90 %.3f%% over %d bars — no measurable movement, "+
+			"keeping the strategy's own stop",
+			symbol, est.MedianRange*100, est.P90Range*100, est.Bars)
+		return 0, false
+	}
 	log.Printf("[PERP VOL] %s: 1m range median %.3f%% p90 %.3f%% over %d bars — stop set to %.3f%%",
 		symbol, est.MedianRange*100, est.P90Range*100, est.Bars, est.StopFraction*100)
-	return est.StopFraction, est.StopFraction > 0
+	return est.StopFraction, true
 }
 
 func (v *VolatilityTracker) measure(ctx context.Context, symbol string) (volEstimate, error) {

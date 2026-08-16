@@ -1,1 +1,1 @@
-{"engine-delta":{"communities":[0,1],"files":1,"symbols":4,"top_files":[{"file":"engine/internal/delta/perp_grid_audit_test.go","symbols":4}]}}
+{"engine-delta":{"communities":[0,1,2],"files":1,"symbols":11,"top_files":[{"file":"engine/internal/delta/perp_volatility.go","symbols":11}]}}
