@@ -567,8 +567,17 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	if !t.ExpiresAt.IsZero() {
 		ttlLabel = ttl.String()
 	}
+	// fillStop/fillTarget, NOT plan.StopPrice/plan.TargetPrice.
+	//
+	// The plan's levels are distances from the PAPER entry; the ones above are
+	// what the venue actually holds. Printing the plan's made every entry line
+	// read as though the position were opened at the fill with the paper stop,
+	// and on a long that filled below its own paper stop the line printed a stop
+	// ABOVE the entry — a sign error that was not happening. Diagnosing this
+	// desk from its log is the normal path, so a log that disagrees with the
+	// venue is worse than no log.
 	log.Printf("[PERP LIVE] ✅ %s %s %s %d contracts @ %.6f | stop %.6f target %.6f ttl %s | $%.2f notional, $%.2f at risk",
-		plan.Side, plan.Symbol, strategy, plan.Contracts, fill, plan.StopPrice, plan.TargetPrice,
+		plan.Side, plan.Symbol, strategy, plan.Contracts, fill, fillStop, fillTarget,
 		ttlLabel, plan.NotionalUSD, plan.RiskUSD)
 	return t
 }

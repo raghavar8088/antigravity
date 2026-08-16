@@ -50,10 +50,20 @@ type OptionPosition struct {
 	CostBasis      float64    `json:"costBasis"`
 	EntryBTCPrice  float64    `json:"entryBtcPrice"`
 	EntryTime      time.Time  `json:"entryTime"`
-	UnrealizedPnL  float64    `json:"unrealizedPnl"`
-	PeakGainPct    float64    `json:"peakGainPct"`
-	IV             float64    `json:"iv"`
-	Delta          float64    `json:"delta"`
+	// EntryFeeUsd is the taker fee already paid to open, in dollars. Held on the
+	// position rather than recomputed at close because the cap depends on the
+	// spot price at the FILL, and that price has moved by the time the position
+	// closes — re-deriving it would book a fee the venue never charged.
+	EntryFeeUsd float64 `json:"entryFeeUsd"`
+	// UnrealizedPnL is NET of the exit fee this position will pay to close.
+	//
+	// Gross would show a winner where the close books a loss, which is the
+	// specific way an options desk lies to its operator: every open position
+	// looks better than it can be closed for, and the gap is exactly the fee.
+	UnrealizedPnL float64 `json:"unrealizedPnl"`
+	PeakGainPct   float64 `json:"peakGainPct"`
+	IV            float64 `json:"iv"`
+	Delta         float64 `json:"delta"`
 	// ShortPremium marks a position that SOLD the contract rather than bought
 	// it. Only anti-strategy mirrors are short on this desk: the exact inverse
 	// of buying a contract is selling that same contract, not buying a
@@ -68,23 +78,33 @@ type OptionPosition struct {
 
 // OptionTrade is a completed option trade
 type OptionTrade struct {
-	ID            string     `json:"id"`
-	StrategyID    int        `json:"strategyId"`
-	StrategyName  string     `json:"strategyName"`
-	OptionType    OptionType `json:"optionType"`
-	Strike        float64    `json:"strike"`
-	ExpiryMins    int        `json:"expiryMins"`
-	EntryPremium  float64    `json:"entryPremium"`
-	ExitPremium   float64    `json:"exitPremium"`
-	Quantity      float64    `json:"quantity"`
-	CostBasis     float64    `json:"costBasis"`
-	NetPnL        float64    `json:"netPnl"`
-	ReturnPct     float64    `json:"returnPct"`
-	EntryBTCPrice float64    `json:"entryBtcPrice"`
-	ExitBTCPrice  float64    `json:"exitBtcPrice"`
-	EntryTime     time.Time  `json:"entryTime"`
-	ExitTime      time.Time  `json:"exitTime"`
-	ExitReason    string     `json:"exitReason"`
+	ID           string     `json:"id"`
+	StrategyID   int        `json:"strategyId"`
+	StrategyName string     `json:"strategyName"`
+	OptionType   OptionType `json:"optionType"`
+	Strike       float64    `json:"strike"`
+	ExpiryMins   int        `json:"expiryMins"`
+	EntryPremium float64    `json:"entryPremium"`
+	ExitPremium  float64    `json:"exitPremium"`
+	Quantity     float64    `json:"quantity"`
+	CostBasis    float64    `json:"costBasis"`
+	// GrossPnL is the result BEFORE fees — what this desk used to report as
+	// "netPnl" while charging nothing.
+	GrossPnL float64 `json:"grossPnl"`
+	// FeesUsd is the round trip: Delta's taker fee on the way in plus the way
+	// out, each 0.03% of underlying notional and each capped at 10% of premium.
+	FeesUsd float64 `json:"feesUsd"`
+	// FeeDragPct is fees as a share of gross profit. On cheap premiums the cap
+	// binds and this runs to 20% and beyond before the market has moved, which
+	// is the single fact that decided the real-money options desk.
+	FeeDragPct    float64   `json:"feeDragPct"`
+	NetPnL        float64   `json:"netPnl"`
+	ReturnPct     float64   `json:"returnPct"`
+	EntryBTCPrice float64   `json:"entryBtcPrice"`
+	ExitBTCPrice  float64   `json:"exitBtcPrice"`
+	EntryTime     time.Time `json:"entryTime"`
+	ExitTime      time.Time `json:"exitTime"`
+	ExitReason    string    `json:"exitReason"`
 }
 
 // StrategyRosterState describes whether a strategy is funded, being observed, or sidelined.
@@ -130,14 +150,23 @@ type StrategyStatus struct {
 
 // AggregateStats for the options engine
 type AggregateStats struct {
-	Balance           float64 `json:"balance"`
-	Equity            float64 `json:"equity"`
-	TotalTrades       int     `json:"totalTrades"`
-	OpenPositions     int     `json:"openPositions"`
-	TotalWins         int     `json:"totalWins"`
-	TotalLosses       int     `json:"totalLosses"`
-	WinRate           float64 `json:"winRate"`
-	TotalPnL          float64 `json:"totalPnl"`
+	Balance       float64 `json:"balance"`
+	Equity        float64 `json:"equity"`
+	TotalTrades   int     `json:"totalTrades"`
+	OpenPositions int     `json:"openPositions"`
+	TotalWins     int     `json:"totalWins"`
+	TotalLosses   int     `json:"totalLosses"`
+	WinRate       float64 `json:"winRate"`
+	TotalPnL      float64 `json:"totalPnl"`
+	// TotalGrossPnL and TotalFees restate TotalPnL as the equation it is: gross
+	// minus fees. Three numbers rather than one, so the cost of trading is a
+	// figure on the page instead of something a reader trusts was handled.
+	TotalGrossPnL float64 `json:"totalGrossPnl"`
+	TotalFees     float64 `json:"totalFees"`
+	// AvgFeePerTrade is TotalFees / closed trades — what one round trip costs at
+	// the size this desk actually trades.
+	AvgFeePerTrade    float64 `json:"avgFeePerTrade"`
+	FeeDragPct        float64 `json:"feeDragPct"`
 	TotalPremiumSpent float64 `json:"totalPremiumSpent"`
 	UnrealizedPnL     float64 `json:"unrealizedPnl"`
 }

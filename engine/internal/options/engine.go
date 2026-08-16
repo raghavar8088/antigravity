@@ -780,7 +780,11 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 
-	e.balance -= pos.CostBasis
+	// The entry fee leaves the balance with the premium. Stored on the position
+	// so the close can report the round trip rather than re-deriving it from a
+	// spot price that has since moved.
+	pos.EntryFeeUsd = optionFeeUSD(pos.EntryBTCPrice, pos.EntryPremium, pos.Quantity)
+	e.balance -= pos.CostBasis + pos.EntryFeeUsd
 	s.position = pos
 	// Tally entries taken on the fallback venue. Those trades are real, but they
 	// were priced on a book the Live Engine does not execute against, so a
@@ -983,6 +987,10 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	} else {
 		pos.UnrealizedPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
 	}
+	// Net of the round trip: the entry fee is already spent, and the exit fee is
+	// unavoidable at this mark. Showing the gross figure here would mean every
+	// open position reads better than it can be closed for.
+	pos.UnrealizedPnL -= pos.EntryFeeUsd + optionFeeUSD(e.lastPrice, pos.CurrentPremium, pos.Quantity)
 
 	// A mirror runs NO exit policy of its own. The rules below are long-premium
 	// rules — trailing stops on gains, theta-bleed cutoffs, thesis breaks — and
@@ -1055,7 +1063,6 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 	// has gone is no longer an inverse of anything.
 	e.closeMirrorLocked(s, reason, now)
 
-	netPnL := pos.UnrealizedPnL
 	returnPct := 0.0
 	if pos.EntryPremium > 0 {
 		returnPct = (pos.CurrentPremium - pos.EntryPremium) / pos.EntryPremium * 100
@@ -1063,12 +1070,23 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 			returnPct = -returnPct
 		}
 	}
-	// UnrealizedPnL is only refreshed by mark-to-market, which a mirror skips
-	// once it has returned early. Recompute from the settling premium so the
-	// booked P&L is the one both halves actually settled on.
+
+	// Booked from the settling premium rather than from UnrealizedPnL. That
+	// field is only refreshed by mark-to-market, which a mirror skips once it
+	// has returned early, so reading it would book a stale figure for exactly
+	// the positions whose P&L has to cancel against their original.
+	grossPnL := (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
 	if pos.ShortPremium {
-		netPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+		grossPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
 	}
+	// The round trip: what was paid to get in, plus what the venue takes to get
+	// out at this mark. Both sides pay — a mirrored pair therefore nets to minus
+	// two lots of fees rather than to zero, which is the property anti_mirror.go
+	// documents and could not previously demonstrate, because the desk charged
+	// nothing.
+	exitFee := optionFeeUSD(e.lastPrice, pos.CurrentPremium, pos.Quantity)
+	feesUsd := pos.EntryFeeUsd + exitFee
+	netPnL := grossPnL - feesUsd
 
 	// Long: sell to close, receive the current option value.
 	// Short (mirror): buy to close, pay it. The premium was credited at open, so
@@ -1079,6 +1097,9 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 	} else {
 		e.balance += pos.CurrentPremium * pos.Quantity
 	}
+	// The exit fee leaves the balance whichever way the close went. The entry
+	// fee was already taken when the position opened.
+	e.balance -= exitFee
 
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,
@@ -1091,6 +1112,9 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		ExitPremium:   pos.CurrentPremium,
 		Quantity:      pos.Quantity,
 		CostBasis:     pos.CostBasis,
+		GrossPnL:      grossPnL,
+		FeesUsd:       feesUsd,
+		FeeDragPct:    feeDragPct(grossPnL, feesUsd),
 		NetPnL:        netPnL,
 		ReturnPct:     returnPct,
 		EntryBTCPrice: pos.EntryBTCPrice,
@@ -1320,13 +1344,26 @@ func (e *Engine) aggregateStatsLocked() AggregateStats {
 			openMarketValue += s.position.CurrentPremium * s.position.Quantity
 		}
 	}
+	// Fees come from the CLOSED trade record. A strategy's TotalPnL is already
+	// net, so summing fees from anywhere else would double-count them.
+	var totalFees, totalGross float64
 	for _, t := range e.trades {
 		totalPremiumSpent += t.CostBasis
+		totalFees += t.FeesUsd
+		totalGross += t.GrossPnL
 	}
 
 	winRate := 0.0
 	if totalTrades > 0 {
 		winRate = float64(wins) / float64(totalTrades) * 100
+	}
+
+	// Averaged over CLOSED trades — the only population that has paid a round
+	// trip. totalTrades counts each strategy's lifetime tally, so dividing by it
+	// would understate the per-trade cost.
+	avgFee := 0.0
+	if n := len(e.trades); n > 0 {
+		avgFee = totalFees / float64(n)
 	}
 
 	return AggregateStats{
@@ -1338,6 +1375,10 @@ func (e *Engine) aggregateStatsLocked() AggregateStats {
 		TotalLosses:       losses,
 		WinRate:           winRate,
 		TotalPnL:          totalPnL,
+		TotalGrossPnL:     totalGross,
+		TotalFees:         totalFees,
+		AvgFeePerTrade:    avgFee,
+		FeeDragPct:        feeDragPct(totalGross, totalFees),
 		TotalPremiumSpent: totalPremiumSpent,
 		UnrealizedPnL:     unrealizedPnL,
 	}

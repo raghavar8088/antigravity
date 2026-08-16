@@ -1026,6 +1026,9 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		ExitPremium:   pos.CurrentPremium,
 		Quantity:      pos.Quantity,
 		CostBasis:     pos.CostBasis,
+		GrossPnL:      grossPnL,
+		FeesUsd:       entryFees,
+		FeeDragPct:    feeDragPct(grossPnL, entryFees),
 		NetPnL:        netPnL,
 		ReturnPct:     returnPct,
 		EntryBTCPrice: pos.EntryBTCPrice,
@@ -1262,13 +1265,27 @@ func (e *Engine) aggregateStatsLocked() AggregateStats {
 			openMarketValue += s.position.CurrentPremium * s.position.Quantity
 		}
 	}
+	// Fees come from the CLOSED trade record, not from the per-strategy stats.
+	// A strategy's TotalPnL is already net, so summing fees anywhere else would
+	// either double-count them or invent them.
+	var totalFees, totalGross float64
 	for _, t := range e.trades {
 		totalPremiumSpent += t.CostBasis
+		totalFees += t.FeesUsd
+		totalGross += t.GrossPnL
 	}
 
 	winRate := 0.0
 	if totalTrades > 0 {
 		winRate = float64(wins) / float64(totalTrades) * 100
+	}
+
+	// Averaged over CLOSED trades, which is the only population that has paid a
+	// fee. Dividing by totalTrades — which counts every strategy's lifetime
+	// count, open positions included — would quietly understate it.
+	avgFee := 0.0
+	if n := len(e.trades); n > 0 {
+		avgFee = totalFees / float64(n)
 	}
 
 	return AggregateStats{
@@ -1280,6 +1297,10 @@ func (e *Engine) aggregateStatsLocked() AggregateStats {
 		TotalLosses:       losses,
 		WinRate:           winRate,
 		TotalPnL:          totalPnL,
+		TotalGrossPnL:     totalGross,
+		TotalFees:         totalFees,
+		AvgFeePerTrade:    avgFee,
+		FeeDragPct:        feeDragPct(totalGross, totalFees),
 		TotalPremiumSpent: totalPremiumSpent,
 		UnrealizedPnL:     unrealizedPnL,
 	}

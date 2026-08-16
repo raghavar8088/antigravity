@@ -912,6 +912,7 @@ The content is organized as follows:
   delta/perp_dust_test.go
   delta/perp_fixed_contracts_test.go
   delta/perp_fixed_contracts.go
+  delta/perp_grid_audit_test.go
   delta/perp_grid_autodisable_test.go
   delta/perp_grid_gate_test.go
   delta/perp_grid_gate.go
@@ -1193,6 +1194,7 @@ The content is organized as follows:
   options/controls.go
   options/engine_test.go
   options/engine.go
+  options/fee_model_test.go
   options/feed_gate_test.go
   options/feed_gate.go
   options/hunt_mode_test.go

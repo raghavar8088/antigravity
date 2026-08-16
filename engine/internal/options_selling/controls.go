@@ -56,7 +56,12 @@ const (
 	DELTA_MAX_QUANTITY  = 500 // 500 contracts max (capped for retail)
 	DELTA_MIN_QUANTITY  = 50  // minimum 50 contracts
 
-	// Round-trip fee on notional (conservative for short options)
+	// Round-trip fee on notional (conservative for short options).
+	//
+	// Charged once at open, on premium x quantity, and deducted from the credit
+	// the seller receives. It has always been charged; what changed on
+	// 2026-08-15 is that the amount now reaches the API and the page instead of
+	// vanishing into a single net figure.
 	ROUND_TRIP_FEE_PCT = 0.0010 // 0.10%
 
 	// Delta Exchange BTC option contract size. One contract controls 0.001 BTC,
@@ -268,4 +273,22 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 	default:
 		return price <= fast*1.002 && mom3 <= 0.0003
 	}
+}
+
+// feeDragPct is fees as a percentage of GROSS PROFIT — not of premium, and not
+// of notional.
+//
+// It answers "how much of what this trade earned did the venue take", which is
+// the only form of the question that decides whether a strategy is worth
+// trading. A fee that is 2% of notional sounds negligible and can still be 80%
+// of the edge on a thin premium.
+//
+// Losers return 0 rather than a negative or a divide-by-zero: drag is undefined
+// when there was no profit to give away, and printing "-140%" there would read
+// as a good number on a bad trade.
+func feeDragPct(grossPnL, fees float64) float64 {
+	if grossPnL <= 0 || fees <= 0 {
+		return 0
+	}
+	return fees / grossPnL * 100
 }

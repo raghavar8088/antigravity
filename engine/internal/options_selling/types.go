@@ -68,23 +68,38 @@ type OptionPosition struct {
 
 // OptionTrade is a completed option trade
 type OptionTrade struct {
-	ID            string     `json:"id"`
-	StrategyID    int        `json:"strategyId"`
-	StrategyName  string     `json:"strategyName"`
-	OptionType    OptionType `json:"optionType"`
-	Strike        float64    `json:"strike"`
-	ExpiryMins    int        `json:"expiryMins"`
-	EntryPremium  float64    `json:"entryPremium"`
-	ExitPremium   float64    `json:"exitPremium"`
-	Quantity      float64    `json:"quantity"`
-	CostBasis     float64    `json:"costBasis"`
-	NetPnL        float64    `json:"netPnl"`
-	ReturnPct     float64    `json:"returnPct"`
-	EntryBTCPrice float64    `json:"entryBtcPrice"`
-	ExitBTCPrice  float64    `json:"exitBtcPrice"`
-	EntryTime     time.Time  `json:"entryTime"`
-	ExitTime      time.Time  `json:"exitTime"`
-	ExitReason    string     `json:"exitReason"`
+	ID           string     `json:"id"`
+	StrategyID   int        `json:"strategyId"`
+	StrategyName string     `json:"strategyName"`
+	OptionType   OptionType `json:"optionType"`
+	Strike       float64    `json:"strike"`
+	ExpiryMins   int        `json:"expiryMins"`
+	EntryPremium float64    `json:"entryPremium"`
+	ExitPremium  float64    `json:"exitPremium"`
+	Quantity     float64    `json:"quantity"`
+	CostBasis    float64    `json:"costBasis"`
+	// GrossPnL is the result BEFORE the round-trip fee.
+	//
+	// Reported alongside net and fees so the subtraction is visible rather than
+	// assumed. This desk has always charged the fee — it comes out of the
+	// premium credited at open — but until now only the net survived to the API,
+	// and a net figure with no gross beside it gives a reader no way to tell
+	// whether the fee was already taken out. Half this codebase's worst days
+	// have come from reading a fee-free number as a fee-honest one.
+	GrossPnL float64 `json:"grossPnl"`
+	// FeesUsd is what the venue took on this trade, in dollars.
+	FeesUsd float64 `json:"feesUsd"`
+	// FeeDragPct is the fee as a share of gross profit, and it is the number
+	// that decides a short-premium desk. A strategy handing back 40% of its edge
+	// needs that edge to be durable; one above 100% is paying to trade.
+	FeeDragPct    float64   `json:"feeDragPct"`
+	NetPnL        float64   `json:"netPnl"`
+	ReturnPct     float64   `json:"returnPct"`
+	EntryBTCPrice float64   `json:"entryBtcPrice"`
+	ExitBTCPrice  float64   `json:"exitBtcPrice"`
+	EntryTime     time.Time `json:"entryTime"`
+	ExitTime      time.Time `json:"exitTime"`
+	ExitReason    string    `json:"exitReason"`
 }
 
 // StrategyRosterState describes whether a strategy is funded, being observed, or sidelined.
@@ -130,14 +145,25 @@ type StrategyStatus struct {
 
 // AggregateStats for the options engine
 type AggregateStats struct {
-	Balance           float64 `json:"balance"`
-	Equity            float64 `json:"equity"`
-	TotalTrades       int     `json:"totalTrades"`
-	OpenPositions     int     `json:"openPositions"`
-	TotalWins         int     `json:"totalWins"`
-	TotalLosses       int     `json:"totalLosses"`
-	WinRate           float64 `json:"winRate"`
-	TotalPnL          float64 `json:"totalPnl"`
+	Balance       float64 `json:"balance"`
+	Equity        float64 `json:"equity"`
+	TotalTrades   int     `json:"totalTrades"`
+	OpenPositions int     `json:"openPositions"`
+	TotalWins     int     `json:"totalWins"`
+	TotalLosses   int     `json:"totalLosses"`
+	WinRate       float64 `json:"winRate"`
+	TotalPnL      float64 `json:"totalPnl"`
+	// TotalGrossPnL and TotalFees restate TotalPnL as the equation it is:
+	// gross minus fees. Shown as three numbers rather than one so the cost of
+	// trading is a figure on the page, not something a reader has to trust was
+	// handled somewhere upstream.
+	TotalGrossPnL float64 `json:"totalGrossPnl"`
+	TotalFees     float64 `json:"totalFees"`
+	// AvgFeePerTrade is TotalFees / closed trades. The per-trade figure is what
+	// tells an operator whether the desk's edge clears its own costs at the size
+	// it actually trades.
+	AvgFeePerTrade    float64 `json:"avgFeePerTrade"`
+	FeeDragPct        float64 `json:"feeDragPct"`
 	TotalPremiumSpent float64 `json:"totalPremiumSpent"`
 	UnrealizedPnL     float64 `json:"unrealizedPnl"`
 }

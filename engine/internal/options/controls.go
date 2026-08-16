@@ -115,7 +115,56 @@ const (
 	DELTA_BASE_QUANTITY = 200
 	DELTA_MAX_QUANTITY  = 500
 	DELTA_MIN_QUANTITY  = 50
+
+	// Delta's option taker fee: 0.03% of UNDERLYING NOTIONAL per side, capped at
+	// 10% of the premium per side.
+	//
+	// Charged from 2026-08-15. Before that this desk charged nothing at all and
+	// called the result "netPnl", which made every strategy here look better
+	// than it could ever trade. That was not a hypothetical: the Live Engine
+	// went to real money on strategies qualified on this desk and bled, and the
+	// post-mortem named the fee cap first — on a $0.19 premium the cap binds and
+	// the round trip costs 20% of the position before the market moves at all.
+	// chain_pricer.go has said in a comment since it was written that fee-free
+	// pricing is why paper results here never transferred. Now the desk charges
+	// what the venue charges.
+	DELTA_OPTION_FEE_PCT_OF_NOTIONAL = 0.0003
+	DELTA_OPTION_FEE_CAP_OF_PREMIUM  = 0.10
 )
+
+// optionFeeUSD is the taker fee for ONE side, in dollars.
+//
+// spot is the underlying price at the fill, premium is the per-BTC option
+// price, and qty is BTC exposure. The cap is what makes cheap options
+// uneconomic and is the entire reason this function is not a single
+// multiplication: 0.03% of notional is trivial on a $2 premium and ruinous on a
+// $0.19 one, where it lands on the 10% ceiling instead.
+func optionFeeUSD(spot, premium, qty float64) float64 {
+	if qty <= 0 || spot <= 0 {
+		return 0
+	}
+	notionalFee := DELTA_OPTION_FEE_PCT_OF_NOTIONAL * spot * qty
+	premiumCap := DELTA_OPTION_FEE_CAP_OF_PREMIUM * premium * qty
+	if premiumCap > 0 && notionalFee > premiumCap {
+		return premiumCap
+	}
+	return notionalFee
+}
+
+// feeDragPct is fees as a percentage of GROSS PROFIT — not of premium, and not
+// of notional. It answers "how much of what this trade earned did the venue
+// take", which is the only form of the question that decides whether a strategy
+// is worth trading.
+//
+// Losers return 0 rather than a negative: drag is undefined when there was no
+// profit to give away, and printing "-140%" there would read as a good number
+// on a bad trade.
+func feeDragPct(grossPnL, fees float64) float64 {
+	if grossPnL <= 0 || fees <= 0 {
+		return 0
+	}
+	return fees / grossPnL * 100
+}
 
 func newStrategyState(def StrategyDef) *strategyState {
 	def.PositionUSD = optionTradeAllocationUSD()
