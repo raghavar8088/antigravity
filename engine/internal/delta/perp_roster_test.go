@@ -344,71 +344,95 @@ func TestPerpRoster_ThinAndCoarseSymbolsStayOffTheVenue(t *testing.T) {
 }
 
 // Every symbol on the live roster must be checked against the REAL price grid,
-// with the venue's own mark and tick, not against a claim that it is fine.
+// with the venue's own mark and tick AND its own measured stop.
 //
-// The measurements below were read from api.india.delta.exchange on 2026-08-16.
-// They are pinned here because the roster's comment block reasons from them, and
-// a comment that reasons from numbers nobody can re-run is a comment that will
-// be wrong without anyone noticing — which is exactly how the MOVEUSD exclusion
-// above came to sit on a stale liquidity figure for eight days.
+// The readings below were taken from api.india.delta.exchange on 2026-08-16 by
+// TestPerpGridAudit_AgainstTheLiveVenue. They are pinned here because the
+// roster's comment block reasons from them, and a comment reasoning from
+// numbers nobody can re-run is a comment that will go wrong unnoticed — which
+// is exactly what happened to the MOVEUSD exclusion, right for eight days on a
+// liquidity figure that had expired.
 //
-// 0.9% is the narrowest stop the MTF pack produces (1.5x ATR on the quietest
-// symbols), so it is the width that decides whether a contract is tradeable.
+// The stop fraction is per symbol, NOT a flat 0.9%. The bridge replaces the
+// strategy's stop with 2x the measured p90 one-minute range before the grid
+// check, so a shared assumption here would be testing a gate that does not
+// exist. That assumption is what produced eleven false passes in the first
+// audit. Where no estimate existed — the market was flat enough that every 1m
+// candle printed high == low — 0.9% is recorded and marked as such.
 func TestPerpRoster_LiveSymbolsWereMeasuredAgainstTheRealGrid(t *testing.T) {
-	const narrowestStopFrac = 0.009
+	// symbol -> mark, tick, stop fraction as measured.
+	type reading struct{ mark, tick, stopFrac float64 }
+	venue := map[string]reading{
+		"HUSD":        {0.10492112, 1e-05, 0.04531},
+		"VELVETUSD":   {1.04028950, 1e-04, 0.04046},
+		"AIOUSD":      {0.06617364, 1e-05, 0.03279},
+		"AVAAIUSD":    {0.01391174, 1e-06, 0.01302},
+		"SKYAIUSD":    {0.07038382, 1e-05, 0.01960},
+		"BEATUSD":     {0.40188014, 1e-04, 0.02963},
+		"CHIPUSD":     {0.03026841, 1e-05, 0.02677},
+		"CROSSUSD":    {0.09625047, 1e-05, 0.00811},
+		"PIEVERSEUSD": {0.85201017, 1e-04, 0.00900}, // no estimate; assumed
+		"ARCUSD":      {0.07209041, 1e-05, 0.00900}, // no estimate; assumed
+		"BLESSUSD":    {0.00900592, 1e-06, 0.00665},
+		"AIOTUSD":     {0.04551320, 1e-05, 0.00900}, // no estimate; assumed
+		"GIGGLEUSD":   {36.7056050, 1e-02, 0.00900}, // no estimate; assumed
+		"EDENUSD":     {0.04638876, 1e-05, 0.00674},
+		"PUMPUSD":     {0.00270873, 1e-06, 0.00900}, // no estimate; assumed
+		"TSTUSD":      {0.01468276, 1e-06, 0.00140},
 
-	// symbol -> (mark, tick) as the venue reported them.
-	venue := map[string][2]float64{
-		"CROSSUSD":    {0.09741207, 1e-05},
-		"BLESSUSD":    {0.00883103, 1e-06},
-		"PIEVERSEUSD": {0.84689994, 1e-04},
-		"GIGGLEUSD":   {30.178807, 1e-02},
-		"LABUSD":      {0.07969152, 1e-04},
-		"MOVEUSD":     {0.00636728, 1e-05},
+		// Held OFF the roster: they fail the gate today but their grids are
+		// fine, so they are not in gridBlockedSymbols. Recorded here so the
+		// roster comment's claim about them can be re-run.
+		"XAIUSD":    {0.00697516, 1e-05, 0.02006},
+		"ZECUSD":    {492.351250, 1e-02, 0.00024},
+		"SWARMSUSD": {0.00880042, 1e-06, 0.00093},
+
+		// Permanently blocked, kept for the assertions below.
+		"MOVEUSD": {0.00636728, 1e-05, 0.00900},
+		"LABUSD":  {0.08313850, 1e-04, 0.02287},
 	}
 	reg := &PerpRegistry{bySymbol: map[string]PerpProduct{}, fetchedAt: time.Now()}
-	for sym, mt := range venue {
-		reg.bySymbol[sym] = PerpProduct{Symbol: sym, MarkPrice: mt[0], TickSize: mt[1], ContractValue: 1}
+	for sym, r := range venue {
+		reg.bySymbol[sym] = PerpProduct{Symbol: sym, MarkPrice: r.mark, TickSize: r.tick, ContractValue: 1}
 	}
-
 	ticksFor := func(sym string) float64 {
-		mark := venue[sym][0]
-		ticks, _ := stopGridTicks(reg, sym, mark, mark*(1-narrowestStopFrac))
+		r := venue[sym]
+		ticks, _ := stopGridTicks(reg, sym, r.mark, r.mark*(1-r.stopFrac))
 		return ticks
 	}
 
-	// MOVEUSD is the claim the roster comment rests on. If this ever passes 20,
-	// the eight excluded streams deserve reconsidering — and this test is where
-	// that would be discovered.
-	if got := ticksFor("MOVEUSD"); got >= minEntryStopTicks {
-		t.Errorf("MOVEUSD now measures %.1f ticks (>= %d): the roster excludes eight streams on the "+
-			"grounds that it cannot express a stop, and that reason no longer holds", got, minEntryStopTicks)
-	}
-
-	// LABUSD is on the roster and expected to REFUSE. Asserting the refusal
-	// keeps the roster comment honest: it says these two rows exist to make the
-	// measurement visible, so the day LABUSD starts clearing the grid is the day
-	// that justification stops being true.
-	if got := ticksFor("LABUSD"); got >= minEntryStopTicks {
-		t.Errorf("LABUSD measures %.1f ticks and now CLEARS the grid; the roster documents it as "+
-			"grid-marginal and expected to refuse", got)
-	}
-
-	// The four that were promoted as executable have to actually be executable,
-	// or the roster is the populated-but-unfillable list this file warns about.
-	for _, sym := range []string{"CROSSUSD", "BLESSUSD", "PIEVERSEUSD", "GIGGLEUSD"} {
-		if got := ticksFor(sym); got < minEntryStopTicks {
-			t.Errorf("%s measures %.1f ticks, under the %d-tick minimum — it is on the live roster "+
-				"as an executable stream and could never place an order", sym, got, minEntryStopTicks)
+	// Every roster symbol must clear the gate at its OWN measured stop. These
+	// are the streams that spend real money.
+	for _, st := range ScalpLiveStreams() {
+		if _, ok := venue[st.Symbol]; !ok {
+			t.Errorf("%s (%s) is on the live roster with no measured mark/tick/stop here; "+
+				"add the venue's figures so the grid claim can be re-run", st.Symbol, st.Strategy)
+			continue
+		}
+		if got := ticksFor(st.Symbol); got < minEntryStopTicks {
+			t.Errorf("%s measures %.1f ticks, under the %d-tick minimum, but carries live stream %s",
+				st.Symbol, got, minEntryStopTicks, st.Strategy)
 		}
 	}
 
-	// And the roster must not name a symbol nobody measured. A new entry added
-	// without a reading here is the failure mode this whole test exists for.
-	for _, st := range ScalpLiveStreams() {
-		if _, ok := venue[st.Symbol]; !ok {
-			t.Errorf("%s (%s) is on the live roster but has no measured mark/tick in this test; "+
-				"add the venue's figures so the grid claim can be re-run", st.Symbol, st.Strategy)
+	// The three held back must actually fail, or the reason they were held back
+	// is wrong and seven streams were dropped for nothing.
+	for _, sym := range []string{"XAIUSD", "ZECUSD", "SWARMSUSD"} {
+		if got := ticksFor(sym); got >= minEntryStopTicks {
+			t.Errorf("%s now measures %.1f ticks and CLEARS the gate; the roster holds 7 streams "+
+				"back on the grounds that it does not", sym, got)
+		}
+		if IsGridBlocked(sym) {
+			t.Errorf("%s was added to gridBlockedSymbols; it fails on VOLATILITY, not on its grid, "+
+				"and blocking it permanently would ban a contract that recovers on its own", sym)
+		}
+	}
+
+	// And the permanent exclusions must stay failing at any plausible stop.
+	for _, sym := range []string{"MOVEUSD", "LABUSD"} {
+		if got := ticksFor(sym); got >= minEntryStopTicks {
+			t.Errorf("%s measures %.1f ticks; it is permanently blocked on the grounds that it cannot "+
+				"hold a stop, and that no longer holds", sym, got)
 		}
 	}
 }

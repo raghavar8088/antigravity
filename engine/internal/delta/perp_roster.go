@@ -50,54 +50,108 @@ import (
 // NOT qualified. The gate asks for 200 trades per stream and these have 19-61,
 // selected from the right tail of 2,416 streams on in-sample data. Being on
 // this list is permission, not evidence.
-// Replaced 2026-08-16 at the owner's direction, from the Scalp Desk leaderboard.
+// Replaced 2026-08-16 (second selection) at the owner's direction, from the
+// Scalp Desk leaderboard.
 //
-// The owner selected FOURTEEN rows. Four are here. The other ten are on
-// contracts whose price grid cannot hold a stop, measured against the live
-// venue by TestPerpGridAudit_AgainstTheLiveVenue rather than inferred:
+// The owner picked 39 streams across 19 symbols. 32 are here; the previous
+// roster's BLESSUSD RSITrendReset_Short is kept alongside them, since this was
+// an ADD rather than a replacement. Total 33.
 //
-//	MOVEUSD  8 rows   5.7 ticks   (mark 0.00636728, tick 0.00001)
-//	LABUSD   2 rows  19.0 ticks   (mark 0.08313850, tick 0.0001)
+// SEVEN are held back, on three symbols that fail the grid gate TODAY:
 //
-// The gate needs 20. Both symbols are in gridBlockedSymbols, so those ten would
-// be filtered out of this list even if someone re-added them.
+//	XAIUSD     14.0 ticks   stop 2.006%   needs > 2.87%   (4 streams)
+//	ZECUSD     12.0 ticks   stop 0.024%   needs > 0.041%  (1 stream)
+//	SWARMSUSD   8.2 ticks   stop 0.093%   needs > 0.227%  (2 streams)
 //
-// Why the MOVEUSD rows ranked so high is the part worth keeping. It turns over
-// $27.8k/day and the desk fills paper at the mid, so the contract that cannot
-// be traded is also the one that cannot be filled AGAINST — nothing in its
-// paper record was ever tested by a real book. It took the top two QUALIFIED
-// slots and six more besides.
+// These are NOT in gridBlockedSymbols and must not be added to it. The
+// distinction is the whole point: MOVEUSD and LABUSD fail because their tick is
+// coarse relative to price, which is a permanent property of the contract.
+// These three have fine grids and are simply too quiet — ZECUSD ticks at 0.01
+// against a 492 mark, one of the finest grids on the venue, and fails only
+// because 2x its p90 one-minute range is 0.024%. It measured 438 ticks in
+// yesterday's run against an ASSUMED 0.9% stop. When the market moves, they
+// become tradeable on their own, and the runtime gate is what decides.
 //
-// The four that remain clear the grid with room: CROSSUSD (89 ticks), BLESSUSD
-// (91), PIEVERSEUSD (77), GIGGLEUSD (27). Three were already on the previous
-// roster.
+// Holding them off the roster rather than letting them be refused is the lesson
+// from the LABUSD rows added and removed earlier today: once the measurement
+// exists, rows that log a refusal per signal are noise, not evidence.
 //
-// What this replaces: ten streams, of which the only one that traded with any
-// frequency was MTF_1h_TrendPullback_Long on AVAAIUSD — 8 of the desk's 11 live
-// fills, net negative, and switched off by the owner at 00:11 UTC. AVAAI, AIOT,
-// AIOUSD, LINKUSD and SKYAIUSD went with it; LINKUSD is now blocked outright at
-// 15.8 ticks.
+// EVIDENCE, honestly stated. One row is QUALIFIED — MTF_1h_LevelRetest_Long on
+// AIOUSD, 31 trades, and its win rate is 35.5%. Everything else reads "too few".
+// Three of them have 2-3 trades at a 100% win rate, which is what 2-3 trades
+// look like when they happen to win, not an edge. The gate asks for 200.
 //
-// NOT qualified, and the leaderboard says so itself. Twelve of the fourteen
-// rows read "too few" in the Qualified column; the two reading YES have 33 and
-// 31 trades against a gate asking for 200, and both were on MOVEUSD. Being on
-// this list is permission, not evidence.
+// Throughput does not scale with the list. Ten positions may be open at once
+// and one per symbol, so 33 streams compete for 10 slots and the slot goes to
+// whichever signals FIRST — a property of frequency, not of quality. Expect the
+// 10m streams to take most of them.
 var defaultScalpLiveStreams = []PerpStream{
-	{Strategy: "MTF_4h_SqueezeExpansion_Short", Symbol: "CROSSUSD"},
-	{Strategy: "MTF_4h_RSITrendReset_Short", Symbol: "BLESSUSD"},
-	{Strategy: "MTF_1h_RSITrendReset_Long", Symbol: "PIEVERSEUSD"},
-	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "GIGGLEUSD"},
+	// AIOUSD (217 ticks)
+	{Strategy: "MTF_1h_LevelRetest_Long", Symbol: "AIOUSD"},
+	{Strategy: "MTF_1h_DojiBreak_Long", Symbol: "AIOUSD"},
 
-	// The two LABUSD streams were here and are gone as of 2026-08-16.
-	//
-	// They were added the same day, deliberately, to make the grid refusal
-	// visible rather than asserted — the reasoning being that a refusal the desk
-	// can show beats a claim in a comment. It showed: LABUSD measures 19.0 ticks
-	// against a 20-tick gate, confirmed across three runs.
-	//
-	// Removed rather than left to refuse, because the argument for keeping them
-	// expired the moment the measurement existed. Two rows that log a refusal on
-	// every signal are not evidence any more, just noise on a roster.
+	// HUSD (475 ticks)
+	{Strategy: "MTF_1d_PinBar_Short", Symbol: "HUSD"},
+	{Strategy: "MTF_1d_TrendPullback_Short", Symbol: "HUSD"},
+	{Strategy: "MTF_1d_FibRetrace_Short", Symbol: "HUSD"},
+	{Strategy: "MTF_10m_TrendPullback_Long", Symbol: "HUSD"},
+
+	// VELVETUSD (421 ticks)
+	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "VELVETUSD"},
+	{Strategy: "MTF_1h_DoubleTopBottom_Long", Symbol: "VELVETUSD"},
+	{Strategy: "MTF_10m_OpeningRangeBreak_Long", Symbol: "VELVETUSD"},
+	{Strategy: "MTF_1h_FibRetrace_Long", Symbol: "VELVETUSD"},
+	{Strategy: "MTF_10m_StructureBreak_Long", Symbol: "VELVETUSD"},
+
+	// AVAAIUSD (181 ticks)
+	{Strategy: "MTF_4h_RSITrendReset_Long", Symbol: "AVAAIUSD"},
+
+	// SKYAIUSD (138 ticks)
+	{Strategy: "MTF_10m_TrendPullback_Long", Symbol: "SKYAIUSD"},
+	{Strategy: "MTF_4h_StructureBreak_Short", Symbol: "SKYAIUSD"},
+
+	// BEATUSD (119 ticks)
+	{Strategy: "MTF_1h_TriangleBreak_Short", Symbol: "BEATUSD"},
+
+	// CHIPUSD (81 ticks)
+	{Strategy: "MTF_1h_PinBar_Short", Symbol: "CHIPUSD"},
+
+	// CROSSUSD (78 ticks)
+	{Strategy: "MTF_4h_SqueezeExpansion_Short", Symbol: "CROSSUSD"},
+	{Strategy: "MTF_1h_LevelRetest_Short", Symbol: "CROSSUSD"},
+	{Strategy: "MTF_1d_PinBar_Short", Symbol: "CROSSUSD"},
+
+	// PIEVERSEUSD (77 ticks)
+	{Strategy: "MTF_1h_RSITrendReset_Long", Symbol: "PIEVERSEUSD"},
+
+	// ARCUSD (65 ticks)
+	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "ARCUSD"},
+
+	// BLESSUSD (60 ticks)
+	{Strategy: "MTF_4h_RSITrendReset_Short", Symbol: "BLESSUSD"},
+	{Strategy: "MTF_1h_LevelRetest_Short", Symbol: "BLESSUSD"},
+	{Strategy: "MTF_10m_TrendPullback_Short", Symbol: "BLESSUSD"},
+
+	// AIOTUSD (41 ticks)
+	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "AIOTUSD"},
+	{Strategy: "MTF_4h_TriangleBreak_Long", Symbol: "AIOTUSD"},
+	{Strategy: "MTF_4h_LevelRetest_Long", Symbol: "AIOTUSD"},
+
+	// GIGGLEUSD (33 ticks)
+	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "GIGGLEUSD"},
+	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "GIGGLEUSD"},
+
+	// EDENUSD (31 ticks)
+	{Strategy: "MTF_4h_HeikinAshiFlip_Long", Symbol: "EDENUSD"},
+
+	// PUMPUSD (24 ticks)
+	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "PUMPUSD"},
+	{Strategy: "MTF_1h_RSITrendReset_Short", Symbol: "PUMPUSD"},
+
+	// TSTUSD (21 ticks) — the narrowest margin on the roster. Its stop measured
+	// 0.140%, and anything under 0.134% puts it under the gate; expect refusals
+	// here first if the market goes quiet.
+	{Strategy: "MTF_10m_TrendPullback_Short", Symbol: "TSTUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
