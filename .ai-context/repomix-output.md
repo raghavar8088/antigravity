@@ -943,6 +943,7 @@ The content is organized as follows:
   delta/perp_target_notional.go
   delta/perp_vol_wire.go
   delta/perp_volatility_test.go
+  delta/perp_volatility_widen_test.go
   delta/perp_volatility.go
   delta/tickformat_test.go
   delta/trade_status_test.go

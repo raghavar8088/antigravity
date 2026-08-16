@@ -173,25 +173,49 @@ func (v *VolatilityTracker) measure(ctx context.Context, symbol string) (volEsti
 	}, nil
 }
 
-// volScaledLevels rebuilds stop and target around the entry at the measured
-// stop distance, preserving direction and the reward:risk the strategy asked
-// for.
+// volScaledLevels widens stop and target to clear the measured noise, keeping
+// direction and the reward:risk the strategy asked for.
 //
 // The RATIO is kept rather than the absolute levels: the strategy's opinion
 // about how much reward justifies its risk is respected, while its opinion
 // about how wide the risk should be is replaced by measurement. Those are
 // different claims and only the second has been shown wrong.
+//
+// WIDENS ONLY, from 2026-08-16. This is a floor, never a replacement.
+//
+// The purpose stated at volStopMultiple is that "the stop must CLEAR the noise"
+// — a stop inside the noise resolves on a coin toss instead of on direction.
+// That argument only ever justifies making a stop WIDER. Applying the measured
+// distance unconditionally also made stops NARROWER on quiet symbols, which
+// inverts the whole point: it puts the stop deeper into the noise, not further
+// out of it.
+//
+// It reached the grid before anyone noticed. ARCUSD printed a p90 one-minute
+// range of 0.014%, so 2x gave a 0.028% stop — 2.1 TICKS on a contract that has
+// 65 ticks of room, and the grid gate refused the entry. The symbol looked
+// broken; the scaler was.
+//
+// Note which way the failure pointed. The refusal was visible and safe, so this
+// showed up as a stream that would not trade. Had the grid gate been one tick
+// more permissive, the same signal would have opened a position whose stop sat
+// two ticks from the entry — stopped out by a single quote, every time, and
+// recorded as the strategy being wrong.
 func volScaledLevels(entry, stop, target, stopFraction float64, long bool) (float64, float64) {
 	if entry <= 0 || stopFraction <= 0 {
 		return stop, target
 	}
+	origRisk := math.Abs(entry - stop)
 	rr := 3.0
-	if origRisk := math.Abs(entry - stop); origRisk > 0 && target > 0 {
+	if origRisk > 0 && target > 0 {
 		if r := math.Abs(target-entry) / origRisk; r > 0 {
 			rr = r
 		}
 	}
 	risk := entry * stopFraction
+	// The strategy's own stop already clears the noise — leave it alone.
+	if origRisk > 0 && risk <= origRisk {
+		return stop, target
+	}
 	if long {
 		return entry - risk, entry + risk*rr
 	}
