@@ -50,47 +50,54 @@ import (
 // NOT qualified. The gate asks for 200 trades per stream and these have 19-61,
 // selected from the right tail of 2,416 streams on in-sample data. Being on
 // this list is permission, not evidence.
+// Replaced 2026-08-16 at the owner's direction, from the Scalp Desk leaderboard.
+//
+// The owner selected fourteen rows. Six are here. The other eight are on
+// MOVEUSD and are NOT on this list, for a reason that was measured against the
+// live venue rather than inferred:
+//
+//	MOVEUSD marks at 0.00636728 against a 0.00001 tick. A 0.9% stop — the
+//	narrowest this pack produces — is 5.7 TICKS wide. The grid gate needs 20.
+//	Every order on it would be refused before sizing, so putting the eight on
+//	this list would produce a roster that looks populated and can never fill.
+//
+// Its turnover is $27,833/day, rank 100 of 220. The eight leaderboard rows that
+// ranked MOVEUSD at #1, #2, #5, #6, #9, #10, #31 and #60 were paper fills on a
+// contract whose entire day's volume is $27.8k, priced at a mid the desk's fill
+// model assumes it can always get. That is why they rank so highly: the
+// contract that cannot be traded is also the one that cannot be filled against,
+// so nothing in its paper record was ever tested by a real book.
+//
+// LABUSD is here and is expected to refuse as well — 7.2 ticks at the same 0.9%
+// stop. It is included because the owner chose it and because the refusal will
+// be VISIBLE: the grid gate logs a reason per signal, the UI shows the count,
+// and five consecutive refusals disable the stream automatically. An assertion
+// in a comment is worth less than a refusal the desk can show, and the two
+// LABUSD rows are the cheapest way to prove the measurement above is right.
+//
+// Four streams can actually reach the venue: CROSSUSD (88 ticks), BLESSUSD
+// (80), PIEVERSEUSD (76) and GIGGLEUSD (27). Three of those four were already
+// on the previous roster.
+//
+// What this replaces: ten streams, of which the only one that traded with any
+// frequency was MTF_1h_TrendPullback_Long on AVAAIUSD — 8 of the desk's 11
+// live fills, net negative, and switched off by the owner at 00:11 UTC. AVAAI,
+// AIOT, AIOUSD, LINKUSD and SKYAIUSD are dropped with it.
+//
+// NOT qualified, and the leaderboard says so itself. Twelve of the fourteen
+// rows read "too few" in the Qualified column; the two that read YES have 33
+// and 31 trades against a gate that asks for 200, and both are on MOVEUSD.
+// Being on this list is permission, not evidence.
 var defaultScalpLiveStreams = []PerpStream{
-	// EMPTY, from 2026-08-14.
-	//
-	// Every stream this list held named a strategy from the Scalp100, Delta20
-	// or Curated packs, and those were removed from the desk on the same day.
-	// Leaving them would have left a 130-row roster whose every entry pointed
-	// at a strategy that no longer exists — a live allow-list that looks
-	// populated and can never produce a signal, which is the exact shape of
-	// failure this desk has hit repeatedly.
-	//
-	// The multi-timeframe pack that replaced them is deliberately NOT promoted
-	// here. It has no live record at all. Promoting a roster on the strength of
-	// how it was designed rather than how it performed is the procedure that
-	// produced the 900-trade record this replaces; the streams that earn real
-	// capital should be chosen from their own out-of-sample results, and the
-	// harness to do that already exists.
-	//
-	// SCALP_LIVE_STREAMS overrides this at runtime for anyone who wants to
-	// route a specific stream before then.
-	// Added 2026-08-11 at the owner's direction, alongside everything above.
-	//
-	// This is a much larger selection than the previous two and its evidence is
-	// much thinner: most of these streams have single-digit trade counts and
-	// many have NONE at all. They are recorded because the owner chose them;
-	// the gates decide what actually executes.
-	//
-	// Adding streams does not increase throughput. Ten positions may be open at
-	// once and only one per symbol, so a longer list changes WHICH streams
-	// compete for those slots, not how many trade. On a roster this size the
-	// slot goes to whichever stream signals first, which is a property of
-	// signal frequency rather than of quality.
+	// Executable — the stop clears the tick grid with room.
 	{Strategy: "MTF_4h_SqueezeExpansion_Short", Symbol: "CROSSUSD"},
-	{Strategy: "MTF_4h_LevelRetest_Long", Symbol: "AIOTUSD"},
-	{Strategy: "MTF_4h_TriangleBreak_Long", Symbol: "LINKUSD"},
-	{Strategy: "MTF_4h_DoubleTopBottom_Long", Symbol: "AIOUSD"},
 	{Strategy: "MTF_4h_RSITrendReset_Short", Symbol: "BLESSUSD"},
-	{Strategy: "MTF_1h_TrendPullback_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "MTF_1h_RSITrendReset_Long", Symbol: "PIEVERSEUSD"},
 	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "GIGGLEUSD"},
-	{Strategy: "MTF_4h_TriangleBreak_Long", Symbol: "AIOTUSD"},
-	{Strategy: "MTF_1h_LevelRetest_Short", Symbol: "SKYAIUSD"},
-	{Strategy: "MTF_1d_PinBar_Short", Symbol: "CROSSUSD"},
+
+	// Grid-marginal at 7.2 ticks. Expect refusals, then auto-disable.
+	{Strategy: "MTF_1h_RSITrendReset_Short", Symbol: "LABUSD"},
+	{Strategy: "MTF_10m_TrendPullback_Short", Symbol: "LABUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine

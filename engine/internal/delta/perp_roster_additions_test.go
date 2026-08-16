@@ -5,19 +5,24 @@ import (
 	"testing"
 )
 
-// The live roster is intentionally EMPTY from 2026-08-14.
+// The roster is SIX streams from 2026-08-16, replacing the ten promoted the day
+// before.
 //
-// Every stream it held named a Scalp100, Delta20 or Curated strategy, and those
-// packs were removed from the desk the same day. A roster of names that no
-// longer exist is worse than an empty one: it looks populated and can never
-// produce a signal.
+// The count is pinned because it is an owner decision, and because the number
+// itself carries the finding: the owner selected FOURTEEN leaderboard rows and
+// eight of them were on MOVEUSD, whose 0.00001 tick against a 0.00636728 mark
+// makes the narrowest stop in the pack 5.7 ticks wide. Those eight are excluded
+// by TestPerpRoster_ThinAndCoarseSymbolsStayOffTheVenue, so a roster of six
+// where fourteen were chosen is the correct outcome rather than a dropped edit.
 //
-// The replacement pack is deliberately not promoted here. It has no live record,
-// and promoting on design rather than performance is the procedure that produced
-// the 900-trade record it replaces.
+// If this count ever changes to fourteen without that exclusion test changing
+// too, something added MOVEUSD back and the desk gained eight rows that can
+// never fill — the populated-but-unfillable roster this file has warned about
+// through three separate rewrites.
 func TestDefaultScalpLiveStreams_HoldsOnlyMTFStreams(t *testing.T) {
-	if len(defaultScalpLiveStreams) != 10 {
-		t.Errorf("roster has %d streams, want the 10 promoted 2026-08-15", len(defaultScalpLiveStreams))
+	if len(defaultScalpLiveStreams) != 6 {
+		t.Errorf("roster has %d streams, want the 6 promoted 2026-08-16 "+
+			"(14 selected, 8 on MOVEUSD excluded by the tick grid)", len(defaultScalpLiveStreams))
 	}
 	// Every retired pack name must stay off it. The Scalp100/Delta20/Curated
 	// strategies no longer exist on the desk, so a roster entry naming one

@@ -3,6 +3,7 @@ package delta
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // The allow-list is the only thing between a paper scalp signal and real money
@@ -303,10 +304,26 @@ func TestPerpPaperCandidates_UnknownStreamIsRefusedEverywhere(t *testing.T) {
 
 // The two symbols excluded from the promotion must NOT reach the venue.
 //
-// Excluded for mechanical reasons, not preference: MOVEUSD turns over
-// $1,985/day (rank 208 of 220) so a $100 position is 5% of a day's volume, and
-// 1000SATSUSD marks at 0.00001055 against a 0.0000001 tick, where a 0.35% stop
-// is 0.37 of ONE tick and cannot be expressed at all.
+// Excluded for mechanical reasons, not preference. 1000SATSUSD marks at
+// 0.00001055 against a 0.0000001 tick, where a 0.35% stop is 0.37 of ONE tick
+// and cannot be expressed at all.
+//
+// MOVEUSD's exclusion was originally written as a LIQUIDITY judgement —
+// $1,985/day, rank 208 of 220. That premise is now stale: re-measured against
+// the venue on 2026-08-16 it turns over $27,833/day at rank 100, fourteen times
+// the figure this test was written against, and it re-entered the desk universe
+// on its own when it crossed the $50k floor.
+//
+// The exclusion stands on a different and independently fatal fact. It marks at
+// 0.00636728 against a 0.00001 tick, so the narrowest stop the MTF pack
+// produces — 0.9% — is 5.7 TICKS wide against a 20-tick minimum. Liquidity can
+// recover; the price grid is a property of the contract.
+//
+// Recording the correction rather than quietly re-deriving the same verdict:
+// this test kept the right answer for eight days with a reason that had
+// expired, and the next person to challenge it deserves the number that is
+// actually load-bearing. Eight leaderboard rows were selected on MOVEUSD paper
+// fills in that window.
 func TestPerpRoster_ThinAndCoarseSymbolsStayOffTheVenue(t *testing.T) {
 	for _, sym := range []string{"MOVEUSD", "1000SATSUSD"} {
 		for _, st := range ScalpLiveStreams() {
@@ -322,6 +339,76 @@ func TestPerpRoster_ThinAndCoarseSymbolsStayOffTheVenue(t *testing.T) {
 			if st.Symbol == sym {
 				t.Errorf("%s still paper-trades; it was removed because the contract cannot support the trade", sym)
 			}
+		}
+	}
+}
+
+// Every symbol on the live roster must be checked against the REAL price grid,
+// with the venue's own mark and tick, not against a claim that it is fine.
+//
+// The measurements below were read from api.india.delta.exchange on 2026-08-16.
+// They are pinned here because the roster's comment block reasons from them, and
+// a comment that reasons from numbers nobody can re-run is a comment that will
+// be wrong without anyone noticing — which is exactly how the MOVEUSD exclusion
+// above came to sit on a stale liquidity figure for eight days.
+//
+// 0.9% is the narrowest stop the MTF pack produces (1.5x ATR on the quietest
+// symbols), so it is the width that decides whether a contract is tradeable.
+func TestPerpRoster_LiveSymbolsWereMeasuredAgainstTheRealGrid(t *testing.T) {
+	const narrowestStopFrac = 0.009
+
+	// symbol -> (mark, tick) as the venue reported them.
+	venue := map[string][2]float64{
+		"CROSSUSD":    {0.09741207, 1e-05},
+		"BLESSUSD":    {0.00883103, 1e-06},
+		"PIEVERSEUSD": {0.84689994, 1e-04},
+		"GIGGLEUSD":   {30.178807, 1e-02},
+		"LABUSD":      {0.07969152, 1e-04},
+		"MOVEUSD":     {0.00636728, 1e-05},
+	}
+	reg := &PerpRegistry{bySymbol: map[string]PerpProduct{}, fetchedAt: time.Now()}
+	for sym, mt := range venue {
+		reg.bySymbol[sym] = PerpProduct{Symbol: sym, MarkPrice: mt[0], TickSize: mt[1], ContractValue: 1}
+	}
+
+	ticksFor := func(sym string) float64 {
+		mark := venue[sym][0]
+		ticks, _ := stopGridTicks(reg, sym, mark, mark*(1-narrowestStopFrac))
+		return ticks
+	}
+
+	// MOVEUSD is the claim the roster comment rests on. If this ever passes 20,
+	// the eight excluded streams deserve reconsidering — and this test is where
+	// that would be discovered.
+	if got := ticksFor("MOVEUSD"); got >= minEntryStopTicks {
+		t.Errorf("MOVEUSD now measures %.1f ticks (>= %d): the roster excludes eight streams on the "+
+			"grounds that it cannot express a stop, and that reason no longer holds", got, minEntryStopTicks)
+	}
+
+	// LABUSD is on the roster and expected to REFUSE. Asserting the refusal
+	// keeps the roster comment honest: it says these two rows exist to make the
+	// measurement visible, so the day LABUSD starts clearing the grid is the day
+	// that justification stops being true.
+	if got := ticksFor("LABUSD"); got >= minEntryStopTicks {
+		t.Errorf("LABUSD measures %.1f ticks and now CLEARS the grid; the roster documents it as "+
+			"grid-marginal and expected to refuse", got)
+	}
+
+	// The four that were promoted as executable have to actually be executable,
+	// or the roster is the populated-but-unfillable list this file warns about.
+	for _, sym := range []string{"CROSSUSD", "BLESSUSD", "PIEVERSEUSD", "GIGGLEUSD"} {
+		if got := ticksFor(sym); got < minEntryStopTicks {
+			t.Errorf("%s measures %.1f ticks, under the %d-tick minimum — it is on the live roster "+
+				"as an executable stream and could never place an order", sym, got, minEntryStopTicks)
+		}
+	}
+
+	// And the roster must not name a symbol nobody measured. A new entry added
+	// without a reading here is the failure mode this whole test exists for.
+	for _, st := range ScalpLiveStreams() {
+		if _, ok := venue[st.Symbol]; !ok {
+			t.Errorf("%s (%s) is on the live roster but has no measured mark/tick in this test; "+
+				"add the venue's figures so the grid claim can be re-run", st.Symbol, st.Strategy)
 		}
 	}
 }
