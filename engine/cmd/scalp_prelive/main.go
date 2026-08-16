@@ -316,13 +316,79 @@ func tail(c []scalers.Candle, n int) []scalers.Candle {
 	return c[len(c)-n:]
 }
 
+// baselineRewardRisk is the ratio the profile table above is WRITTEN at. The
+// TP bands are literally 3x the SL bands, so this is the number the table's
+// comments describe, and the divisor when scaling it to something else.
+const baselineRewardRisk = 3.0
+
 // targetRewardRisk is the house reward-to-risk ratio, applied everywhere a
 // target is derived from a stop.
 //
 // 1:3 means a strategy needs only a 25% win rate to break even before costs,
 // against the 66.7% the mirrors previously needed. The profile table above is
 // set to the same ratio, so originals and mirrors agree.
-const targetRewardRisk = 3.0
+//
+// A VARIABLE, overridable per deployment with SCALP_REWARD_RISK, because the
+// three desks running this binary — the scalp desk on 8094, the demo on 8095
+// and High Volume on 8096 — are separate containers with separate env files and
+// no longer agree on this number. Changing the constant would have retuned all
+// three at once, which is precisely what the High Volume request was not.
+var targetRewardRisk = rewardRiskFromEnv()
+
+// rewardRiskFromEnv reads SCALP_REWARD_RISK, falling back to the house ratio.
+//
+// A bad value logs and falls back rather than failing the boot: a desk that
+// refuses to start over a malformed env var is a worse outcome than one that
+// trades at the documented default and says so. Silence would be the worst of
+// the three — an operator who sets 1:6 and gets 1:3 has no way to tell.
+func rewardRiskFromEnv() float64 {
+	raw := strings.TrimSpace(os.Getenv("SCALP_REWARD_RISK"))
+	if raw == "" {
+		return baselineRewardRisk
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || v <= 0 {
+		log.Printf("[SCALP] ⚠️  SCALP_REWARD_RISK=%q is not a positive number — using the house 1:%.1f", raw, baselineRewardRisk)
+		return baselineRewardRisk
+	}
+	return v
+}
+
+// Scale the profile table's TARGET side to the configured ratio.
+//
+// Only the TP fields move. The stop is what sizes the risk — the bands were
+// measured against where price actually goes (median 0.288%, p90 1.090% over
+// 500 trades) and moving them would change how often a trade resolves at all.
+// Multiplying keeps each profile's relative character intact: runner still
+// reaches further than scalp, in the same proportion.
+//
+// Runs in init() so it happens after the profiles map is built, whatever order
+// the package vars are declared in.
+func init() {
+	if scaled := scaleProfileTargets(profiles, targetRewardRisk); scaled {
+		log.Printf("[SCALP] reward:risk set to 1:%.1f by SCALP_REWARD_RISK (house default 1:%.1f) — "+
+			"TP bands scaled %.2fx; stops unchanged", targetRewardRisk, baselineRewardRisk,
+			targetRewardRisk/baselineRewardRisk)
+	}
+}
+
+// scaleProfileTargets rewrites the TP side of each profile to `ratio`, in place,
+// and reports whether anything changed. Separated from init() so the ratio can
+// actually be tested — an init() that reads the environment runs once per
+// process and cannot be exercised at more than one value.
+func scaleProfileTargets(p map[string]profileCfg, ratio float64) bool {
+	if ratio <= 0 || ratio == baselineRewardRisk {
+		return false
+	}
+	scale := ratio / baselineRewardRisk
+	for name, cfg := range p {
+		cfg.TPATR *= scale
+		cfg.TPMin *= scale
+		cfg.TPMax *= scale
+		p[name] = cfg
+	}
+	return true
+}
 
 // ── $100 live-account simulation ─────────────────────────────────────────────
 //

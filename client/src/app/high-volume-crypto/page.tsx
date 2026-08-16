@@ -917,9 +917,9 @@ export default function ScalpDeskPage() {
         />
 
         <p className="desk-label-md" style={{ textAlign: "center", fontWeight: 400, paddingBottom: 8 }}>
-          Paper trading only · $100 account per strategy (3x notional) · SL floor -$10, TP floor $20/$30/$50 by profile
-          (scalp/revert/runner, ~1:2 to 1:5 reward-to-risk) · maker post-only fill model with missed fills counted ·
-          state persists on the engine host
+          Paper trading only · $100 account per strategy (3x notional) · stop band 0.35%-0.60% of price, target band
+          1:5 against it (this desk only — the scalp and demo desks stay at 1:3) · maker post-only fill model with
+          missed fills counted · state persists on the engine host
         </p>
       </main>
     </div>
