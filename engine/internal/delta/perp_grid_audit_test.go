@@ -30,6 +30,19 @@ import (
 // So this calls StopFractionFor and stopGridTicks, in that order, exactly as
 // executePerpSignal does.
 //
+// A THIRD thing it cannot see, since 2026-08-16: volScaledLevels now only ever
+// WIDENS. The stop actually sent is max(the strategy's own stop, the measured
+// one), and this audit knows only the measured one. So every number below is a
+// LOWER BOUND on the effective stop:
+//
+//	PASS here  -> passes live, always.
+//	FAIL here  -> MAY still pass live, if the strategy's own stop is wider.
+//
+// ARCUSD is the worked example. It measures 2.0 ticks on a 0.028% volatility
+// stop and this audit reports FAIL; live it trades, because the strategy's stop
+// is far wider and now survives. Reading the FAIL column as a verdict would
+// remove a symbol that works.
+//
 //	SYMBOLS=A,B,C PERP_GRID_AUDIT=1 go test ./internal/delta/ -run GridAudit -v
 func TestPerpGridAudit_AgainstTheLiveVenue(t *testing.T) {
 	if os.Getenv("PERP_GRID_AUDIT") != "1" {
@@ -132,24 +145,28 @@ func TestPerpGridAudit_AgainstTheLiveVenue(t *testing.T) {
 	fmt.Printf("\n=== PERP GRID AUDIT — %d symbols, gate needs %d ticks ===\n",
 		len(rows), minEntryStopTicks)
 	fmt.Printf("PASS %d   FAIL %d   UNKNOWN %d\n", len(pass), len(fail), len(unknown))
-	show(fmt.Sprintf("PASS (>= %d ticks)", minEntryStopTicks), pass)
-	show(fmt.Sprintf("FAIL (< %d ticks — refused before entry)", minEntryStopTicks), fail)
+	show(fmt.Sprintf("PASS (>= %d ticks on the volatility stop alone — clears live)", minEntryStopTicks), pass)
+	show(fmt.Sprintf("BELOW THE GATE (< %d ticks on the volatility stop; the strategy's own stop may still carry it)",
+		minEntryStopTicks), fail)
 	for _, r := range unknown {
 		fmt.Printf("  UNKNOWN %-14s %s\n", r.sym, r.reason)
 	}
 
-	// The audit is a report, not an assertion about which symbols should exist.
-	// The one thing it DOES assert: every symbol on the live roster must clear
-	// the gate at its own measured stop, because those are the streams that
-	// spend real money.
+	// A report, not a verdict. Since volScaledLevels widens only, a roster
+	// symbol below the gate here is NOT necessarily refused live — it depends on
+	// the strategy's own stop, which this package cannot see. Logged so the
+	// operator can go look, never failed, because failing on it would push
+	// someone to remove a working symbol on incomplete information.
 	live := map[string]bool{}
 	for _, st := range ScalpLiveStreams() {
 		live[strings.ToUpper(st.Symbol)] = true
 	}
 	for _, r := range fail {
 		if live[r.sym] {
-			t.Logf("ROSTER SYMBOL %s fails the gate at its measured stop (%.1f ticks at %.3f%%): %s",
-				r.sym, r.ticks, r.stopFrac*100, r.reason)
+			t.Logf("ROSTER SYMBOL %s is under the gate on its VOLATILITY stop alone "+
+				"(%.1f ticks at %.3f%%). Since the scaler widens only, it still trades if the "+
+				"strategy's own stop is wider — check the engine log for a refusal before acting.",
+				r.sym, r.ticks, r.stopFrac*100)
 		}
 	}
 }

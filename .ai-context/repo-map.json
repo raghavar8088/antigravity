@@ -1,1 +1,1 @@
-{"engine-delta":{"communities":[0,1,2],"files":2,"symbols":16,"top_files":[{"file":"engine/internal/delta/perp_volatility.go","symbols":11},{"file":"engine/internal/delta/perp_volatility_widen_test.go","symbols":5}]}}
+{"engine-delta":{"communities":[0,1,2,3,4,5,6],"files":4,"symbols":49,"top_files":[{"file":"engine/internal/delta/perp_roster.go","symbols":26},{"file":"engine/internal/delta/perp_roster_test.go","symbols":15},{"file":"engine/internal/delta/perp_grid_audit_test.go","symbols":4},{"file":"engine/internal/delta/perp_roster_additions_test.go","symbols":4}]}}

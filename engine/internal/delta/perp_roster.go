@@ -50,108 +50,139 @@ import (
 // NOT qualified. The gate asks for 200 trades per stream and these have 19-61,
 // selected from the right tail of 2,416 streams on in-sample data. Being on
 // this list is permission, not evidence.
-// Replaced 2026-08-16 (second selection) at the owner's direction, from the
-// Scalp Desk leaderboard.
+// Owner selection from the Scalp Desk leaderboard, third addition on
+// 2026-08-16. 53 streams across 19 symbols.
 //
-// The owner picked 39 streams across 19 symbols. 32 are here; the previous
-// roster's BLESSUSD RSITrendReset_Short is kept alongside them, since this was
-// an ADD rather than a replacement. Total 33.
+// Each addition has been an ADD, not a replacement: 4 -> 33 -> 53.
 //
-// SEVEN are held back, on three symbols that fail the grid gate TODAY:
+// Grid status at selection, on the VOLATILITY stop (2x p90 1m range):
 //
-//	XAIUSD     14.0 ticks   stop 2.006%   needs > 2.87%   (4 streams)
-//	ZECUSD     12.0 ticks   stop 0.024%   needs > 0.041%  (1 stream)
-//	SWARMSUSD   8.2 ticks   stop 0.093%   needs > 0.227%  (2 streams)
+//	HUSD 772   AIOUSD 264   AVAAIUSD 158   GRIFFAINUSD 117   BEATUSD 107
+//	CHIPUSD 83  PIEVERSEUSD 77  VELVETUSD 421  SKYAIUSD 138  CROSSUSD 63
+//	BLESSUSD 60  BASEDUSD 44  AIOTUSD 41  GIGGLEUSD 33  EDENUSD 30
+//	PUMPUSD 24  TSTUSD 20  XAIUSD 14  ARCUSD 2
 //
-// These are NOT in gridBlockedSymbols and must not be added to it. The
-// distinction is the whole point: MOVEUSD and LABUSD fail because their tick is
-// coarse relative to price, which is a permanent property of the contract.
-// These three have fine grids and are simply too quiet — ZECUSD ticks at 0.01
-// against a 492 mark, one of the finest grids on the venue, and fails only
-// because 2x its p90 one-minute range is 0.024%. It measured 438 ticks in
-// yesterday's run against an ASSUMED 0.9% stop. When the market moves, they
-// become tradeable on their own, and the runtime gate is what decides.
+// The last two are under the 20-tick gate on that measure and are routed
+// anyway, which is a deliberate reversal of how LABUSD was handled this
+// morning. The reason is that the measure changed underneath us.
 //
-// Holding them off the roster rather than letting them be refused is the lesson
-// from the LABUSD rows added and removed earlier today: once the measurement
-// exists, rows that log a refusal per signal are noise, not evidence.
+// volScaledLevels now WIDENS ONLY, so the stop actually sent is max(strategy
+// stop, measured stop). The audit sees only the measured one, which makes every
+// tick count in it a LOWER BOUND. ARCUSD proves the gap is real: it audits at
+// 2.0 ticks and trades live — its MTF_10m_FibRetrace_Short opened and closed at
+// 16:17, and the engine logged no refusal at all after the fix shipped.
 //
-// EVIDENCE, honestly stated. One row is QUALIFIED — MTF_1h_LevelRetest_Long on
-// AIOUSD, 31 trades, and its win rate is 35.5%. Everything else reads "too few".
-// Three of them have 2-3 trades at a 100% win rate, which is what 2-3 trades
-// look like when they happen to win, not an edge. The gate asks for 200.
+// LABUSD was different in kind. It measured 19.0 ticks across three runs on a
+// stop that was ALREADY the strategy's, so nothing wider was coming; and its
+// grid is coarse relative to price, which is permanent. XAIUSD and ARCUSD are
+// quiet, not coarse. Where the outcome genuinely cannot be predicted from here,
+// the runtime gate is the right decider: it refuses per signal with a logged
+// reason, shows the count in the UI, and auto-disables after five in a row.
 //
-// Throughput does not scale with the list. Ten positions may be open at once
-// and one per symbol, so 33 streams compete for 10 slots and the slot goes to
-// whichever signals FIRST — a property of frequency, not of quality. Expect the
-// 10m streams to take most of them.
+// EVIDENCE, unchanged and worth restating. One row on the whole roster is
+// QUALIFIED — MTF_1h_LevelRetest_Long on AIOUSD, 31 trades, 35.5% win rate.
+// Everything else reads "too few", and this batch adds six streams with 2-3
+// trades at a 100% win rate, which is what three trades look like when they
+// happen to win. The gate asks for 200.
+//
+// And the binding constraint is unchanged: 10 concurrent positions, one per
+// symbol. 53 streams now compete for those 10 and the slot goes to whichever
+// signals FIRST. Past about 20 streams this list stops selecting what trades
+// and starts selecting only what trades OFTEN — the 10m entries will take most
+// slots regardless of how any of them rank.
 var defaultScalpLiveStreams = []PerpStream{
-	// AIOUSD (217 ticks)
+	// AIOUSD
 	{Strategy: "MTF_1h_LevelRetest_Long", Symbol: "AIOUSD"},
 	{Strategy: "MTF_1h_DojiBreak_Long", Symbol: "AIOUSD"},
+	{Strategy: "MTF_10m_DirectionalTriangle_Long", Symbol: "AIOUSD"},
+	{Strategy: "MTF_1h_TriangleBreak_Long", Symbol: "AIOUSD"},
+	{Strategy: "MTF_4h_DoubleTopBottom_Long", Symbol: "AIOUSD"},
 
-	// HUSD (475 ticks)
+	// HUSD
 	{Strategy: "MTF_1d_PinBar_Short", Symbol: "HUSD"},
 	{Strategy: "MTF_1d_TrendPullback_Short", Symbol: "HUSD"},
 	{Strategy: "MTF_1d_FibRetrace_Short", Symbol: "HUSD"},
 	{Strategy: "MTF_10m_TrendPullback_Long", Symbol: "HUSD"},
+	{Strategy: "MTF_10m_TriangleBreak_Short", Symbol: "HUSD"},
 
-	// VELVETUSD (421 ticks)
+	// VELVETUSD
 	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "VELVETUSD"},
 	{Strategy: "MTF_1h_DoubleTopBottom_Long", Symbol: "VELVETUSD"},
 	{Strategy: "MTF_10m_OpeningRangeBreak_Long", Symbol: "VELVETUSD"},
 	{Strategy: "MTF_1h_FibRetrace_Long", Symbol: "VELVETUSD"},
 	{Strategy: "MTF_10m_StructureBreak_Long", Symbol: "VELVETUSD"},
 
-	// AVAAIUSD (181 ticks)
+	// AVAAIUSD
 	{Strategy: "MTF_4h_RSITrendReset_Long", Symbol: "AVAAIUSD"},
+	{Strategy: "MTF_4h_FibRetrace_Long", Symbol: "AVAAIUSD"},
 
-	// SKYAIUSD (138 ticks)
+	// SKYAIUSD
 	{Strategy: "MTF_10m_TrendPullback_Long", Symbol: "SKYAIUSD"},
 	{Strategy: "MTF_4h_StructureBreak_Short", Symbol: "SKYAIUSD"},
 
-	// BEATUSD (119 ticks)
+	// BEATUSD
 	{Strategy: "MTF_1h_TriangleBreak_Short", Symbol: "BEATUSD"},
+	{Strategy: "MTF_1h_OutsideBar_Short", Symbol: "BEATUSD"},
 
-	// CHIPUSD (81 ticks)
+	// CHIPUSD
 	{Strategy: "MTF_1h_PinBar_Short", Symbol: "CHIPUSD"},
+	{Strategy: "MTF_1h_HeikinAshiFlip_Long", Symbol: "CHIPUSD"},
 
-	// CROSSUSD (78 ticks)
+	// CROSSUSD
 	{Strategy: "MTF_4h_SqueezeExpansion_Short", Symbol: "CROSSUSD"},
 	{Strategy: "MTF_1h_LevelRetest_Short", Symbol: "CROSSUSD"},
 	{Strategy: "MTF_1d_PinBar_Short", Symbol: "CROSSUSD"},
+	{Strategy: "MTF_10m_LevelRetest_Long", Symbol: "CROSSUSD"},
 
-	// PIEVERSEUSD (77 ticks)
+	// PIEVERSEUSD
 	{Strategy: "MTF_1h_RSITrendReset_Long", Symbol: "PIEVERSEUSD"},
+	{Strategy: "MTF_1h_TrendPullback_Long", Symbol: "PIEVERSEUSD"},
 
-	// ARCUSD (65 ticks)
-	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "ARCUSD"},
-
-	// BLESSUSD (60 ticks)
+	// BLESSUSD
 	{Strategy: "MTF_4h_RSITrendReset_Short", Symbol: "BLESSUSD"},
 	{Strategy: "MTF_1h_LevelRetest_Short", Symbol: "BLESSUSD"},
 	{Strategy: "MTF_10m_TrendPullback_Short", Symbol: "BLESSUSD"},
 
-	// AIOTUSD (41 ticks)
+	// BASEDUSD — new
+	{Strategy: "MTF_1d_RSITrendReset_Short", Symbol: "BASEDUSD"},
+	{Strategy: "MTF_4h_FibRetrace_Short", Symbol: "BASEDUSD"},
+	{Strategy: "MTF_10m_StructureBreak_Short", Symbol: "BASEDUSD"},
+
+	// AIOTUSD
 	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "AIOTUSD"},
 	{Strategy: "MTF_4h_TriangleBreak_Long", Symbol: "AIOTUSD"},
 	{Strategy: "MTF_4h_LevelRetest_Long", Symbol: "AIOTUSD"},
 
-	// GIGGLEUSD (33 ticks)
+	// GIGGLEUSD
 	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "GIGGLEUSD"},
 	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "GIGGLEUSD"},
 
-	// EDENUSD (31 ticks)
-	{Strategy: "MTF_4h_HeikinAshiFlip_Long", Symbol: "EDENUSD"},
+	// GRIFFAINUSD — new
+	{Strategy: "MTF_4h_LevelRetest_Long", Symbol: "GRIFFAINUSD"},
 
-	// PUMPUSD (24 ticks)
+	// EDENUSD
+	{Strategy: "MTF_4h_HeikinAshiFlip_Long", Symbol: "EDENUSD"},
+	{Strategy: "MTF_1h_StructureBreak_Short", Symbol: "EDENUSD"},
+
+	// PUMPUSD
 	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "PUMPUSD"},
 	{Strategy: "MTF_1h_RSITrendReset_Short", Symbol: "PUMPUSD"},
 
-	// TSTUSD (21 ticks) — the narrowest margin on the roster. Its stop measured
-	// 0.140%, and anything under 0.134% puts it under the gate; expect refusals
-	// here first if the market goes quiet.
+	// TSTUSD — 20.3 ticks, the narrowest that clears outright.
 	{Strategy: "MTF_10m_TrendPullback_Short", Symbol: "TSTUSD"},
+	{Strategy: "MTF_10m_TriangleBreak_Long", Symbol: "TSTUSD"},
+
+	// ARCUSD — audits at 2.0 ticks and trades anyway; see the note above.
+	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "ARCUSD"},
+	{Strategy: "MTF_4h_TrendPullback_Long", Symbol: "ARCUSD"},
+
+	// XAIUSD — new, 14.1 ticks on the volatility stop. Needs the strategy's own
+	// stop to exceed 2.87% to clear. Genuinely unknown from here, so the runtime
+	// gate decides and the refusal count in the UI is the answer.
+	{Strategy: "MTF_1h_RSITrendReset_Long", Symbol: "XAIUSD"},
+	{Strategy: "MTF_1h_FibRetrace_Long", Symbol: "XAIUSD"},
+	{Strategy: "MTF_1h_LevelRetest_Long", Symbol: "XAIUSD"},
+	{Strategy: "MTF_10m_DoubleTopBottom_Long", Symbol: "XAIUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
