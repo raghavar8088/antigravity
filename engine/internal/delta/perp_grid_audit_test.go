@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -88,8 +89,13 @@ func TestPerpGridAudit_AgainstTheLiveVenue(t *testing.T) {
 			sym: sym, ticks: ticks, stopFrac: frac, mark: entry,
 			tick: p.TickSize, measured: measured, reason: reason,
 		})
-		// The venue rate-limits the candle endpoint far harder than quotes.
-		time.Sleep(250 * time.Millisecond)
+		// The venue rate-limits the candle endpoint far harder than quotes, and a
+		// throttled fetch returns "no estimate" — which this audit would then
+		// report as an ASSUMED 0.9% stop. That is indistinguishable in the output
+		// from a symbol the venue genuinely has no candles for, and it is the
+		// difference between a measurement and a guess. PACE_MS exists to re-run
+		// the unmeasured ones slowly and find out which they are.
+		time.Sleep(auditPace())
 	}
 
 	sort.Slice(rows, func(i, j int) bool { return rows[i].ticks > rows[j].ticks })
@@ -146,4 +152,14 @@ func TestPerpGridAudit_AgainstTheLiveVenue(t *testing.T) {
 				r.sym, r.ticks, r.stopFrac*100, r.reason)
 		}
 	}
+}
+
+// auditPace is the gap between candle fetches, default 250ms.
+func auditPace() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("PACE_MS")); raw != "" {
+		if ms, err := strconv.Atoi(raw); err == nil && ms > 0 {
+			return time.Duration(ms) * time.Millisecond
+		}
+	}
+	return 250 * time.Millisecond
 }
