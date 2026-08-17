@@ -361,39 +361,49 @@ func TestPerpRoster_ThinAndCoarseSymbolsStayOffTheVenue(t *testing.T) {
 // candle printed high == low — 0.9% is recorded and marked as such.
 func TestPerpRoster_LiveSymbolsWereMeasuredAgainstTheRealGrid(t *testing.T) {
 	// symbol -> mark, tick, stop fraction as measured.
-	type reading struct{ mark, tick, stopFrac float64 }
+	type reading struct{ mark, tick, stopFrac, contractValue float64 }
 	venue := map[string]reading{
-		"HUSD":        {0.13651582, 1e-05, 0.05659},
-		"VELVETUSD":   {1.04028950, 1e-04, 0.04046},
-		"AIOUSD":      {0.06982594, 1e-05, 0.03774},
-		"AVAAIUSD":    {0.01397433, 1e-06, 0.01128},
-		"SKYAIUSD":    {0.07038382, 1e-05, 0.01960},
-		"BEATUSD":     {0.36232067, 1e-04, 0.02939},
-		"CHIPUSD":     {0.02951552, 1e-05, 0.02803},
-		"CROSSUSD":    {0.09558758, 1e-05, 0.00661},
-		"BASEDUSD":    {0.07846384, 1e-05, 0.00557},
-		"BLESSUSD":    {0.00900592, 1e-06, 0.00665},
-		"EDENUSD":     {0.04528730, 1e-05, 0.00672},
-		"TSTUSD":      {0.01439519, 1e-06, 0.00141},
-		"PIEVERSEUSD": {0.85075864, 1e-04, 0.00900}, // no estimate; assumed
-		"GRIFFAINUSD": {0.01295374, 1e-06, 0.00900}, // no estimate; assumed
-		"AIOTUSD":     {0.04551320, 1e-05, 0.00900}, // no estimate; assumed
-		"GIGGLEUSD":   {36.7056050, 1e-02, 0.00900}, // no estimate; assumed
-		"PUMPUSD":     {0.00270873, 1e-06, 0.00900}, // no estimate; assumed
+		"HUSD":        {0.13651582, 1e-05, 0.05659, 1},
+		"VELVETUSD":   {1.04028950, 1e-04, 0.04046, 1},
+		"AIOUSD":      {0.06982594, 1e-05, 0.03774, 1},
+		"AVAAIUSD":    {0.01397433, 1e-06, 0.01128, 1},
+		"SKYAIUSD":    {0.07038382, 1e-05, 0.01960, 1},
+		"BEATUSD":     {0.36232067, 1e-04, 0.02939, 1},
+		"CHIPUSD":     {0.02951552, 1e-05, 0.02803, 1},
+		"CROSSUSD":    {0.09558758, 1e-05, 0.00661, 1},
+		"BASEDUSD":    {0.07846384, 1e-05, 0.00557, 1},
+		"BLESSUSD":    {0.00900592, 1e-06, 0.00665, 1},
+		"EDENUSD":     {0.04528730, 1e-05, 0.00672, 1},
+		"TSTUSD":      {0.01439519, 1e-06, 0.00141, 1},
+		"PIEVERSEUSD": {0.85075864, 1e-04, 0.00900, 1},   // no estimate; assumed
+		"GRIFFAINUSD": {0.01295374, 1e-06, 0.00900, 1},   // no estimate; assumed
+		"AIOTUSD":     {0.04551320, 1e-05, 0.00900, 1},   // no estimate; assumed
+		"GIGGLEUSD":   {36.7056050, 1e-02, 0.00900, 0.1}, // no estimate; assumed
+		"PUMPUSD":     {0.00270873, 1e-06, 0.00900, 1},   // no estimate; assumed
+
+		// From the High Volume board, 2026-08-17.
+		"ADAUSD":  {0.17434149, 1e-05, 0.00263, 1},
+		"AVAXUSD": {6.30522150, 1e-04, 0.00900, 1}, // no estimate; assumed
+		"UNIUSD":  {3.27878950, 1e-04, 0.00900, 1}, // no estimate; assumed
+		"HYPEUSD": {59.1373080, 1e-03, 0.00135, 0.1},
+
+		// Clears the grid at 218 ticks and is still NOT routed: one contract is
+		// $64.08 against a $30 book. See the sizing assertion below.
+		"BTCUSD": {64075.139, 0.5, 0.00170, 0.001},
 
 		// On the roster and UNDER the gate on the volatility stop alone. They
 		// trade on the strategy's own stop, which volScaledLevels no longer
 		// overrides downward. See reliesOnStrategyStop below.
-		"ARCUSD": {0.07162879, 1e-05, 0.00028},
-		"XAIUSD": {0.00707017, 1e-05, 0.01994},
+		"ARCUSD": {0.07162879, 1e-05, 0.00028, 1},
+		"XAIUSD": {0.00707017, 1e-05, 0.01994, 1},
 
 		// Held off the roster: fail today, grids are fine, not blocklisted.
-		"ZECUSD":    {492.351250, 1e-02, 0.00024},
-		"SWARMSUSD": {0.00880042, 1e-06, 0.00093},
+		"ZECUSD":    {492.351250, 1e-02, 0.00024, 1},
+		"SWARMSUSD": {0.00880042, 1e-06, 0.00093, 1},
 
 		// Permanently blocked, kept for the assertions below.
-		"MOVEUSD": {0.00636728, 1e-05, 0.00900},
-		"LABUSD":  {0.08313850, 1e-04, 0.02287},
+		"MOVEUSD": {0.00636728, 1e-05, 0.00900, 1},
+		"LABUSD":  {0.08313850, 1e-04, 0.02287, 1},
 	}
 	reg := &PerpRegistry{bySymbol: map[string]PerpProduct{}, fetchedAt: time.Now()}
 	for sym, r := range venue {
@@ -454,6 +464,38 @@ func TestPerpRoster_LiveSymbolsWereMeasuredAgainstTheRealGrid(t *testing.T) {
 			t.Errorf("%s was added to gridBlockedSymbols; it fails on VOLATILITY, not on its grid, "+
 				"and blocking it permanently would ban a contract that recovers on its own", sym)
 		}
+	}
+
+	// One contract must FIT THE BOOK. A separate constraint from the grid, and
+	// the one BTCUSD fails.
+	//
+	// Delta has no fractional contracts, so the smallest position that exists on
+	// a symbol is one contract. BTCUSD measures 218 ticks — one of the cleanest
+	// grids on the venue — and one contract is $64.08 against a $30 ceiling
+	// ($10 equity at 3x). PlanPerpOrder refuses it with
+	// ErrAggregateExposureReached on an empty book, every time.
+	//
+	// Pinned against the desk's SHIPPED parameters. If equity rises, this test
+	// is where someone finds out that BTCUSD became expressible; if a cheap
+	// contract is routed and then re-lists at a higher price, it is where they
+	// find out it stopped being.
+	const deskEquityUSD, deskMaxLeverage = 10.0, 3.0
+	const bookCeiling = deskEquityUSD * deskMaxLeverage
+	for _, st := range ScalpLiveStreams() {
+		r, ok := venue[st.Symbol]
+		if !ok {
+			continue // already reported above
+		}
+		if perContract := r.mark * r.contractValue; perContract > bookCeiling {
+			t.Errorf("%s: one contract is $%.2f against a $%.2f book ceiling, so %s can never be "+
+				"funded — Delta has no fractional contracts",
+				st.Symbol, perContract, bookCeiling, st.Strategy)
+		}
+	}
+	if r := venue["BTCUSD"]; r.mark*r.contractValue <= bookCeiling {
+		t.Errorf("BTCUSD now costs $%.2f per contract, inside the $%.2f ceiling — it is excluded "+
+			"on the grounds that it cannot be funded, and that reason has expired",
+			r.mark*r.contractValue, bookCeiling)
 	}
 
 	// And the permanent exclusions must stay failing at any plausible stop.

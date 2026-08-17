@@ -79,6 +79,27 @@ import (
 // the runtime gate is the right decider: it refuses per signal with a logged
 // reason, shows the count in the UI, and auto-disables after five in a row.
 //
+// FOURTH addition, from the High Volume desk board: 14 streams on ADAUSD,
+// AVAXUSD, UNIUSD and HYPEUSD. 53 -> 67 across 23 symbols. Nothing existing was
+// touched.
+//
+// All four clear the grid comfortably — AVAXUSD 568 ticks, UNIUSD 295, HYPEUSD
+// 80, ADAUSD 46.
+//
+// BTCUSD is NOT here, and it is not a grid problem: it measures 218 ticks, one
+// of the best on the venue. One BTCUSD contract is $64.08 (mark 64,078 x 0.001
+// contract value) and the desk book ceiling is $30 — $10 equity at 3x. Delta
+// has no fractional contracts, so the smallest position that exists is more
+// than twice the entire book, and PlanPerpOrder refuses it with
+// ErrAggregateExposureReached every time, on an empty book.
+//
+// That is arithmetic, not volatility, so it is excluded outright rather than
+// routed to find out — the same reasoning that dropped LABUSD and the opposite
+// of the XAIUSD case, where the answer genuinely depended on a stop this
+// package cannot see. MTF_4h_HeadShoulders_Long on BTCUSD needs desk equity of
+// at least $22 at 3x to be expressible at all, and more than that to be sized
+// on its own risk rather than clamped to one contract.
+//
 // EVIDENCE, unchanged and worth restating. One row on the whole roster is
 // QUALIFIED — MTF_1h_LevelRetest_Long on AIOUSD, 31 trades, 35.5% win rate.
 // Everything else reads "too few", and this batch adds six streams with 2-3
@@ -183,6 +204,28 @@ var defaultScalpLiveStreams = []PerpStream{
 	{Strategy: "MTF_1h_FibRetrace_Long", Symbol: "XAIUSD"},
 	{Strategy: "MTF_1h_LevelRetest_Long", Symbol: "XAIUSD"},
 	{Strategy: "MTF_10m_DoubleTopBottom_Long", Symbol: "XAIUSD"},
+
+	// ADAUSD (46 ticks) — from the High Volume board.
+	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "ADAUSD"},
+	{Strategy: "MTF_4h_StructureBreak_Short", Symbol: "ADAUSD"},
+	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "ADAUSD"},
+	{Strategy: "MTF_10m_PinBar_Long", Symbol: "ADAUSD"},
+
+	// AVAXUSD (568 ticks)
+	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_1h_TriangleBreak_Short", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "AVAXUSD"},
+
+	// UNIUSD (295 ticks)
+	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "UNIUSD"},
+	{Strategy: "MTF_10m_RSITrendReset_Long", Symbol: "UNIUSD"},
+	{Strategy: "MTF_4h_RSITrendReset_Short", Symbol: "UNIUSD"},
+
+	// HYPEUSD (80 ticks)
+	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "HYPEUSD"},
+	{Strategy: "MTF_10m_RSITrendReset_Long", Symbol: "HYPEUSD"},
+	{Strategy: "MTF_10m_HeikinAshiFlip_Short", Symbol: "HYPEUSD"},
+	{Strategy: "MTF_1h_HeikinAshiFlip_Short", Symbol: "HYPEUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine

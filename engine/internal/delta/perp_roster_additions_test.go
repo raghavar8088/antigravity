@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The roster is 53 streams from 2026-08-16.
+// The roster is 67 streams.
 //
 // The count is pinned because it is an owner decision, and because the number
 // itself carries the finding: the owner selected FOURTEEN leaderboard rows, and
@@ -18,8 +18,8 @@ import (
 // symbol that cannot fill — the populated-but-unfillable roster this file has
 // warned about through three separate rewrites.
 func TestDefaultScalpLiveStreams_HoldsOnlyMTFStreams(t *testing.T) {
-	if len(defaultScalpLiveStreams) != 53 {
-		t.Errorf("roster has %d streams, want 53 (4 -> 33 -> 53 across three owner additions)",
+	if len(defaultScalpLiveStreams) != 67 {
+		t.Errorf("roster has %d streams, want 67 (4 -> 33 -> 53 -> 67 across four owner additions)",
 			len(defaultScalpLiveStreams))
 	}
 	// Every retired pack name must stay off it. The Scalp100/Delta20/Curated
