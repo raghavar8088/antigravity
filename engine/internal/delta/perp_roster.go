@@ -329,6 +329,95 @@ func IsGoldSymbol(symbol string) bool {
 	return false
 }
 
+// symbolBooks are the Top Crypto Trading books: one account per symbol.
+//
+// Keyed by SYMBOL rather than by a number, because that is what the account
+// is — "BTCUSD" is a book that trades BTCUSD and nothing else. A numbered book
+// would need a lookup table mapping 07..16 to symbols, and that table is one
+// edit away from disagreeing with the container's -symbols flag, at which point
+// the page shows a symbol the engine is not trading.
+//
+// Registered at boot for the same reason the gold list is: the roster is "every
+// strategy the desk runs, on this symbol", and the strategy pack owns that set.
+var (
+	symbolBookMu sync.RWMutex
+	symbolBooks  map[string][]PerpStream
+	symbolOrder  []string
+)
+
+// SetSymbolPaperBooks registers one book per symbol. Called once at boot by the
+// desk, which is the only component that knows both the pack and the resolved
+// universe.
+//
+// Order is preserved from the caller so the UI tabs appear in the order the
+// operator listed the symbols, not in map order — which would shuffle on every
+// boot and make the page feel non-deterministic.
+func SetSymbolPaperBooks(order []string, bySymbol map[string][]PerpStream) {
+	symbolBookMu.Lock()
+	defer symbolBookMu.Unlock()
+	symbolBooks = map[string][]PerpStream{}
+	symbolOrder = nil
+	for _, sym := range order {
+		u := strings.ToUpper(strings.TrimSpace(sym))
+		if u == "" {
+			continue
+		}
+		streams := bySymbol[u]
+		if len(streams) == 0 {
+			// Registered with nothing to watch. Logged rather than skipped
+			// silently: an empty tab and a missing tab look different on the
+			// page and mean different things.
+			log.Printf("[TOP CRYPTO] ⚠️  %s registered with 0 streams — its tab will be empty", u)
+		}
+		out := make([]PerpStream, 0, len(streams))
+		seen := map[string]bool{}
+		for _, st := range streams {
+			if !strings.EqualFold(st.Symbol, u) {
+				continue // a foreign symbol in a symbol book is a wiring bug
+			}
+			k := perpStreamKey(st.Strategy, st.Symbol)
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			out = append(out, PerpStream{Strategy: st.Strategy, Symbol: u})
+		}
+		symbolBooks[u] = out
+		symbolOrder = append(symbolOrder, u)
+	}
+	log.Printf("[TOP CRYPTO] %d symbol books registered: %v", len(symbolOrder), symbolOrder)
+}
+
+// SymbolBookIDs returns the registered symbol books, in registration order.
+func SymbolBookIDs() []string {
+	symbolBookMu.RLock()
+	defer symbolBookMu.RUnlock()
+	out := make([]string, len(symbolOrder))
+	copy(out, symbolOrder)
+	return out
+}
+
+// IsSymbolBook reports whether an account id is a per-symbol book.
+func IsSymbolBook(account string) bool {
+	symbolBookMu.RLock()
+	defer symbolBookMu.RUnlock()
+	_, ok := symbolBooks[strings.ToUpper(account)]
+	return ok
+}
+
+// symbolBookStreams returns one symbol book's watch list.
+func symbolBookStreams(account string) ([]PerpStream, bool) {
+	symbolBookMu.RLock()
+	defer symbolBookMu.RUnlock()
+	st, ok := symbolBooks[strings.ToUpper(account)]
+	if !ok {
+		return nil, false
+	}
+	out := make([]PerpStream, len(st))
+	copy(out, st)
+	return out, true
+}
+
 // goldPaperStreams is the Gold book's watch list, registered at boot.
 //
 // Registered rather than hardcoded because the roster IS "every strategy the
@@ -374,7 +463,10 @@ func GoldPaperStreams() []PerpStream {
 
 // PaperAccountIDs is every book, in display order.
 func PaperAccountIDs() []string {
-	return []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04, PaperAccount05, PaperAccount06, PaperAccountGold}
+	base := []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04, PaperAccount05, PaperAccount06, PaperAccountGold}
+	// Symbol books last, so the numbered crypto books and the Gold Desk keep
+	// their existing positions on every page that renders this list in order.
+	return append(base, SymbolBookIDs()...)
 }
 
 // defaultScalpPaperStreams02 is Account 02's watch list.
@@ -739,6 +831,14 @@ func ScalpPaperStreamsFor(account string) []PerpStream {
 		// to the crypto default below and quietly filling a gold book with
 		// altcoin streams.
 		return GoldPaperStreams()
+	default:
+		// A per-symbol book, if one is registered under this id. Returned
+		// directly for the same reason as gold: falling through would hand a
+		// symbol book the default candidate roster, which is a list of other
+		// symbols entirely.
+		if st, ok := symbolBookStreams(account); ok {
+			return st
+		}
 	}
 	if src != nil {
 		out := make([]PerpStream, 0, len(src))

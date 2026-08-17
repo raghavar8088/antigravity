@@ -1481,6 +1481,37 @@ func main() {
 				"(check the SCALP_MIN_TURNOVER_USD floor and Delta's product list)", missing, missing)
 		}
 		delta.SetGoldPaperStreams(gold)
+
+		// Top Crypto Trading: one book PER SYMBOL, each watching every strategy
+		// the desk runs on that symbol.
+		//
+		// Opt-in via SCALP_SYMBOL_BOOKS=true so the existing desks are
+		// unaffected — the scalp desk runs 91 symbols and would otherwise grow
+		// 91 books overnight, which is not a module, it is a memory leak with
+		// tabs.
+		//
+		// The symbol list is the container's OWN resolved universe rather than a
+		// second list in configuration. Two lists that must agree eventually do
+		// not, and the failure is a tab for a symbol the engine never polls.
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("SCALP_SYMBOL_BOOKS")), "true") {
+			order := make([]string, 0, len(d.symbols))
+			bySym := map[string][]delta.PerpStream{}
+			for _, ss := range d.symbols {
+				u := strings.ToUpper(ss.sym)
+				order = append(order, u)
+				rows := make([]delta.PerpStream, 0, len(d.streamNames()))
+				for _, name := range d.streamNames() {
+					rows = append(rows, delta.PerpStream{Strategy: name, Symbol: u})
+				}
+				bySym[u] = rows
+			}
+			delta.SetSymbolPaperBooks(order, bySym)
+			for _, id := range delta.SymbolBookIDs() {
+				if n := paperSeedBook(id); n > 0 {
+					log.Printf("[TOP CRYPTO] %s: seeded %d rows", id, n)
+				}
+			}
+		}
 		// Seed the board now that the list exists. The books were constructed
 		// during package init, when the gold roster was still empty.
 		if n := paperSeedBook(delta.PaperAccountGold); n > 0 {

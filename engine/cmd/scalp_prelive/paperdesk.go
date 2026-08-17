@@ -202,7 +202,14 @@ var livePaperBooks = func() map[string]*livePaperDesk {
 func paperSeedBook(id string) int {
 	d := livePaperBooks[id]
 	if d == nil {
-		return 0
+		// CREATE it. livePaperBooks is built during package init from
+		// PaperAccountIDs(), which at that moment does not yet include the
+		// per-symbol books — they are registered from main() once the symbol
+		// universe resolves. Returning 0 here instead would leave the Top Crypto
+		// module with no books at all while every log line said it was
+		// configured, which is the failure this function exists to prevent.
+		d = newLivePaperDesk(id)
+		livePaperBooks[id] = d
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
