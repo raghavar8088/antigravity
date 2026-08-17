@@ -130,6 +130,7 @@ The content is organized as follows:
   app/api/scalers/stats/route.ts
   app/api/scalp-demo/[...path]/route.ts
   app/api/scalp-highvol/[...path]/route.ts
+  app/api/scalp-topcrypto/[...path]/route.ts
   app/api/scalp/[...path]/route.ts
   app/api/sep/bottom/route.ts
   app/api/sep/rankings/route.ts
@@ -206,6 +207,7 @@ The content is organized as follows:
   app/terminal/strategies/threshold-config/page.tsx
   app/terminal/trade-engine/page.tsx
   app/terminal/trading/page.tsx
+  app/top-crypto-trading/page.tsx
   components/ActivityFeed.tsx
   components/AiAppTrackerPanel.tsx
   components/AIInsightPanel.tsx

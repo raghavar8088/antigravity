@@ -68,6 +68,12 @@ type OptionTrade = {
   exitPremium: number;
   quantity: number;
   costBasis: number;
+  /** Result BEFORE fees. Shown beside net so the subtraction is visible. */
+  grossPnl: number;
+  /** What the venue took on this trade, in dollars. */
+  feesUsd: number;
+  /** Fees as a share of gross profit. 0 on losers — drag needs a profit to eat. */
+  feeDragPct: number;
   netPnl: number;
   returnPct: number;
   entryBtcPrice: number;
@@ -105,6 +111,12 @@ type AggregateStats = {
   totalLosses: number;
   winRate: number;
   totalPnl: number;
+  /** totalPnl restated as the equation it is: gross minus fees. */
+  totalGrossPnl: number;
+  totalFees: number;
+  /** What one round trip costs at the size this desk actually trades. */
+  avgFeePerTrade: number;
+  feeDragPct: number;
   totalPremiumSpent: number;
   unrealizedPnl: number;
 };
@@ -305,7 +317,22 @@ export default function OptionsBuyingDeskPage() {
       cell: (t) => <DeskChip tone={t.exitReason === "TP" ? "success" : t.exitReason === "SL" ? "error" : "default"}>{t.exitReason}</DeskChip>,
     },
     { id: "ret", align: "right", header: "Ret %", cell: (t) => t.returnPct.toFixed(1) },
-    { id: "pnl", align: "right", header: "P&L", cell: (t) => <span className={pnlToneClass(t.netPnl)} style={{ fontWeight: 600 }}>{fmtUSD(t.netPnl)}</span> },
+    // Gross -> minus fees -> equals net, in that order, so the row reads as the
+    // equation it is. A net figure alone gives a reader no way to tell whether
+    // the fee was already taken out, and reading a fee-free number as a
+    // fee-honest one is how this desk's results failed to survive real money.
+    { id: "gross", align: "right", header: "Gross", cell: (t) => <span className={pnlToneClass(t.grossPnl)}>{fmtUSD(t.grossPnl)}</span> },
+    { id: "fees", align: "right", header: "− Fees", cell: (t) => <span className="desk-pnl-negative">{fmtUSD(-(t.feesUsd ?? 0))}</span> },
+    { id: "pnl", align: "right", header: "= Net", cell: (t) => <span className={pnlToneClass(t.netPnl)} style={{ fontWeight: 600 }}>{fmtUSD(t.netPnl)}</span> },
+    {
+      id: "drag", align: "right", header: "Fee Drag",
+      // Above 100% means the trade earned less than it cost to make.
+      cell: (t) => (
+        <span className={(t.feeDragPct ?? 0) >= 100 ? "desk-pnl-negative" : undefined}>
+          {t.netPnl > 0 ? `${(t.feeDragPct ?? 0).toFixed(0)}%` : "—"}
+        </span>
+      ),
+    },
   ];
 
   return (
@@ -342,6 +369,12 @@ export default function OptionsBuyingDeskPage() {
             valueClassName={stats ? pnlToneClass(stats.totalPnl) : undefined}
             sub={stats ? `realized + unrealized ${fmtUSD(stats.unrealizedPnl)}` : "—"}
             highlight
+          />
+          <DeskMetricTile
+            label="Fees Paid"
+            value={stats ? fmtUSD(-(stats.totalFees ?? 0)) : "—"}
+            valueClassName="desk-pnl-negative"
+            sub={stats ? `${fmtUSD(-(stats.avgFeePerTrade ?? 0))} per trade · ${(stats.feeDragPct ?? 0).toFixed(0)}% of gross` : "—"}
           />
           <DeskMetricTile
             label="Closed Trades"

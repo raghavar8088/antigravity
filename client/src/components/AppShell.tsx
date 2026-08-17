@@ -92,6 +92,10 @@ const PRIMARY_NAV: NavItem[] = [
   // Gold sits with the trading desks rather than under the crypto group: it
   // runs on the same venue and the same engine, but it is a different asset and
   // its results must not be read as part of the crypto leaderboard.
+  // Directly under the Live Engine group, as requested: it is the widest
+  // catalogue this app runs and the place a strategy earns its way toward the
+  // live roster.
+  { href: "/top-crypto-trading", label: "Top Crypto Trading", icon: ic.layers },
   { href: "/gold-desk", label: "Gold Desk", icon: ic.target },
   { href: "/crypto-fno", label: "Crypto F&O", icon: ic.layers },
   { href: "/btc-pre-live", label: "BTC Pre-Live Engine", icon: ic.trend },
