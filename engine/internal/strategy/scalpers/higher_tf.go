@@ -18,6 +18,7 @@ const (
 	TF10m HigherTF = "10m"
 	TF15m HigherTF = "15m"
 	TF30m HigherTF = "30m"
+	TF45m HigherTF = "45m"
 	TF1h  HigherTF = "1h"
 	TF4h  HigherTF = "4h"
 	TF1d  HigherTF = "1d"
@@ -36,6 +37,8 @@ func (t HigherTF) Step() time.Duration {
 		return 15 * time.Minute
 	case TF30m:
 		return 30 * time.Minute
+	case TF45m:
+		return 45 * time.Minute
 	case TF1h:
 		return time.Hour
 	case TF4h:
@@ -91,6 +94,8 @@ func (t HigherTF) CandlesFor(ctx MarketContext) ([]Candle, bool) {
 		c = ctx.Candles15m
 	case TF30m:
 		c = ctx.Candles30m
+	case TF45m:
+		c = ctx.Candles45m
 	case TF1h:
 		c = ctx.Candles1h
 	case TF4h:

@@ -229,7 +229,10 @@ func BuildMTFPack() []RegistryEntry {
 	// fee bar refuses most short-timeframe setups on its own, because the
 	// measured move is smaller than the cost of taking it. The pattern is
 	// allowed to exist everywhere and the economics decide where it trades.
-	tfs := []HigherTF{TF1m, TF5m, TF10m, TF15m, TF30m, TF1h, TF4h, TF1d}
+	// 45m added 2026-08-17 at the owner's request. 10m is kept rather than
+	// swapped out: streams on it already carry a live record, and deleting a
+	// timeframe would discard that evidence to make a list match a spec.
+	tfs := []HigherTF{TF1m, TF5m, TF10m, TF15m, TF30m, TF45m, TF1h, TF4h, TF1d}
 	type fam struct {
 		id   string
 		make func(bool) func(string, []Candle, float64) Signal
@@ -277,6 +280,31 @@ func BuildMTFPack() []RegistryEntry {
 		{"Flag", patFlag},
 		{"OpeningRangeBreak", patOpeningRangeBreak},
 		{"FibRetrace", patFibRetrace},
+
+		// Chart patterns, third batch — the shapes the catalogue was missing.
+		// All of these need a long lookback to recognise anything real, so they
+		// self-reject on short histories instead of finding a "wedge" in eight
+		// candles of noise.
+		{"Wedge", patWedge},
+		{"Pennant", patPennant},
+		{"CupHandle", patCupHandle},
+		{"Rounding", patRounding},
+		{"Broadening", patBroadening},
+		{"Diamond", patDiamond},
+
+		// Candlestick: the plain one-bar rejection shape, distinct from PinBar,
+		// which additionally requires the bar to sit at a swing extreme.
+		{"Hammer", patHammer},
+
+		// Price structure, second batch.
+		{"Keltner", patKeltner},
+		{"PriorSessionBreak", patPriorSessionBreak},
+		{"RoundNumber", patRoundNumber},
+		{"TTMSqueeze", patTTMSqueeze},
+		{"EMARibbon", patEMARibbon},
+		{"ATRThrust", patATRThrust},
+		{"PivotBreak", patPivotBreak},
+		{"GapFade", patGapFade},
 	}
 	out := make([]RegistryEntry, 0, len(tfs)*len(fams)*2)
 	for _, tf := range tfs {

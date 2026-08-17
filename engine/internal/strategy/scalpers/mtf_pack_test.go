@@ -33,9 +33,15 @@ func mtfCandles(n int, start, driftPct, noisePct float64) []Candle {
 // The pack must cover every timeframe and family, in both directions.
 func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 	p := BuildMTFPack()
-	// 6 indicator + 20 pattern families, on 8 timeframes, both sides.
-	if len(p) != 8*26*2 {
-		t.Fatalf("pack has %d strategies, want %d (8 timeframes x 26 families x 2 sides)", len(p), 8*26*2)
+	// 41 families on 9 timeframes, both sides.
+	//
+	// Was 26 families x 8 timeframes. 2026-08-17 added 45m and fifteen families
+	// completing the chart / candlestick / price-structure catalogue: Wedge,
+	// Pennant, CupHandle, Rounding, Broadening, Diamond, Hammer, Keltner,
+	// PriorSessionBreak, RoundNumber, TTMSqueeze, EMARibbon, ATRThrust,
+	// PivotBreak and GapFade.
+	if len(p) != 9*41*2 {
+		t.Fatalf("pack has %d strategies, want %d (9 timeframes x 41 families x 2 sides)", len(p), 9*41*2)
 	}
 	seen := map[string]bool{}
 	for _, e := range p {
@@ -51,6 +57,13 @@ func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 		"MTF_30m_StructureBreak_Short", "MTF_15m_LevelRetest_Long", "MTF_1h_TriangleBreak_Short",
 		"MTF_5m_HeadShoulders_Short", "MTF_1m_Marubozu_Long", "MTF_10m_Flag_Long",
 		"MTF_4h_HeikinAshiFlip_Short", "MTF_1d_TripleTopBottom_Long", "MTF_30m_FibRetrace_Long",
+		// The 2026-08-17 additions, including the new 45m timeframe.
+		"MTF_45m_TrendPullback_Long", "MTF_45m_Wedge_Short", "MTF_1h_CupHandle_Long",
+		"MTF_4h_Diamond_Short", "MTF_1d_Broadening_Long", "MTF_15m_Hammer_Short",
+		"MTF_30m_Keltner_Long", "MTF_1h_PriorSessionBreak_Short", "MTF_5m_RoundNumber_Long",
+		"MTF_4h_TTMSqueeze_Short", "MTF_1h_EMARibbon_Long", "MTF_15m_ATRThrust_Short",
+		"MTF_1d_PivotBreak_Long", "MTF_5m_GapFade_Short", "MTF_45m_Pennant_Long",
+		"MTF_45m_Rounding_Short",
 	} {
 		if !seen[want] {
 			t.Errorf("missing %s", want)

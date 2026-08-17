@@ -89,6 +89,7 @@ type MarketContext struct {
 	Candles4h  []Candle // last 30 4h candles
 	Candles10m []Candle // last 200 10m candles
 	Candles30m []Candle // last 96 30m candles
+	Candles45m []Candle // last 96 45m candles
 	Candles1d  []Candle // last 120 daily candles
 
 	// Order flow

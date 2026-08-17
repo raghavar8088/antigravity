@@ -711,6 +711,11 @@ func (d *desk) poll() {
 				// 55-period average over four.
 				Candles10m: tail(resample(ss.bars, 10*time.Minute, cutoff), 200),
 				Candles30m: tail(resample(ss.bars, 30*time.Minute, cutoff), 96),
+				// 45m buckets anchor on Truncate's epoch grid, not on the hour,
+				// so a 45m candle does not align with the 30m or 1h series. That
+				// is inherent to a timeframe that does not divide the hour, and
+				// it is consistent bar to bar, which is what the indicators need.
+				Candles45m: tail(resample(ss.bars, 45*time.Minute, cutoff), 96),
 			}
 			// 1h/4h/1d come from the VENUE when available, because resampling
 			// the ring gives 100/25/4 candles against the 120 each needs.
