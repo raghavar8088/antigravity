@@ -86,6 +86,9 @@ type Book = {
   openUnrealisedUsd: number;
   maxNotionalUsd: number;
   maxConcurrent: number;
+  maxLeverage: number;
+  /** Notional of one position. Explicit here because the concurrency cap is off. */
+  positionUsd: number;
   feeRatePerSide: number;
   accounts?: Stream[];
   openPositions?: OpenPos[];
@@ -110,6 +113,17 @@ function fmtPx(v: number | undefined): string {
   if (abs >= 1) return v.toFixed(3);
   return v.toFixed(6);
 }
+/**
+ * The engine reports -1 for an UNLIMITED cap, distinct from 0 which would read
+ * as "nothing allowed" — the opposite. Rendering the raw -1 would look like a
+ * bug, so it becomes a word.
+ */
+function fmtCap(v: number | undefined, unit: string): string {
+  if (v === undefined) return "—";
+  if (v < 0) return "unlimited";
+  return unit === "$" ? `$${v.toFixed(0)}` : `${v}${unit}`;
+}
+
 function pnlTone(v: number): string {
   return v > 0 ? "desk-pnl-positive" : v < 0 ? "desk-pnl-negative" : "desk-pnl-neutral";
 }
@@ -440,6 +454,13 @@ export default function TopCryptoTradingPage() {
                 All ten books combined: <strong>{fmtUSD(totalEquity)}</strong> on {fmtUSD(totalStart)} deployed. Shown
                 as a sum, never as a single account — there is no pooled balance, and treating one would let the best
                 book disguise the worst.
+              </p>
+              <p className="desk-body-md" style={{ marginTop: 8, maxWidth: 900, color: "var(--desk-on-surface-variant)" }}>
+                <strong>Open positions: {fmtCap(book.maxConcurrent, "")}</strong> · aggregate leverage cap{" "}
+                {fmtCap(book.maxLeverage, "x")} · {fmtUSD(book.positionUsd)} notional per position. Uncapped
+                concurrency is what lets all {allStreams.length} streams express themselves instead of the first three
+                to signal — but it also means aggregate exposure is bounded only by how many setups appear at once,
+                so read a drawdown here against the position COUNT, not just the balance.
               </p>
             </DeskCard>
 

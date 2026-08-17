@@ -1832,6 +1832,7 @@ The content is organized as follows:
   scalp_prelive/livesim_test.go
   scalp_prelive/main.go
   scalp_prelive/mirror_test.go
+  scalp_prelive/papercaps_test.go
   scalp_prelive/paperdesk_test.go
   scalp_prelive/paperdesk.go
   scalp_prelive/paperpersist_test.go

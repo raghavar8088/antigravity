@@ -5,7 +5,9 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -124,17 +126,66 @@ type livePaperDesk struct {
 
 // livePaperStartingEquity is the whole account - the same $100 the live desk
 // runs, so a result here transfers without rescaling.
-const livePaperStartingEquity = 100.0
+var livePaperStartingEquity = paperEnvFloat("SCALP_PAPER_EQUITY", 100.0)
+
+// paperEnvFloat reads a positive float from the environment.
+//
+// A bad value logs and falls back rather than failing the boot, and NEVER
+// silently: an operator who sets a $10,000 book and gets $100 has no way to
+// tell from the page, because both render as a valid balance.
+func paperEnvFloat(key string, def float64) float64 {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || v < 0 {
+		log.Printf("[PAPER] ⚠️  %s=%q is not a non-negative number — using %.2f", key, raw, def)
+		return def
+	}
+	return v
+}
+
+// paperEnvInt is the integer form. Zero is meaningful for the caps below, so it
+// is accepted rather than treated as unset.
+func paperEnvInt(key string, def int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v < 0 {
+		log.Printf("[PAPER] ⚠️  %s=%q is not a non-negative integer — using %d", key, raw, def)
+		return def
+	}
+	return v
+}
 
 // livePaperMaxLeverage is the AGGREGATE cap across all open positions, matching
 // PerpRiskConfig.MaxAggregateLeverage on the live bridge.
-const livePaperMaxLeverage = 3.0
+// ZERO means UNLIMITED — no aggregate cap at all. Used by Top Crypto Trading,
+// where the point is to let every one of 738 streams express itself rather than
+// to reproduce the live desk's budget.
+var livePaperMaxLeverage = paperEnvFloat("SCALP_PAPER_MAX_LEVERAGE", 3.0)
 
 // livePaperMaxConcurrent matches the bridge's MaxConcurrentPositions. Three
 // positions sharing a 3x cap is ~1x notional each — which is what the live desk
 // actually deploys, and materially less than the 3x a per-strategy account
 // implied.
-const livePaperMaxConcurrent = 3
+// ZERO means UNLIMITED concurrent positions.
+var livePaperMaxConcurrent = paperEnvInt("SCALP_PAPER_MAX_CONCURRENT", 3)
+
+// livePaperPositionUSD is the notional of ONE paper position.
+//
+// It had to become explicit. The old size fell out of
+// equity*maxLeverage/maxConcurrent, which is undefined once concurrency is
+// unlimited — and scaling that formula to a $10,000 book would have sized every
+// position at $10,000 notional, so twenty-five open positions would be 25x
+// aggregate leverage on a book whose siblings run 3x.
+//
+// Zero keeps the historical formula, so every desk that does not set this is
+// unaffected.
+var livePaperPositionUSD = paperEnvFloat("SCALP_PAPER_POSITION_USD", 0)
 
 // livePaperProductLeverage is the leverage SET ON THE PRODUCT at Delta, which
 // decides how much margin the venue holds and therefore how far away it will
@@ -340,15 +391,23 @@ func (d *livePaperDesk) onSignal(strategy, symbol, dir string, entry, stop, targ
 	// Concurrency cap, matching the bridge. Refusing here is the same refusal
 	// the live desk makes; without it the paper record would contain trades the
 	// real desk would never have taken.
-	if len(d.open) >= livePaperMaxConcurrent {
+	if livePaperMaxConcurrent > 0 && len(d.open) >= livePaperMaxConcurrent {
 		return
 	}
+	// Per-position notional.
+	perPosition := livePaperPositionUSD
+	if perPosition <= 0 {
+		// Historical formula: the whole budget divided evenly across the slots.
+		perPosition = d.equity * livePaperMaxLeverage / float64(livePaperMaxConcurrent)
+	}
+	notional := perPosition
 	// Aggregate leverage cap across everything already open. One wallet means
 	// one budget: a fourth idea cannot be funded by pretending the first three
-	// were free.
-	budget := d.equity*livePaperMaxLeverage - d.openNotionalLocked()
-	perPosition := d.equity * livePaperMaxLeverage / livePaperMaxConcurrent
-	notional := math.Min(budget, perPosition)
+	// were free. Skipped entirely when the cap is unlimited.
+	if livePaperMaxLeverage > 0 {
+		budget := d.equity*livePaperMaxLeverage - d.openNotionalLocked()
+		notional = math.Min(budget, perPosition)
+	}
 	if notional <= 0 {
 		return
 	}
@@ -570,9 +629,27 @@ func (d *livePaperDesk) snapshot() map[string]any {
 		// pay. Summed here rather than in the UI so the page and the API cannot
 		// disagree about what is exposed.
 		"openUnrealisedUsd": math.Round(d.openUnrealisedLocked()*100) / 100,
-		"maxNotionalUsd":    math.Round(d.equity*livePaperMaxLeverage*100) / 100,
-		"maxConcurrent":     livePaperMaxConcurrent,
-		"maxLeverage":       livePaperMaxLeverage,
+		// -1 on either of these means UNLIMITED. Reported distinctly from 0,
+		// which a reader would take as "nothing allowed" — the opposite.
+		"maxNotionalUsd": func() float64 {
+			if livePaperMaxLeverage <= 0 {
+				return -1
+			}
+			return math.Round(d.equity*livePaperMaxLeverage*100) / 100
+		}(),
+		"maxConcurrent": func() int {
+			if livePaperMaxConcurrent <= 0 {
+				return -1
+			}
+			return livePaperMaxConcurrent
+		}(),
+		"maxLeverage": func() float64 {
+			if livePaperMaxLeverage <= 0 {
+				return -1
+			}
+			return livePaperMaxLeverage
+		}(),
+		"positionUsd": math.Round(livePaperPositionUSD*100) / 100,
 		// The VENUE-side settings, distinct from the size caps above. These are
 		// what decide where Delta force-closes a position, and they are reported
 		// so the page can show that the paper desk plays by the same margin
