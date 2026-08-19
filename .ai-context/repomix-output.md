@@ -1819,6 +1819,12 @@ The content is organized as follows:
   delta_week_backtest/main.go
   fetch_historical/main.go
   m1_scalp_qualify/main.go
+  mtf_qualify/data.go
+  mtf_qualify/grade.go
+  mtf_qualify/main.go
+  mtf_qualify/metrics.go
+  mtf_qualify/sim_test.go
+  mtf_qualify/sim.go
   perfbench/main.go
   pre_live/main.go
   pre_live/mongo.go
