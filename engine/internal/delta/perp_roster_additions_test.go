@@ -5,21 +5,24 @@ import (
 	"testing"
 )
 
-// The roster is 67 streams.
+// The roster is 5 streams, all on AVAXUSD.
 //
-// The count is pinned because it is an owner decision, and because the number
-// itself carries the finding: the owner selected FOURTEEN leaderboard rows, and
-// ten of them are on contracts whose price grid cannot hold a stop — eight on
-// MOVEUSD at 5.7 ticks, two on LABUSD at 19.0 against a 20-tick gate. Both
-// symbols are in gridBlockedSymbols, so a roster of four where fourteen were
-// chosen is the correct outcome rather than a dropped edit.
+// Pinned because it is an owner decision, and because the number carries the
+// finding. Fifteen streams were selected off the Top Crypto board on
+// 2026-08-20; ten of them cannot be SIZED on a $10 account, so a roster of five
+// where fifteen were chosen is the correct outcome rather than a dropped edit.
 //
-// If this count ever climbs without the blocklist shrinking, something routed a
-// symbol that cannot fill — the populated-but-unfillable roster this file has
-// warned about through three separate rewrites.
+// The ten are not grid-blocked — every symbol involved clears the tick grid
+// easily. They fail risk sizing, which is a different and here tighter limit;
+// TestRoster_EverySymbolCanBeSizedByRisk holds that reasoning.
+//
+// If this count climbs without desk equity changing, something routed a stream
+// the account cannot fund — the populated-but-unfillable roster this file has
+// warned about through four rewrites.
 func TestDefaultScalpLiveStreams_HoldsOnlyMTFStreams(t *testing.T) {
-	if len(defaultScalpLiveStreams) != 67 {
-		t.Errorf("roster has %d streams, want 67 (4 -> 33 -> 53 -> 67 across four owner additions)",
+	if len(defaultScalpLiveStreams) != 5 {
+		t.Errorf("roster has %d streams, want the 5 AVAXUSD streams routable at $10 equity "+
+			"(15 selected from Top Crypto; 10 cannot be sized on this account)",
 			len(defaultScalpLiveStreams))
 	}
 	// Every retired pack name must stay off it. The Scalp100/Delta20/Curated

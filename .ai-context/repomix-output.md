@@ -935,6 +935,7 @@ The content is organized as follows:
   delta/perp_roster_additions_test.go
   delta/perp_roster_test.go
   delta/perp_roster.go
+  delta/perp_sizing_budget_test.go
   delta/perp_sizing_test.go
   delta/perp_sizing.go
   delta/perp_slippage_test.go
@@ -1857,6 +1858,7 @@ The content is organized as follows:
   sep_evidence/datasource.go
   sep_evidence/main.go
   sep_evidence/reports.go
+  wallet_check/main.go
 
 [docs]/
   api-index.md

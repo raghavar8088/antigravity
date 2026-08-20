@@ -50,182 +50,77 @@ import (
 // NOT qualified. The gate asks for 200 trades per stream and these have 19-61,
 // selected from the right tail of 2,416 streams on in-sample data. Being on
 // this list is permission, not evidence.
-// Owner selection from the Scalp Desk leaderboard, third addition on
-// 2026-08-16. 53 streams across 19 symbols.
+// Replaced 2026-08-20 at the owner's direction, from the TOP CRYPTO TRADING
+// board. The previous 67 streams are removed; this replaces them.
 //
-// Each addition has been an ADD, not a replacement: 4 -> 33 -> 53.
+// The owner picked 15 streams across five books and asked to run them on the
+// EXISTING capital. At $10 equity, FIVE of the fifteen can fill.
 //
-// Grid status at selection, on the VOLATILITY stop (2x p90 1m range):
+// The binding constraint is neither the price grid nor the book ceiling. Every
+// one of the five symbols clears the grid with enormous margin — SOL 3952
+// ticks, BTC 646, AVAX 286, ETH 255, ZEC 173 — and ETHUSD clears the ceiling
+// too. What refuses them is the RISK BUDGET, which is a different limit:
 //
-//	HUSD 772   AIOUSD 264   AVAAIUSD 158   GRIFFAINUSD 117   BEATUSD 107
-//	CHIPUSD 83  PIEVERSEUSD 77  VELVETUSD 421  SKYAIUSD 138  CROSSUSD 63
-//	BLESSUSD 60  BASEDUSD 44  AIOTUSD 41  GIGGLEUSD 33  EDENUSD 30
-//	PUMPUSD 24  TSTUSD 20  XAIUSD 14  ARCUSD 2
+//	risk/trade = equity x 0.6%             = $0.06
+//	notional   = risk / stop fraction
+//	contracts  = int(notional / per contract)     <- rounds DOWN
 //
-// The last two are under the 20-tick gate on that measure and are routed
-// anyway, which is a deliberate reversal of how LABUSD was handled this
-// morning. The reason is that the measure changed underneath us.
+//	symbol   1 ctr    stop%   notional  ctr  ceiling  result
+//	SOLUSD   $87.07   0.454%   $13.22    0   over     refused
+//	BTCUSD   $72.44   0.446%   $13.45    0   over     refused
+//	ZECUSD   $56.45   0.307%   $19.54    0   over     refused
+//	ETHUSD   $23.08   0.553%   $10.85    0   UNDER    refused
+//	AVAXUSD   $7.08   0.404%   $14.85    2   under    TRADES
 //
-// volScaledLevels now WIDENS ONLY, so the stop actually sent is max(strategy
-// stop, measured stop). The audit sees only the measured one, which makes every
-// tick count in it a LOWER BOUND. ARCUSD proves the gap is real: it audits at
-// 2.0 ticks and trades live — its MTF_10m_FibRetrace_Short opened and closed at
-// 16:17, and the engine logged no refusal at all after the fix shipped.
+// ETHUSD is the row worth reading twice, and it corrects a claim made earlier
+// in this session. It fits the $30 ceiling comfortably and is STILL refused:
+// risk sizing asks for $10.85 of notional and one contract costs $23.08, so the
+// position the strategy wants is smaller than the smallest position that
+// exists. Rounding down makes that zero contracts and ErrRiskTooSmall. "Fits
+// the book" and "fits the risk budget" are separate questions, and here the
+// second is the tighter one — a distinction easy to miss because on every
+// cheap symbol the desk has traded so far, the ceiling was the only one that
+// ever bound.
 //
-// LABUSD was different in kind. It measured 19.0 ticks across three runs on a
-// stop that was ALREADY the strategy's, so nothing wider was coming; and its
-// grid is coarse relative to price, which is permanent. XAIUSD and ARCUSD are
-// quiet, not coarse. Where the outcome genuinely cannot be predicted from here,
-// the runtime gate is the right decider: it refuses per signal with a logged
-// reason, shows the count in the UI, and auto-disables after five in a row.
+// Not routed rather than routed-and-refused, on the LABUSD precedent: a stream
+// that logs the same refusal on every signal is noise rather than evidence. ETH
+// needs its stop to roughly halve (to 0.260%) or equity to reach $21.27; the
+// others need $29-$66. Nothing about the strategies changes at those numbers —
+// only whether the account can express them.
 //
-// FOURTH addition, from the High Volume desk board: 14 streams on ADAUSD,
-// AVAXUSD, UNIUSD and HYPEUSD. 53 -> 67 across 23 symbols. Nothing existing was
-// touched.
+// ONE POSITION AT A TIME. All five routed streams are on AVAXUSD and
+// MaxPositionsPerSymbol is 1, so they compete for a single slot and the one
+// that fills is whichever signals first. That is a frequency property rather
+// than a quality one, and the 10m stream will win most of them.
 //
-// All four clear the grid comfortably — AVAXUSD 568 ticks, UNIUSD 295, HYPEUSD
-// 80, ADAUSD 46.
-//
-// BTCUSD is NOT here, and it is not a grid problem: it measures 218 ticks, one
-// of the best on the venue. One BTCUSD contract is $64.08 (mark 64,078 x 0.001
-// contract value) and the desk book ceiling is $30 — $10 equity at 3x. Delta
-// has no fractional contracts, so the smallest position that exists is more
-// than twice the entire book, and PlanPerpOrder refuses it with
-// ErrAggregateExposureReached every time, on an empty book.
-//
-// That is arithmetic, not volatility, so it is excluded outright rather than
-// routed to find out — the same reasoning that dropped LABUSD and the opposite
-// of the XAIUSD case, where the answer genuinely depended on a stop this
-// package cannot see. MTF_4h_HeadShoulders_Long on BTCUSD needs desk equity of
-// at least $22 at 3x to be expressible at all, and more than that to be sized
-// on its own risk rather than clamped to one contract.
-//
-// EVIDENCE, unchanged and worth restating. One row on the whole roster is
-// QUALIFIED — MTF_1h_LevelRetest_Long on AIOUSD, 31 trades, 35.5% win rate.
-// Everything else reads "too few", and this batch adds six streams with 2-3
-// trades at a 100% win rate, which is what three trades look like when they
-// happen to win. The gate asks for 200.
-//
-// And the binding constraint is unchanged: 10 concurrent positions, one per
-// symbol. 53 streams now compete for those 10 and the slot goes to whichever
-// signals FIRST. Past about 20 streams this list stops selecting what trades
-// and starts selecting only what trades OFTEN — the 10m entries will take most
-// slots regardless of how any of them rank.
+// EVIDENCE. These come from Top Crypto, a PAPER-ONLY module where no stream is
+// on the venue allow-list, so none has ever placed a real order. Records run
+// 12-24 trades against a gate asking for 200, and the AVAX book they were drawn
+// from is net NEGATIVE overall at -$32.47 — these are the winners inside a
+// losing book, which is what the top of a leaderboard is by construction.
+// Permission, not evidence.
 var defaultScalpLiveStreams = []PerpStream{
-	// AIOUSD
-	{Strategy: "MTF_1h_LevelRetest_Long", Symbol: "AIOUSD"},
-	{Strategy: "MTF_1h_DojiBreak_Long", Symbol: "AIOUSD"},
-	{Strategy: "MTF_10m_DirectionalTriangle_Long", Symbol: "AIOUSD"},
-	{Strategy: "MTF_1h_TriangleBreak_Long", Symbol: "AIOUSD"},
-	{Strategy: "MTF_4h_DoubleTopBottom_Long", Symbol: "AIOUSD"},
-
-	// HUSD
-	{Strategy: "MTF_1d_PinBar_Short", Symbol: "HUSD"},
-	{Strategy: "MTF_1d_TrendPullback_Short", Symbol: "HUSD"},
-	{Strategy: "MTF_1d_FibRetrace_Short", Symbol: "HUSD"},
-	{Strategy: "MTF_10m_TrendPullback_Long", Symbol: "HUSD"},
-	{Strategy: "MTF_10m_TriangleBreak_Short", Symbol: "HUSD"},
-
-	// VELVETUSD
-	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "VELVETUSD"},
-	{Strategy: "MTF_1h_DoubleTopBottom_Long", Symbol: "VELVETUSD"},
-	{Strategy: "MTF_10m_OpeningRangeBreak_Long", Symbol: "VELVETUSD"},
-	{Strategy: "MTF_1h_FibRetrace_Long", Symbol: "VELVETUSD"},
-	{Strategy: "MTF_10m_StructureBreak_Long", Symbol: "VELVETUSD"},
-
-	// AVAAIUSD
-	{Strategy: "MTF_4h_RSITrendReset_Long", Symbol: "AVAAIUSD"},
-	{Strategy: "MTF_4h_FibRetrace_Long", Symbol: "AVAAIUSD"},
-
-	// SKYAIUSD
-	{Strategy: "MTF_10m_TrendPullback_Long", Symbol: "SKYAIUSD"},
-	{Strategy: "MTF_4h_StructureBreak_Short", Symbol: "SKYAIUSD"},
-
-	// BEATUSD
-	{Strategy: "MTF_1h_TriangleBreak_Short", Symbol: "BEATUSD"},
-	{Strategy: "MTF_1h_OutsideBar_Short", Symbol: "BEATUSD"},
-
-	// CHIPUSD
-	{Strategy: "MTF_1h_PinBar_Short", Symbol: "CHIPUSD"},
-	{Strategy: "MTF_1h_HeikinAshiFlip_Long", Symbol: "CHIPUSD"},
-
-	// CROSSUSD
-	{Strategy: "MTF_4h_SqueezeExpansion_Short", Symbol: "CROSSUSD"},
-	{Strategy: "MTF_1h_LevelRetest_Short", Symbol: "CROSSUSD"},
-	{Strategy: "MTF_1d_PinBar_Short", Symbol: "CROSSUSD"},
-	{Strategy: "MTF_10m_LevelRetest_Long", Symbol: "CROSSUSD"},
-
-	// PIEVERSEUSD
-	{Strategy: "MTF_1h_RSITrendReset_Long", Symbol: "PIEVERSEUSD"},
-	{Strategy: "MTF_1h_TrendPullback_Long", Symbol: "PIEVERSEUSD"},
-
-	// BLESSUSD
-	{Strategy: "MTF_4h_RSITrendReset_Short", Symbol: "BLESSUSD"},
-	{Strategy: "MTF_1h_LevelRetest_Short", Symbol: "BLESSUSD"},
-	{Strategy: "MTF_10m_TrendPullback_Short", Symbol: "BLESSUSD"},
-
-	// BASEDUSD — new
-	{Strategy: "MTF_1d_RSITrendReset_Short", Symbol: "BASEDUSD"},
-	{Strategy: "MTF_4h_FibRetrace_Short", Symbol: "BASEDUSD"},
-	{Strategy: "MTF_10m_StructureBreak_Short", Symbol: "BASEDUSD"},
-
-	// AIOTUSD
-	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "AIOTUSD"},
-	{Strategy: "MTF_4h_TriangleBreak_Long", Symbol: "AIOTUSD"},
-	{Strategy: "MTF_4h_LevelRetest_Long", Symbol: "AIOTUSD"},
-
-	// GIGGLEUSD
-	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "GIGGLEUSD"},
-	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "GIGGLEUSD"},
-
-	// GRIFFAINUSD — new
-	{Strategy: "MTF_4h_LevelRetest_Long", Symbol: "GRIFFAINUSD"},
-
-	// EDENUSD
-	{Strategy: "MTF_4h_HeikinAshiFlip_Long", Symbol: "EDENUSD"},
-	{Strategy: "MTF_1h_StructureBreak_Short", Symbol: "EDENUSD"},
-
-	// PUMPUSD
-	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "PUMPUSD"},
-	{Strategy: "MTF_1h_RSITrendReset_Short", Symbol: "PUMPUSD"},
-
-	// TSTUSD — 20.3 ticks, the narrowest that clears outright.
-	{Strategy: "MTF_10m_TrendPullback_Short", Symbol: "TSTUSD"},
-	{Strategy: "MTF_10m_TriangleBreak_Long", Symbol: "TSTUSD"},
-
-	// ARCUSD — audits at 2.0 ticks and trades anyway; see the note above.
-	{Strategy: "MTF_10m_FibRetrace_Short", Symbol: "ARCUSD"},
-	{Strategy: "MTF_4h_TrendPullback_Long", Symbol: "ARCUSD"},
-
-	// XAIUSD — new, 14.1 ticks on the volatility stop. Needs the strategy's own
-	// stop to exceed 2.87% to clear. Genuinely unknown from here, so the runtime
-	// gate decides and the refusal count in the UI is the answer.
-	{Strategy: "MTF_1h_RSITrendReset_Long", Symbol: "XAIUSD"},
-	{Strategy: "MTF_1h_FibRetrace_Long", Symbol: "XAIUSD"},
-	{Strategy: "MTF_1h_LevelRetest_Long", Symbol: "XAIUSD"},
-	{Strategy: "MTF_10m_DoubleTopBottom_Long", Symbol: "XAIUSD"},
-
-	// ADAUSD (46 ticks) — from the High Volume board.
-	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "ADAUSD"},
-	{Strategy: "MTF_4h_StructureBreak_Short", Symbol: "ADAUSD"},
-	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "ADAUSD"},
-	{Strategy: "MTF_10m_PinBar_Long", Symbol: "ADAUSD"},
-
-	// AVAXUSD (568 ticks)
-	{Strategy: "MTF_1h_TrendPullback_Short", Symbol: "AVAXUSD"},
-	{Strategy: "MTF_1h_TriangleBreak_Short", Symbol: "AVAXUSD"},
+	// AVAXUSD — $7.08 per contract, the only one of the five the account can
+	// express. Risk sizing puts 2 contracts on each entry.
+	{Strategy: "MTF_4h_DoubleTopBottom_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_4h_TripleTopBottom_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_1h_PriorSessionBreak_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_1h_Keltner_Long", Symbol: "AVAXUSD"},
 	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "AVAXUSD"},
 
-	// UNIUSD (295 ticks)
-	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "UNIUSD"},
-	{Strategy: "MTF_10m_RSITrendReset_Long", Symbol: "UNIUSD"},
-	{Strategy: "MTF_4h_RSITrendReset_Short", Symbol: "UNIUSD"},
-
-	// HYPEUSD (80 ticks)
-	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "HYPEUSD"},
-	{Strategy: "MTF_10m_RSITrendReset_Long", Symbol: "HYPEUSD"},
-	{Strategy: "MTF_10m_HeikinAshiFlip_Short", Symbol: "HYPEUSD"},
-	{Strategy: "MTF_1h_HeikinAshiFlip_Short", Symbol: "HYPEUSD"},
+	// Chosen by the owner and NOT routed, because the account cannot fund them.
+	// All ten clear the tick grid; none can be sized at $10 equity:
+	//
+	//   MTF_1d_TTMSqueeze_Long|ETHUSD          20 trades, net $19.81
+	//   MTF_1d_ATRThrust_Long|ETHUSD           14 trades, net $15.06
+	//   MTF_1d_Keltner_Long|ETHUSD             14 trades, net $15.06
+	//   MTF_1h_StructureBreak_Long|ETHUSD      11 trades, net $13.20
+	//   MTF_1d_EMARibbon_Long|BTCUSD           30 trades, net $11.30
+	//   MTF_1d_TTMSqueeze_Long|BTCUSD          28 trades, net  $6.63
+	//   MTF_1d_Keltner_Long|SOLUSD             22 trades, net  $5.57
+	//   MTF_1h_PriorSessionBreak_Long|SOLUSD   19 trades, net $13.48
+	//   MTF_1d_DirectionalTriangle_Long|ZECUSD 33 trades, net $14.60
+	//   MTF_1d_StructureBreak_Long|ZECUSD      15 trades, net $13.14
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
