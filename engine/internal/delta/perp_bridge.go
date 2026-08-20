@@ -2,6 +2,7 @@ package delta
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -445,8 +446,24 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 
 	plan, err := PlanPerpOrder(b.reg, cfg, symbol, long, entry, stop, target, openCount, openNotional)
 	if err != nil {
-		// Capacity and sub-contract refusals are routine; log them quietly once
-		// rather than treating a normal skip as a failure.
+		// A sub-contract refusal is stated OUT LOUD, once per signal.
+		//
+		// It used to go only to noteError, which records a single last-error
+		// string. That is fine for a transient capacity skip and wrong for this
+		// one: a stream whose every signal rounds to zero contracts presents as
+		// a strategy that never fires, and the desk offers no way to tell the
+		// two apart. ETHUSD is deliberately on the roster in exactly that state
+		// — $23.08 a contract against $10.85 of risk-sized notional — so the
+		// reason it is quiet has to be legible without reading the sizing code.
+		//
+		// Capacity refusals stay quiet, because those are genuinely routine and
+		// self-clearing.
+		if errors.Is(err, ErrRiskTooSmall) {
+			log.Printf("[PERP LIVE] %s %s: refused before entry — %v (risk $%.4f at a %.3f%% stop "+
+				"buys less than one contract; it will size once the stop tightens or equity rises)",
+				strategy, symbol, err, cfg.EquityUSD*cfg.RiskPerTradeFraction,
+				math.Abs(entry-stop)/entry*100)
+		}
 		b.noteError(err.Error())
 		return nil
 	}

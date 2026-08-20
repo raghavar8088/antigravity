@@ -38,11 +38,32 @@ func TestRoster_EverySymbolCanBeSizedByRisk(t *testing.T) {
 		return int(notional / q.perContract) // SizeContracts rounds down
 	}
 
+	// Routed symbols that cannot size TODAY but can when volatility falls.
+	//
+	// ETHUSD is here at the owner's explicit instruction after the refusal was
+	// explained. It is refused now — $10.85 of risk-sized notional against a
+	// $23.08 contract — but its contract fits under the $30 ceiling, so a
+	// quieter market makes it fundable without anything else changing. The same
+	// measurement put ETH's stop at 0.069% on 2026-08-16, well inside the
+	// 0.260% it needs.
+	volatilityGated := map[string]bool{"ETHUSD": true}
+
 	for _, st := range ScalpLiveStreams() {
 		q, ok := measured[st.Symbol]
 		if !ok {
 			t.Errorf("%s (%s) is routed but has no measured contract price/stop here; "+
 				"add them so the sizing claim can be re-run", st.Symbol, st.Strategy)
+			continue
+		}
+		if volatilityGated[st.Symbol] {
+			// The exemption is only legitimate while the contract fits the
+			// ceiling. Past that, no volatility helps and the row would refuse
+			// forever, which is the state this file exists to prevent.
+			if q.perContract > equityUSD*maxLeverage {
+				t.Errorf("%s is marked volatility-gated but its $%.2f contract exceeds the $%.2f "+
+					"ceiling — it can never size, so it is not gated, it is impossible",
+					st.Symbol, q.perContract, equityUSD*maxLeverage)
+			}
 			continue
 		}
 		if n := contractsFor(q); n < 1 {
@@ -52,12 +73,14 @@ func TestRoster_EverySymbolCanBeSizedByRisk(t *testing.T) {
 		}
 	}
 
-	// And the ones deliberately held back must still be unfundable, or the
-	// reason they were excluded has expired and they deserve another look.
-	for _, sym := range []string{"ETHUSD", "ZECUSD", "BTCUSD", "SOLUSD"} {
-		if n := contractsFor(measured[sym]); n >= 1 {
-			t.Errorf("%s now sizes to %d contract(s) at $%.0f equity and could be routed; "+
-				"it is excluded on the grounds that it cannot be", sym, n, equityUSD)
+	// The six held back are held back because no volatility can rescue them.
+	// Asserted on the CEILING rather than on today's stop, because that is the
+	// permanent property their exclusion rests on.
+	for _, sym := range []string{"ZECUSD", "BTCUSD", "SOLUSD"} {
+		if measured[sym].perContract <= equityUSD*maxLeverage {
+			t.Errorf("%s at $%.2f now fits the $%.2f ceiling and could become routable; "+
+				"it is excluded on the grounds that it never can",
+				sym, measured[sym].perContract, equityUSD*maxLeverage)
 		}
 	}
 

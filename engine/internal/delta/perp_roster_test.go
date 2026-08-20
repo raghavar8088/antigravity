@@ -383,7 +383,12 @@ func TestPerpRoster_LiveSymbolsWereMeasuredAgainstTheRealGrid(t *testing.T) {
 
 		// From the High Volume board, 2026-08-17.
 		"ADAUSD":  {0.17434149, 1e-05, 0.00263, 1},
-		"AVAXUSD": {6.30522150, 1e-04, 0.00900, 1}, // no estimate; assumed
+		"AVAXUSD": {7.07889160, 1e-04, 0.00404, 1},
+
+		// Routed 2026-08-20 and currently refused by the RISK BUDGET, not the
+		// grid: 255 ticks is ample, but a $23.08 contract against $10.85 of
+		// risk-sized notional rounds to zero. See perp_sizing_budget_test.go.
+		"ETHUSD":  {2306.34700, 5e-02, 0.00553, 0.01},
 		"UNIUSD":  {3.27878950, 1e-04, 0.00900, 1}, // no estimate; assumed
 		"HYPEUSD": {59.1373080, 1e-03, 0.00135, 0.1},
 

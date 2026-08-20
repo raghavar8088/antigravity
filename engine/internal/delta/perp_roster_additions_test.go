@@ -5,24 +5,27 @@ import (
 	"testing"
 )
 
-// The roster is 5 streams, all on AVAXUSD.
+// The roster is 9 streams — 5 on AVAXUSD, 4 on ETHUSD.
 //
 // Pinned because it is an owner decision, and because the number carries the
 // finding. Fifteen streams were selected off the Top Crypto board on
-// 2026-08-20; ten of them cannot be SIZED on a $10 account, so a roster of five
-// where fifteen were chosen is the correct outcome rather than a dropped edit.
+// 2026-08-20; six are on symbols whose single contract costs more than the
+// entire $30 book, so a roster of nine is the correct outcome rather than a
+// dropped edit.
 //
-// The ten are not grid-blocked — every symbol involved clears the tick grid
-// easily. They fail risk sizing, which is a different and here tighter limit;
-// TestRoster_EverySymbolCanBeSizedByRisk holds that reasoning.
+// None of the six is grid-blocked — every symbol clears the tick grid easily.
+// They fail risk sizing, and specifically its CAP: notional can never exceed
+// equity x leverage, so a $72 contract sizes to zero at any volatility.
+// TestRoster_EverySymbolCanBeSizedByRisk holds that reasoning, including why
+// ETHUSD is routed while currently refusing.
 //
 // If this count climbs without desk equity changing, something routed a stream
 // the account cannot fund — the populated-but-unfillable roster this file has
 // warned about through four rewrites.
 func TestDefaultScalpLiveStreams_HoldsOnlyMTFStreams(t *testing.T) {
-	if len(defaultScalpLiveStreams) != 5 {
-		t.Errorf("roster has %d streams, want the 5 AVAXUSD streams routable at $10 equity "+
-			"(15 selected from Top Crypto; 10 cannot be sized on this account)",
+	if len(defaultScalpLiveStreams) != 9 {
+		t.Errorf("roster has %d streams, want 9 (5 AVAXUSD + 4 ETHUSD); "+
+			"15 were selected from Top Crypto and 6 cost more per contract than the whole book",
 			len(defaultScalpLiveStreams))
 	}
 	// Every retired pack name must stay off it. The Scalp100/Delta20/Curated
