@@ -311,6 +311,25 @@ func BuildMTFPack() []RegistryEntry {
 		// cannot be measured in a short window, so it self-rejects on most
 		// intraday series rather than finding a "base" in twenty bars.
 		{"VCP", patVCP},
+
+		// Candlestick, third batch — the named reversal and continuation shapes
+		// the catalogue was still missing. Each carries an explicit numeric
+		// tolerance rather than a visual read: "the same low" is within 15% of
+		// an ATR, a doji body is under 10% of range, a belt hold has under 5%
+		// wick on its opening side.
+		{"Tweezer", patTweezer},
+		{"Harami", haramiFamily(false)},
+		{"HaramiCross", haramiFamily(true)},
+		{"Piercing", patPiercing},
+		{"ThreeInside", patThreeInside},
+		{"ThreeOutside", patThreeOutside},
+		{"ThreeMethods", patThreeMethods},
+		{"Kicker", patKicker},
+		{"AbandonedBaby", patAbandonedBaby},
+		{"SpinningTop", patSpinningTop},
+		{"BeltHold", patBeltHold},
+		{"LongLeggedDoji", patLongLeggedDoji},
+		{"DragonflyGravestone", patDragonflyGravestone},
 	}
 	out := make([]RegistryEntry, 0, len(tfs)*len(fams)*2)
 	for _, tf := range tfs {

@@ -1513,6 +1513,8 @@ The content is organized as follows:
   strategy/scalpers/m1xb_pack.go
   strategy/scalpers/macro_family.go
   strategy/scalpers/microstructure_family.go
+  strategy/scalpers/mtf_candles4_test.go
+  strategy/scalpers/mtf_candles4.go
   strategy/scalpers/mtf_families.go
   strategy/scalpers/mtf_indicators.go
   strategy/scalpers/mtf_pack_test.go

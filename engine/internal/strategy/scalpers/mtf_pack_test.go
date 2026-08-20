@@ -40,8 +40,8 @@ func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 	// Pennant, CupHandle, Rounding, Broadening, Diamond, Hammer, Keltner,
 	// PriorSessionBreak, RoundNumber, TTMSqueeze, EMARibbon, ATRThrust,
 	// PivotBreak and GapFade.
-	if len(p) != 9*42*2 {
-		t.Fatalf("pack has %d strategies, want %d (9 timeframes x 42 families x 2 sides)", len(p), 9*42*2)
+	if len(p) != 9*55*2 {
+		t.Fatalf("pack has %d strategies, want %d (9 timeframes x 55 families x 2 sides)", len(p), 9*55*2)
 	}
 	seen := map[string]bool{}
 	for _, e := range p {
@@ -63,6 +63,12 @@ func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 		"MTF_30m_Keltner_Long", "MTF_1h_PriorSessionBreak_Short", "MTF_5m_RoundNumber_Long",
 		"MTF_4h_TTMSqueeze_Short", "MTF_1h_EMARibbon_Long", "MTF_15m_ATRThrust_Short",
 		"MTF_1d_PivotBreak_Long", "MTF_5m_GapFade_Short", "MTF_45m_Pennant_Long",
+		// The 2026-08-18 candlestick batch.
+		"MTF_15m_Tweezer_Long", "MTF_1h_Harami_Short", "MTF_4h_HaramiCross_Long",
+		"MTF_30m_Piercing_Short", "MTF_1d_ThreeInside_Long", "MTF_5m_ThreeOutside_Short",
+		"MTF_45m_ThreeMethods_Long", "MTF_1h_Kicker_Short", "MTF_4h_AbandonedBaby_Long",
+		"MTF_15m_SpinningTop_Short", "MTF_1d_BeltHold_Long", "MTF_1h_LongLeggedDoji_Short",
+		"MTF_30m_DragonflyGravestone_Long",
 		"MTF_45m_Rounding_Short",
 	} {
 		if !seen[want] {
