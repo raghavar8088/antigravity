@@ -667,11 +667,20 @@ func (d *livePaperDesk) snapshot() map[string]any {
 		"openUnrealisedUsd": math.Round(d.openUnrealisedLocked()*100) / 100,
 		// -1 on either of these means UNLIMITED. Reported distinctly from 0,
 		// which a reader would take as "nothing allowed" — the opposite.
+		// Reported WITH this desk's size multiplier applied, because that is the
+		// budget the desk actually spends.
+		//
+		// Without it the Gold Desk reported a $238.66 ceiling while deploying
+		// twenty times that — the same "the number printed is not the number
+		// used" fault as the entry log that showed the paper stop instead of
+		// the fill stop, and the volatility line that said "stop set to 0.000%"
+		// when it meant "no estimate". A cap an operator reads and a cap the
+		// code enforces have to be one number.
 		"maxNotionalUsd": func() float64 {
 			if livePaperMaxLeverage <= 0 {
 				return -1
 			}
-			return math.Round(d.equity*livePaperMaxLeverage*100) / 100
+			return math.Round(d.equity*livePaperMaxLeverage*livePaperSizeMultiplier(d.account)*100) / 100
 		}(),
 		"maxConcurrent": func() int {
 			if livePaperMaxConcurrent <= 0 {
@@ -685,7 +694,23 @@ func (d *livePaperDesk) snapshot() map[string]any {
 			}
 			return livePaperMaxLeverage
 		}(),
-		"positionUsd": math.Round(livePaperPositionUSD*100) / 100,
+		// The per-position notional this desk will actually send. Resolved the
+		// same way openPosition resolves it — explicit override, else the
+		// budget split across the slots — and then scaled, rather than echoing
+		// the raw env var, which reads 0 on every desk that uses the formula.
+		"positionUsd": func() float64 {
+			per := livePaperPositionUSD
+			if per <= 0 {
+				if livePaperMaxConcurrent <= 0 {
+					return -1 // unlimited concurrency: no fixed per-position size
+				}
+				per = d.equity * livePaperMaxLeverage / float64(livePaperMaxConcurrent)
+			}
+			return math.Round(per*livePaperSizeMultiplier(d.account)*100) / 100
+		}(),
+		// Stated separately so a desk that is scaled says so, rather than
+		// leaving the reader to infer it from a notional that looks too large.
+		"sizeMultiplier": livePaperSizeMultiplier(d.account),
 		// The VENUE-side settings, distinct from the size caps above. These are
 		// what decide where Delta force-closes a position, and they are reported
 		// so the page can show that the paper desk plays by the same margin

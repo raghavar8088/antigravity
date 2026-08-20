@@ -49,3 +49,42 @@ func TestLivePaperSizeMultiplier_AccountNameIsNormalised(t *testing.T) {
 		}
 	}
 }
+
+// The reported budget must be the budget actually spent.
+//
+// The Gold Desk reported a $238.66 ceiling while deploying twenty times that,
+// because the stats echoed equity x leverage and the multiplier was applied
+// later, at position-open. This session has now produced three faults of that
+// exact shape — an entry log printing the paper stop instead of the fill stop,
+// a volatility line reading "stop set to 0.000%" when it meant "no estimate",
+// and this. The cap an operator reads and the cap the code enforces have to be
+// one number.
+func TestPaperStats_ReportTheScaledBudget(t *testing.T) {
+	t.Setenv("SCALP_PAPER_SIZE_MULT_GOLD", "20")
+
+	gold := newLivePaperDesk("GOLD")
+	plain := newLivePaperDesk("01")
+	gs, ps := gold.snapshot(), plain.snapshot()
+
+	gm, _ := gs["maxNotionalUsd"].(float64)
+	pm, _ := ps["maxNotionalUsd"].(float64)
+	if pm <= 0 {
+		t.Skip("unlimited leverage configured; the ceiling is not a number here")
+	}
+	if want := pm * 20; gm != want {
+		t.Errorf("GOLD maxNotionalUsd = %.2f, want %.2f (20x the unscaled %.2f)", gm, want, pm)
+	}
+	if mult, _ := gs["sizeMultiplier"].(float64); mult != 20 {
+		t.Errorf("GOLD sizeMultiplier reported %v, want 20", mult)
+	}
+	if mult, _ := ps["sizeMultiplier"].(float64); mult != 1 {
+		t.Errorf("account 01 sizeMultiplier reported %v, want 1", mult)
+	}
+
+	// positionUsd must be the size actually sent, not the raw env var — which
+	// is 0 on every desk using the formula, and reads as "no position size".
+	gp, _ := gs["positionUsd"].(float64)
+	if gp <= 0 {
+		t.Errorf("GOLD positionUsd = %v; it must report the notional the desk will send", gp)
+	}
+}
