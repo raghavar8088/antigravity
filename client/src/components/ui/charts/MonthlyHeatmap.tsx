@@ -1,5 +1,7 @@
 "use client";
 
+import { AutoSortTable } from "@/components/desk/ui";
+
 export interface MonthlyHeatmapEntry {
   year: number;
   month: number;
@@ -26,7 +28,7 @@ export function MonthlyHeatmap({ data }: MonthlyHeatmapProps) {
 
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ borderCollapse: "separate", borderSpacing: 2, width: "100%" }}>
+      <AutoSortTable><table style={{ borderCollapse: "separate", borderSpacing: 2, width: "100%" }}>
         <thead>
           <tr>
             <th style={{ fontSize: 10.5, color: "var(--text-faint, var(--text-muted))", fontFamily: "var(--font-mono)", padding: "6px 2px" }} />
@@ -66,7 +68,7 @@ export function MonthlyHeatmap({ data }: MonthlyHeatmapProps) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }

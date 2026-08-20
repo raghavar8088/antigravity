@@ -5,6 +5,7 @@ import type { SoakDaySnapshot } from "@/lib/analytics/futuresSoakTracker";
 import type { UnifiedReadiness } from "@/lib/risk/futuresUnifiedReadiness";
 import { unifiedReadinessLabel } from "@/lib/risk/futuresUnifiedReadiness";
 import { deskReplayGateEnabled } from "@/lib/analytics/futuresReplayGate";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const STATE_COLOR: Record<UnifiedReadiness, string> = {
   NOT_READY: "#f85149",
@@ -50,7 +51,7 @@ export function SoakTrendPanel({
     return (
       <div style={{ fontSize: 11, color: "#e6edf3" }}>
         {last7.length > 0 ? (
-          <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
+          <AutoSortTable><table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ color: "#8b949e", textAlign: "left" }}>
                 <th>UTC date</th>
@@ -84,7 +85,7 @@ export function SoakTrendPanel({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         ) : (
           <div style={{ color: "#8b949e" }}>No soak days recorded yet — snapshots append daily.</div>
         )}
@@ -151,7 +152,7 @@ export function SoakTrendPanel({
           </div>
 
           {last7.length > 0 ? (
-            <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
+            <AutoSortTable><table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ color: "#8b949e", textAlign: "left" }}>
                   <th>UTC date</th>
@@ -185,7 +186,7 @@ export function SoakTrendPanel({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           ) : (
             <div style={{ color: "#8b949e" }}>No soak days recorded yet — snapshots append daily.</div>
           )}

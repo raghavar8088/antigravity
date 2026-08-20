@@ -5,6 +5,7 @@ import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { cn } from "@/components/ui/cn";
 import type { Order, OrderStatus } from "@/types/trading";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const STATUS_VARIANT: Record<OrderStatus, BadgeVariant> = {
   PENDING:      "caution",
@@ -134,7 +135,7 @@ export function OrderBlotter() {
               No {tab === "all" ? "" : tab} orders
             </div>
           ) : (
-            <table className="w-full" role="table">
+            <AutoSortTable><table className="w-full" role="table">
               <thead className="sticky top-0 bg-[var(--color-bg-surface)]">
                 <tr className="text-[10px] text-[var(--color-text-muted)]">
                   {["Order ID", "Symbol", "Strategy", "Dir", "Type", "Qty", "Price", "Status", "Fill%", "Latency", "Time", ""].map((h) => (
@@ -199,7 +200,7 @@ export function OrderBlotter() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           )}
         </div>
       </div>

@@ -4,6 +4,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SkeletonBlock } from "@/components/ui/EmptyState";
 import { TerminalCard } from "./TerminalCard";
+import { AutoSortTable } from "@/components/desk/ui";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const POLL_MS = 5_000;
@@ -196,7 +197,7 @@ function DeltaPositionsTable({ positions }: { positions: LivePosition[] }) {
   if (positions.length === 0) return <EmptyState label="No open positions on Delta Exchange" hint="Positions appear here as soon as a pre-live trade is cloned live." />;
   return (
     <div className="pre-live-scroll-table">
-      <table style={tableStyle}>
+      <AutoSortTable><table style={tableStyle}>
         <thead>
           <tr>
             {["SYMBOL", "SIDE", "CONTRACTS", "ENTRY", "MARK", "UNREALIZED PnL", "MARGIN"].map((h, i) => (
@@ -217,7 +218,7 @@ function DeltaPositionsTable({ positions }: { positions: LivePosition[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }
@@ -253,7 +254,7 @@ function MirrorTradesTable({ trades }: { trades: MirrorTrade[] }) {
         )}
       </div>
       <div className="pre-live-scroll-table">
-        <table style={{ ...tableStyle, minWidth: 1050 }}>
+        <AutoSortTable><table style={{ ...tableStyle, minWidth: 1050 }}>
           <thead>
             <tr>
               {["ID", "STRATEGY", "SIDE", "STATUS", "OPENED (IST)", "CONTRACTS", "LIVE ENTRY", "LIVE EXIT", "PnL", "REASON"].map((h, i) => (
@@ -283,7 +284,7 @@ function MirrorTradesTable({ trades }: { trades: MirrorTrade[] }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     </div>
   );

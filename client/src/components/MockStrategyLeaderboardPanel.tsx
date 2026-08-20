@@ -3,6 +3,7 @@
 import type { MockTrade } from "@/lib/trading/mockTradingEngine";
 import { rankStrategies } from "@/lib/ai/mockStrategyRankingEngine";
 import { useMemo } from "react";
+import { AutoSortTable } from "@/components/desk/ui";
 
 interface MockStrategyLeaderboardPanelProps {
   trades?: MockTrade[];
@@ -48,7 +49,7 @@ export function MockStrategyLeaderboardPanel({
 
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+      <AutoSortTable><table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: "1px solid #27272a", textAlign: "left" }}>
             {["#", "Strategy", "Family", "Score", "Win %", "Trades", "PF", "Net PnL", "Status"].map(
@@ -127,7 +128,7 @@ export function MockStrategyLeaderboardPanel({
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }

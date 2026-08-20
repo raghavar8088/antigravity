@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { AutoSortTable } from "@/components/desk/ui";
 
 type Metrics = {
   trades: number;
@@ -115,7 +116,7 @@ export default function QualificationBoard() {
 
       {/* Leaderboard table */}
       <div className="glass-panel overflow-x-auto rounded-2xl">
-        <table className="w-full min-w-[760px] text-left text-[12px]">
+        <AutoSortTable><table className="w-full min-w-[760px] text-left text-[12px]">
           <thead>
             <tr className="border-b border-zinc-200 text-[10px] uppercase tracking-wider text-zinc-400">
               <th className="px-4 py-2.5">#</th>
@@ -164,7 +165,7 @@ export default function QualificationBoard() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
 
       <div className="text-[11px] text-zinc-400">

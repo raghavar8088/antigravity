@@ -1,6 +1,7 @@
 "use client";
 
 import type { RotationReport, RotationScore } from "@/lib/trading/futuresStrategyRotation";
+import { AutoSortTable } from "@/components/desk/ui";
 
 interface StrategyRotationPanelProps {
   report: RotationReport | null | undefined;
@@ -168,7 +169,7 @@ export function StrategyRotationPanel({ report, onRestore }: StrategyRotationPan
 
       {/* Table */}
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+        <AutoSortTable><table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #27272a" }}>
               {["#", "Strategy", "Score", "Status", "Reasoning", ""].map((h) => (
@@ -199,7 +200,7 @@ export function StrategyRotationPanel({ report, onRestore }: StrategyRotationPan
               />
             ))}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     </div>
   );

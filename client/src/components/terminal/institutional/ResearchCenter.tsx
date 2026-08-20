@@ -5,6 +5,7 @@ import type { TerminalSnapshot } from "@/lib/terminal/terminalTypes";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { usd } from "./format";
 import { Metric, TerminalCard } from "./TerminalCard";
+import { AutoSortTable } from "@/components/desk/ui";
 
 type IntelSummary = {
   healthy: number;
@@ -36,7 +37,7 @@ export function ResearchCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
           <TerminalNoData label="NO STRATEGY DATA — backend authority empty" />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-xs">
+            <AutoSortTable><table className="w-full min-w-[860px] text-xs">
               <thead className="text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                 <tr>
                   <th className="py-2">Rank</th>
@@ -69,7 +70,7 @@ export function ResearchCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           </div>
         )}
       </TerminalCard>

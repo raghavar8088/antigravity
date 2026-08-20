@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { StrategyProfileDoc } from "@/lib/strategyAuthority/types";
 import { TerminalCard, Metric } from "./TerminalCard";
+import { AutoSortTable } from "@/components/desk/ui";
 
 type SortKey = "retired_at" | "family" | "demotion_count" | "promotion_count";
 
@@ -191,7 +192,7 @@ export function RetirementCenter() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <AutoSortTable><table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-[9px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
                   <th className="py-2 px-2">Strategy</th>
@@ -224,7 +225,7 @@ export function RetirementCenter() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           </div>
         )}
       </TerminalCard>

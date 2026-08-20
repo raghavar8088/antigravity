@@ -14,6 +14,7 @@
 import { useCallback, useState } from "react";
 import { DeskButton } from "@/components/desk/ui";
 import type { ReplayWalkForwardRank } from "@/lib/ai/replayWalkForwardRanker";
+import { AutoSortTable } from "@/components/desk/ui";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -340,7 +341,7 @@ export function ReplayWalkForwardLab() {
             )}
           </p>
           <div style={{ overflowX: "auto" }}>
-            <table
+            <AutoSortTable><table
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
@@ -403,7 +404,7 @@ export function ReplayWalkForwardLab() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           </div>
         </div>
       )}

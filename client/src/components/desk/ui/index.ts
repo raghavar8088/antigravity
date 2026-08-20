@@ -14,5 +14,7 @@ export { DeskShell } from "./DeskShell";
 export { DeskTabs, type DeskTabItem } from "./DeskTabs";
 export { StatusBadge, type DeskEngineStatus } from "./StatusBadge";
 export { useTableSort, SortableTh, type TableSort, type SortDir } from "./useTableSort";
+export { SortableRows } from "./SortableRows";
+export { AutoSortTable } from "./AutoSortTable";
 export { parseSortable, compareSortable, nodeText } from "./sortValue";
 export { cn } from "./cn";

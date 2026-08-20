@@ -2,6 +2,7 @@
 
 import { formatUSD } from "@/lib/portfolio/money";
 import { formatShortDate, formatShortTime } from "@/lib/utils/time";
+import { AutoSortTable } from "@/components/desk/ui";
 
 interface RunningTrade {
   id: string;
@@ -61,7 +62,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
       </div>
 
       <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <table className="w-full text-left text-sm">
+        <AutoSortTable><table className="w-full text-left text-sm">
           <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
             <tr className="text-[11px] uppercase tracking-[0.12em]">
               <th className="px-4 py-3 font-medium">Position</th>
@@ -142,7 +143,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
               );
             })}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     </div>
   );

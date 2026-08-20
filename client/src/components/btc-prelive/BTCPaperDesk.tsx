@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const POLL_MS = 5_000;
 
@@ -169,7 +170,7 @@ export default function BTCPaperDesk({ basePath = "/api/btc-prelive/desk" }: { b
         {positions.length === 0 ? (
           <div className="px-5 py-6 text-center text-[12px] text-zinc-400">No open positions</div>
         ) : (
-          <table className="w-full min-w-[640px] text-left text-[12px]">
+          <AutoSortTable><table className="w-full min-w-[640px] text-left text-[12px]">
             <thead>
               <tr className="border-b border-zinc-200 text-[10px] uppercase tracking-wider text-zinc-400">
                 <th className="px-5 py-2">Strategy</th>
@@ -206,7 +207,7 @@ export default function BTCPaperDesk({ basePath = "/api/btc-prelive/desk" }: { b
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         )}
       </div>
 
@@ -220,7 +221,7 @@ export default function BTCPaperDesk({ basePath = "/api/btc-prelive/desk" }: { b
             No closed trades yet — the desk trades 24/7; check back soon.
           </div>
         ) : (
-          <table className="w-full min-w-[640px] text-left text-[12px]">
+          <AutoSortTable><table className="w-full min-w-[640px] text-left text-[12px]">
             <thead>
               <tr className="border-b border-zinc-200 text-[10px] uppercase tracking-wider text-zinc-400">
                 <th className="px-5 py-2">Strategy</th>
@@ -262,7 +263,7 @@ export default function BTCPaperDesk({ basePath = "/api/btc-prelive/desk" }: { b
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         )}
       </div>
     </div>

@@ -1,1 +1,1 @@
-{"client/src/components/ui/DataTable.tsx::parseSortableValue()":["client/src/components/desk/ui/sortValue.ts::parseSortable()"]}
+{"client/src/components/StrategyLeaderboard.tsx::StrategyLeaderboard()":["client/src/components/desk/ui/useTableSort.tsx::useTableSort()"],"client/src/components/terminal/institutional/ShadowPerformanceCenter.tsx::ShadowPerformanceCenter()":["client/src/components/desk/ui/useTableSort.tsx::useTableSort()"]}

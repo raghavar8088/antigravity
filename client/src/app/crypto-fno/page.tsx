@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { AutoSortTable } from "@/components/desk/ui";
 import {
   DeskBanner,
   DeskButton,
@@ -584,7 +585,7 @@ export default function CryptoFnoPage() {
             }
           />
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <AutoSortTable><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr className="desk-label-sm">
                   <th style={th}>Call</th>
@@ -628,7 +629,7 @@ export default function CryptoFnoPage() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></AutoSortTable>
             {ladder.length === 0 && (
               <DeskEmptyState title="No chain" subtitle="Waiting for the live Delta option chain." />
             )}

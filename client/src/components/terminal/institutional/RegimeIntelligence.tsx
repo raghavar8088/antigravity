@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { MarketRegime, StrategyRegimeMetrics } from "@/lib/strategyAuthority/portfolioTypes";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const REGIME_CONFIG: Record<MarketRegime, { label: string; color: string; bg: string }> = {
   TRENDING: { label: "Trending", color: "text-emerald-400", bg: "bg-emerald-900/30 border-emerald-800/40" },
@@ -135,7 +136,7 @@ export function RegimeIntelligence() {
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <AutoSortTable><table className="w-full text-xs">
           <thead>
             <tr className="text-left text-[9px] uppercase text-zinc-500 border-b border-zinc-800">
               <th className="py-2 px-2">Strategy</th>
@@ -183,7 +184,7 @@ export function RegimeIntelligence() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     </div>
   );

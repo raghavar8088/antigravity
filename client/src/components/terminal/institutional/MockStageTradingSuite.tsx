@@ -18,6 +18,7 @@ import { SkeletonBlock } from "@/components/ui/EmptyState";
 import { TerminalCard } from "./TerminalCard";
 import { MockTradingConfigurationPanel } from "./MockTradingConfigurationPanel";
 import { fmtISTClock } from "@/lib/istTime";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const TRADE_ENGINE_TITLE = "Trade Engine";
 
@@ -409,7 +410,7 @@ export function RegimeBadge({ regime }: { regime: string }) {
 function PositionsTableSkeleton() {
   return (
     <div style={{ overflowX: "auto" }} aria-busy="true" aria-label="Loading open positions">
-      <table style={tableStyle}>
+      <AutoSortTable><table style={tableStyle}>
         <thead>
           <tr>
             {["STRATEGY", "SIDE", "OPENED (IST)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
@@ -436,7 +437,7 @@ function PositionsTableSkeleton() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }
@@ -574,7 +575,7 @@ function OpenPositionsTable({ trades, nowMs, loading = false }: { trades: MockTr
 
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={tableStyle}>
+      <AutoSortTable><table style={tableStyle}>
         <thead>
           <tr>
             {["STRATEGY", "SIDE", "OPENED (IST)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
@@ -634,7 +635,7 @@ function OpenPositionsTable({ trades, nowMs, loading = false }: { trades: MockTr
             );
           })}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }
@@ -731,7 +732,7 @@ function ClosedTradesTable({
         <TableEmptyState label="No closed trades" />
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={tableStyle}>
+          <AutoSortTable><table style={tableStyle}>
             <thead>
               <tr>
                 {["STRATEGY", "SIDE", "OPENED (IST)", "ENTRY", "EXIT", "PnL", "REASON", "DURATION", ""].map((header, index) => (
@@ -816,7 +817,7 @@ function ClosedTradesTable({
                 );
               })}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       )}
     </div>

@@ -12,6 +12,7 @@ import { DeskCard } from "@/components/desk/ui/DeskCard";
 import { DeskChip } from "@/components/desk/ui/DeskChip";
 import { DeskMetricTile } from "@/components/desk/ui/DeskMetricTile";
 import { DeskSectionHeader } from "@/components/desk/ui/DeskSectionHeader";
+import { AutoSortTable } from "@/components/desk/ui";
 import {
   buildDeskReplaySearchParams,
   formatReplaySummary,
@@ -324,7 +325,7 @@ export default function ReplayBacktestPanel({
                 </div>
                 {replayRows.length > 0 ? (
                   <div className="max-h-[280px] overflow-auto rounded border border-zinc-200 bg-white">
-                    <table className="w-full min-w-[520px] text-left text-[10px]">
+                    <AutoSortTable><table className="w-full min-w-[520px] text-left text-[10px]">
                       <thead className="sticky top-0 border-b border-zinc-200 bg-zinc-50 text-zinc-500">
                         <tr>
                           <th className="px-2 py-1.5 font-semibold">Closed</th>
@@ -351,7 +352,7 @@ export default function ReplayBacktestPanel({
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </table></AutoSortTable>
                   </div>
                 ) : (
                   <p className="text-sm text-zinc-500">

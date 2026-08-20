@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { TerminalCard } from "./TerminalCard";
 import type { StrategyWithMetrics } from "@/lib/strategyAuthority/types";
+import { AutoSortTable } from "@/components/desk/ui";
 
 interface StrategyGenomeProps {
   strategies?: StrategyWithMetrics[];
@@ -62,7 +63,7 @@ export function StrategyGenome({ strategies = [], loading = false }: StrategyGen
         <div className="py-8 text-center text-xs text-zinc-600">No strategies to analyse</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <AutoSortTable><table className="w-full text-xs">
             <thead>
               <tr className="text-left text-[9px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
                 <th className="py-2 px-2">Family</th>
@@ -87,7 +88,7 @@ export function StrategyGenome({ strategies = [], loading = false }: StrategyGen
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       )}
     </TerminalCard>

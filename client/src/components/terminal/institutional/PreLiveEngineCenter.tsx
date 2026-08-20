@@ -9,6 +9,7 @@ import { SkeletonBlock } from "@/components/ui/EmptyState";
 import { TerminalCard } from "./TerminalCard";
 import { RegimeBadge, LeaderboardTable } from "./MockStageTradingSuite";
 import { rankStrategies, type RankableTrade } from "@/lib/ai/mockStrategyRankingEngine";
+import { AutoSortTable } from "@/components/desk/ui";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const POLL_MS = 5_000;
@@ -175,7 +176,7 @@ function OpenPositionsTable({ positions, nowMs, markPrice }: { positions: OpenPo
   return (
     <>
       <div className="pre-live-scroll-table">
-        <table style={tableStyle}>
+        <AutoSortTable><table style={tableStyle}>
           <thead>
             <tr>
               {["STRATEGY", "SIDE", "OPENED (IST)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((h, i) => (
@@ -208,7 +209,7 @@ function OpenPositionsTable({ positions, nowMs, markPrice }: { positions: OpenPo
               );
             })}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     </>
   );
@@ -230,7 +231,7 @@ function ClosedTradesTable({ trades, nowMs }: { trades: ClosedTrade[]; nowMs: nu
         )}
       </div>
       <div className="pre-live-scroll-table">
-        <table style={tableStyle}>
+        <AutoSortTable><table style={tableStyle}>
           <thead>
             <tr>
               {["STRATEGY", "SIDE", "OPENED (IST)", "ENTRY", "EXIT", "PnL", "REASON", "DURATION"].map((h, i) => (
@@ -269,7 +270,7 @@ function ClosedTradesTable({ trades, nowMs }: { trades: ClosedTrade[]; nowMs: nu
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     </div>
   );
@@ -371,7 +372,7 @@ function PreLiveDailyPnL({ trades, balance }: { trades: ClosedTrade[]; balance: 
         Daily PnL <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--text-tertiary)", marginLeft: 8 }}>{rows.length} day{rows.length !== 1 ? "s" : ""} traded · pre-live engine only</span>
       </div>
       <div className="pre-live-scroll-table">
-        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13, minWidth: 700 }}>
+        <AutoSortTable><table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13, minWidth: 700 }}>
           <thead>
             <tr>
               {["Date","PnL ($)","PnL (%)","Trades","W / L","Best / Worst"].map(h => (
@@ -399,7 +400,7 @@ function PreLiveDailyPnL({ trades, balance }: { trades: ClosedTrade[]; balance: 
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     </div>
   );

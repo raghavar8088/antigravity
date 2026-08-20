@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 import type { FamilyIntelligenceRow } from "@/lib/strategyAuthority/strategyAuthorityMongo";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const STATUS_ORDER: StrategyStatus[] = ["TRADE_ENGINE", "MAIN_ENGINE", "GRADE_1", "GRADE_2", "GRADE_3", "GRADE_4", "GRADE_5"];
 const STATUS_COLOR: Record<StrategyStatus, string> = {
@@ -117,7 +118,7 @@ export function FamilyLeaderboard() {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <AutoSortTable><table className="w-full text-xs">
               <thead>
                 <tr className="text-left border-b border-zinc-800">
                   <th className="py-2 px-2 text-[9px] uppercase tracking-wider text-zinc-500">#</th>
@@ -253,7 +254,7 @@ export function FamilyLeaderboard() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           </div>
         </>
       )}

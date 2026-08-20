@@ -6,6 +6,7 @@ import { Sparkline } from "@/components/ui/Sparkline";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 import type { PnlUpdate } from "@/types/trading";
+import { AutoSortTable } from "@/components/desk/ui";
 
 interface StrategyRow extends PnlUpdate {
   history: number[];
@@ -123,7 +124,7 @@ export function LivePnlFeed() {
             No positions — waiting for data…
           </div>
         ) : (
-          <table className="w-full" role="table">
+          <AutoSortTable><table className="w-full" role="table">
             <thead>
               <tr className="text-[10px] text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
                 <th className="px-3 py-1.5 text-left font-medium">Strategy</th>
@@ -167,7 +168,7 @@ export function LivePnlFeed() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         )}
       </div>
     </div>

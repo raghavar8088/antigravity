@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { pnlClass, usd } from "./format";
+import { AutoSortTable } from "@/components/desk/ui";
+import { SortableTh, useTableSort } from "@/components/desk/ui";
 
 // Mirrors engine/internal/shadow/ledger.go ShadowPerformance.
 type ShadowPerformance = {
@@ -123,7 +125,18 @@ export function ShadowPerformanceCenter() {
   // appear in both feeds for a short window around promotion — live wins.
   const liveNames = useMemo(() => new Set(livePerf.map((p) => p.name)), [livePerf]);
 
-  const rows: LeaderboardRow[] = useMemo(() => {
+  // Numbers straight off the row: win rate is stored as a fraction and rendered
+  // as a percentage, so sorting the rendered text would compare "48.0%" as text.
+  const { sort, toggle, sortRows } = useTableSort<LeaderboardRow>({
+    name: (r) => r.name,
+    mode: (r) => r.mode,
+    trades: (r) => r.trades,
+    winRate: (r) => r.winRate,
+    sharpe: (r) => r.sharpe,
+    pnl: (r) => r.pnl,
+  });
+
+  const unsortedRows: LeaderboardRow[] = useMemo(() => {
     const liveRows: LeaderboardRow[] = livePerf.map((p) => ({
       name: p.name,
       mode: "LIVE",
@@ -151,6 +164,10 @@ export function ShadowPerformanceCenter() {
       }));
     return [...liveRows, ...shadowRows].sort((a, b) => b.winRate - a.winRate || b.pnl - a.pnl);
   }, [livePerf, shadowPerf, liveNames]);
+
+  // The default ordering (win rate, then P&L) still applies until the reader
+  // picks a column; sortRows returns the input untouched while nothing is set.
+  const rows = sortRows(unsortedRows);
 
   const liveCount = rows.filter((r) => r.mode === "LIVE").length;
   const shadowCount = rows.filter((r) => r.mode === "SHADOW").length;
@@ -285,16 +302,34 @@ export function ShadowPerformanceCenter() {
           <TerminalNoData label="No strategy performance data reported by engine yet" />
         ) : (
           <div className="overflow-x-auto">
+            {/* Sorted through its DATA rather than by wrapping the table.
+                Each entry here is a Fragment holding the strategy row AND its
+                conditional expanded detail row, so reordering the rendered rows
+                would separate a detail row from the row it belongs to. Ordering
+                the array keeps each pair together. */}
             <table className="w-full min-w-[860px] text-xs">
               <thead>
                 <tr className="border-b border-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-500">
                   <th className="px-2 py-2">Rank</th>
-                  <th className="px-2 py-2">Strategy</th>
-                  <th className="px-2 py-2">Mode</th>
-                  <th className="px-2 py-2 text-right">Trades</th>
-                  <th className="px-2 py-2 text-right">Win Rate</th>
-                  <th className="px-2 py-2 text-right">Sharpe</th>
-                  <th className="px-2 py-2 text-right">PnL</th>
+                  {([
+                    ["Strategy", "name", "left"],
+                    ["Mode", "mode", "left"],
+                    ["Trades", "trades", "right"],
+                    ["Win Rate", "winRate", "right"],
+                    ["Sharpe", "sharpe", "right"],
+                    ["PnL", "pnl", "right"],
+                  ] as const).map(([label, key, align]) => (
+                    <SortableTh
+                      key={key}
+                      sortKey={key}
+                      sort={sort}
+                      onSort={toggle}
+                      align={align}
+                      style={{ padding: "8px" }}
+                    >
+                      {label}
+                    </SortableTh>
+                  ))}
                   <th className="px-2 py-2 text-right">Actions</th>
                 </tr>
               </thead>
@@ -364,7 +399,7 @@ export function ShadowPerformanceCenter() {
                           {expandedTrades.length === 0 ? (
                             <div className="text-[10px] text-zinc-600">No closed shadow trades yet.</div>
                           ) : (
-                            <table className="w-full text-[10px]">
+                            <AutoSortTable><table className="w-full text-[10px]">
                               <thead>
                                 <tr className="text-left uppercase tracking-wider text-zinc-600">
                                   <th className="py-1 pr-3">Direction</th>
@@ -391,7 +426,7 @@ export function ShadowPerformanceCenter() {
                                   </tr>
                                 ))}
                               </tbody>
-                            </table>
+                            </table></AutoSortTable>
                           )}
                         </td>
                       </tr>

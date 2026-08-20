@@ -23,8 +23,13 @@ export type TableSort = { key: string; dir: SortDir } | null;
 /** How to read the sort value for a column key. Values may be null (absent). */
 export type SortAccessor<T> = (row: T) => number | string | null | undefined;
 
-export function useTableSort<T>(
-  accessors: Record<string, SortAccessor<T>>,
+export function useTableSort<T = unknown>(
+  /**
+   * Optional. Supply accessors to sort an ARRAY yourself via sortRows; omit
+   * them when pairing with <SortableRows>, which sorts rendered rows by their
+   * cell text and needs only the shared sort state.
+   */
+  accessors: Record<string, SortAccessor<T>> = {},
   initial: TableSort = null,
 ) {
   const [sort, setSort] = useState<TableSort>(initial);

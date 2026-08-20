@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PortfolioAllocationSummary, StrategyAllocationWeight } from "@/lib/strategyAuthority/portfolioTypes";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const TIER_COLOR: Record<string, string> = {
   CORE: "text-emerald-400",
@@ -133,7 +134,7 @@ export function AllocationView() {
 
       {/* Allocation table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <AutoSortTable><table className="w-full text-xs">
           <thead>
             <tr className="text-left text-[9px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
               <th className="py-2 px-2">Strategy</th>
@@ -166,7 +167,7 @@ export function AllocationView() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     </div>
   );

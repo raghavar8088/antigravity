@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { cn } from "@/components/ui/cn";
 import type { Position } from "@/types/trading";
+import { AutoSortTable } from "@/components/desk/ui";
 
 function ageColor(ageMs: number): string {
   const h = ageMs / 3_600_000;
@@ -89,7 +90,7 @@ export function PositionManager() {
               No open positions
             </div>
           ) : (
-            <table className="w-full" role="table">
+            <AutoSortTable><table className="w-full" role="table">
               <thead className="sticky top-0 bg-[var(--color-bg-surface)]">
                 <tr className="text-[10px] text-[var(--color-text-muted)]">
                   {["Symbol", "Exch", "Strategy", "Dir", "Size", "Entry", "Current", "P&L", "Return", "SL", "Target", "Age", ""].map((h) => (
@@ -146,7 +147,7 @@ export function PositionManager() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           )}
         </div>
       </div>

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 const BTCLiveChart = dynamic(() => import("@/components/BTCLiveChart"), { ssr: false });
 import DailyPnlLedger from "@/components/DailyPnlLedger";
 import { formatShortDate, formatShortTime } from "@/lib/utils/time";
+import { AutoSortTable } from "@/components/desk/ui";
 import {
   BTC_SPOT_CLIP_USD,
   type BTCSpotEngineStats,
@@ -730,7 +731,7 @@ export default function BTCSpotScalper({
             </div>
 
             <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-              <table className="w-full text-left text-sm" style={{ minWidth: 1020 }}>
+              <AutoSortTable><table className="w-full text-left text-sm" style={{ minWidth: 1020 }}>
                 <thead>
                   <tr
                     className="text-[10px] uppercase tracking-[0.14em]"
@@ -839,7 +840,7 @@ export default function BTCSpotScalper({
                     );
                   })}
                 </tbody>
-              </table>
+              </table></AutoSortTable>
             </div>
           </div>
         )}
@@ -1004,7 +1005,7 @@ export default function BTCSpotScalper({
           <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>Ledger empty.</p>
         ) : (
           <div className="mt-3 overflow-x-auto max-h-[420px] overflow-y-auto">
-            <table className="w-full text-left text-sm">
+            <AutoSortTable><table className="w-full text-left text-sm">
               <thead className="sticky top-0 z-10 bg-[var(--surface-1)]">
                 <tr className="border-b text-[10px] uppercase tracking-wider" style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}>
                   <th className="py-2 pr-2">Exit</th>
@@ -1037,7 +1038,7 @@ export default function BTCSpotScalper({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { buildDailyPnlRows, type ClosedTradeLike } from "@/lib/portfolio/dailyPnl";
+import { AutoSortTable } from "@/components/desk/ui";
 
 type CurrencyFormatOptions = {
   signed?: boolean;
@@ -75,7 +76,7 @@ export default function DailyPnlLedger<T extends ClosedTradeLike>({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-          <table className="w-full text-left text-sm" style={{ minWidth: 900 }}>
+          <AutoSortTable><table className="w-full text-left text-sm" style={{ minWidth: 900 }}>
             <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
               <tr className="text-[11px] uppercase tracking-[0.12em]">
                 <th className="px-4 py-3 font-medium">Date</th>
@@ -113,7 +114,7 @@ export default function DailyPnlLedger<T extends ClosedTradeLike>({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       )}
     </div>

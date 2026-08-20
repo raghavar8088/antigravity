@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { TerminalSnapshot } from "@/lib/terminal/terminalTypes";
 import { pnlClass, px, usd } from "./format";
 import { Metric, TerminalCard } from "./TerminalCard";
+import { AutoSortTable } from "@/components/desk/ui";
 
 export function TradeJournalPro({ snapshot }: { snapshot: TerminalSnapshot }) {
   const [filter, setFilter] = useState("ALL");
@@ -41,7 +42,7 @@ export function TradeJournalPro({ snapshot }: { snapshot: TerminalSnapshot }) {
         }
       >
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-xs">
+          <AutoSortTable><table className="w-full min-w-[820px] text-xs">
             <thead className="text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
               <tr>
                 <th className="py-2">Trade</th>
@@ -68,7 +69,7 @@ export function TradeJournalPro({ snapshot }: { snapshot: TerminalSnapshot }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       </TerminalCard>
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { TerminalCard } from "@/components/terminal/institutional/TerminalCard";
+import { AutoSortTable } from "@/components/desk/ui";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -386,7 +387,7 @@ function LeaderboardTab() {
       ) : (
         <div className="m3-data-table">
           <div className="m3-data-table__scroll">
-            <table>
+            <AutoSortTable><table>
               <thead className="m3-data-table__head--sticky">
                 <tr>
                   <th>Strategy</th>
@@ -469,7 +470,7 @@ function LeaderboardTab() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           </div>
         </div>
       )}

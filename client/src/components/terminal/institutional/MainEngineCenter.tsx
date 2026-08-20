@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { StrategyWithMetrics } from "@/lib/strategyAuthority/types";
 import { TerminalCard, Metric } from "./TerminalCard";
+import { AutoSortTable } from "@/components/desk/ui";
 
 function fmt(n: number, dec = 2) {
   return isNaN(n) ? "—" : n.toFixed(dec);
@@ -82,7 +83,7 @@ export function MainEngineCenter() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <AutoSortTable><table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-[9px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
                   <th className="py-2 px-2">#</th>
@@ -135,7 +136,7 @@ export function MainEngineCenter() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           </div>
         )}
       </TerminalCard>

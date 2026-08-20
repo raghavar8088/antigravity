@@ -7,6 +7,7 @@ import { pct, usd } from "./format";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/StatusChip";
+import { AutoSortTable } from "@/components/desk/ui";
 
 type CorrelationMatrix = {
   labels: string[];
@@ -68,7 +69,7 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
         <TerminalCard title="Strategy Correlation" subtitle="Pearson · daily PnL · /api/paper-trades/correlation-matrix">
           {correlation && correlation.labels.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[400px] text-center font-mono text-[10px]">
+              <AutoSortTable><table className="w-full min-w-[400px] text-center font-mono text-[10px]">
                 <thead>
                   <tr>
                     <th className="text-left text-zinc-500" />
@@ -99,7 +100,7 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></AutoSortTable>
             </div>
           ) : (
             <TerminalNoData label="No correlation data" />

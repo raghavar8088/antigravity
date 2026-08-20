@@ -12,6 +12,7 @@ import { MockStageTradingSuite } from "./MockStageTradingSuite";
 import { RegimeIntelligence } from "./RegimeIntelligence";
 import { TerminalCard, Metric } from "./TerminalCard";
 import { SkeletonBlock } from "@/components/ui/EmptyState";
+import { AutoSortTable } from "@/components/desk/ui";
 
 type SortKey = "authority" | "pf" | "sharpe" | "drawdown" | "allocation";
 
@@ -23,7 +24,7 @@ function fmt(n: number | undefined, dec = 2) {
 function EngineRosterSkeleton() {
   return (
     <div className="overflow-x-auto" aria-busy="true" aria-label="Loading engine roster">
-      <table className="w-full text-xs">
+      <AutoSortTable><table className="w-full text-xs">
         <thead>
           <tr className="text-left text-[9px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
             <th className="py-2 px-2">#</th>
@@ -47,7 +48,7 @@ function EngineRosterSkeleton() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }
@@ -203,7 +204,7 @@ export function MockEngineCenter() {
           <div className="py-8 text-center text-xs text-zinc-600">No strategies in main engine</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <AutoSortTable><table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-[9px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
                   <th className="py-2 px-2">#</th>
@@ -236,7 +237,7 @@ export function MockEngineCenter() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           </div>
         )}
       </TerminalCard>

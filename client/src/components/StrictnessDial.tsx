@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { TerminalCard } from "./terminal/institutional/TerminalCard";
 import type { StrictnessProfile, ThresholdConfigDTO, ThresholdDelta } from "@/lib/thresholdConfig/types";
 import { formatThresholdValue, interpolateStrictnessValue } from "@/lib/thresholdConfig/types";
+import { AutoSortTable } from "@/components/desk/ui";
 
 type DialStatus = "idle" | "applying" | "applied" | "error";
 
@@ -428,7 +429,7 @@ export function StrictnessDial({
 
       {showAffected ? (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <AutoSortTable><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ textAlign: "left", color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
                 <th style={{ padding: "6px 8px" }}>Threshold</th>
@@ -460,7 +461,7 @@ export function StrictnessDial({
                 );
               })}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       ) : null}
 

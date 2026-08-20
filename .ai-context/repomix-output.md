@@ -231,6 +231,8 @@ The content is organized as follows:
   components/desk/DeskHeroStrip.tsx
   components/desk/DeskModuleChrome.tsx
   components/desk/DeskThemeToggle.tsx
+  components/desk/ui/AutoSortTable.test.tsx
+  components/desk/ui/AutoSortTable.tsx
   components/desk/ui/cn.ts
   components/desk/ui/DeskAppBar.tsx
   components/desk/ui/DeskBanner.tsx
@@ -249,6 +251,7 @@ The content is organized as follows:
   components/desk/ui/DeskSwitch.tsx
   components/desk/ui/DeskTabs.tsx
   components/desk/ui/index.ts
+  components/desk/ui/SortableRows.tsx
   components/desk/ui/sortValue.test.ts
   components/desk/ui/sortValue.ts
   components/desk/ui/StatusBadge.tsx

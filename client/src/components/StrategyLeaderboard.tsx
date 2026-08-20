@@ -1,6 +1,7 @@
 "use client";
 
 import type { StrategyScore } from "@/lib/ai/strategyScoringEngine";
+import { SortableTh, useTableSort } from "@/components/desk/ui";
 
 interface StrategyLeaderboardProps {
   scores?: StrategyScore[];
@@ -23,7 +24,18 @@ function fmtUsd(n: number): string {
  * Used in the MockTradingDashboard as a lazy-loaded panel.
  */
 export function StrategyLeaderboard({ scores = [], maxRows = 50 }: StrategyLeaderboardProps) {
-  const rows = scores.slice(0, maxRows);
+  // Accessors read the underlying NUMBER, not the rendered string: win rate is
+  // stored as a fraction and shown as a percentage, and profit factor can be
+  // Infinity, which has no sensible text form.
+  const { sort, toggle, sortRows } = useTableSort<StrategyScore>({
+    rank: (r) => r.rank,
+    strategy: (r) => r.strategyName,
+    score: (r) => r.overallScore,
+    wr: (r) => r.metrics.winRate,
+    pf: (r) => (Number.isFinite(r.metrics.profitFactor) ? r.metrics.profitFactor : null),
+    pnl: (r) => r.metrics.netPnl,
+  });
+  const rows = sortRows(scores.slice(0, maxRows));
 
   if (rows.length === 0) {
     return (
@@ -45,9 +57,20 @@ export function StrategyLeaderboard({ scores = [], maxRows = 50 }: StrategyLeade
       <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: "1px solid #27272a", textAlign: "left" }}>
-            {["#", "Strategy", "Score", "Win %", "PF", "Net PnL"].map((h) => (
-              <th
-                key={h}
+            {([
+              ["#", "rank"],
+              ["Strategy", "strategy"],
+              ["Score", "score"],
+              ["Win %", "wr"],
+              ["PF", "pf"],
+              ["Net PnL", "pnl"],
+            ] as const).map(([h, key]) => (
+              <SortableTh
+                key={key}
+                sortKey={key}
+                sort={sort}
+                onSort={toggle}
+                align={h === "#" || h === "Strategy" ? "left" : "right"}
                 style={{
                   padding: "6px 8px",
                   fontSize: 9,
@@ -55,11 +78,10 @@ export function StrategyLeaderboard({ scores = [], maxRows = 50 }: StrategyLeade
                   letterSpacing: "0.06em",
                   color: "#71717a",
                   fontWeight: 600,
-                  textAlign: h === "#" ? "left" : "right",
                 }}
               >
                 {h}
-              </th>
+              </SortableTh>
             ))}
           </tr>
         </thead>

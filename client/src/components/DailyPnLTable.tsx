@@ -3,6 +3,7 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from "react";
 import { TerminalCard } from "@/components/terminal/institutional/TerminalCard";
 import { SkeletonBlock } from "@/components/ui/EmptyState";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const REFRESH_MS = 60_000;
 const DISPLAY_TIMEZONE = "Asia/Kolkata";
@@ -130,7 +131,7 @@ function isWithinRange(row: DailyPnlRow, cutoffMs: number | null): boolean {
 function DailyPnLSkeleton() {
   return (
     <div style={{ overflowX: "auto" }} aria-busy="true" aria-label="Loading daily PnL">
-      <table style={tableStyle}>
+      <AutoSortTable><table style={tableStyle}>
         <thead>
           <tr>
             {["DATE", "PNL ($)", "PNL (%)", "TRADES", "W/L", "BEST / WORST"].map((header, index) => (
@@ -151,7 +152,7 @@ function DailyPnLSkeleton() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }
@@ -307,7 +308,7 @@ export function DailyPnLTable({ accountKey, className }: DailyPnLTableProps) {
   } else {
     body = (
       <div style={{ overflowX: "auto" }}>
-        <table style={tableStyle}>
+        <AutoSortTable><table style={tableStyle}>
           <thead>
             <tr>
               {["DATE", "PNL ($)", "PNL (%)", "TRADES", "W/L", "BEST / WORST"].map((header, index) => (
@@ -372,7 +373,7 @@ export function DailyPnLTable({ accountKey, className }: DailyPnLTableProps) {
               );
             })}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     );
   }

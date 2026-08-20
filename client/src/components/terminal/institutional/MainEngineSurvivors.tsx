@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { StrategyWithMetrics } from "@/lib/strategyAuthority/types";
 import { computeAuthorityScore, TIER_COLOR, TIER_BG } from "@/lib/strategyAuthority/authorityScore";
 import { TerminalCard, Metric } from "./TerminalCard";
+import { AutoSortTable } from "@/components/desk/ui";
 
 function fmt(n: number | undefined, dec = 2) {
   if (n == null || isNaN(n)) return "—";
@@ -103,7 +104,7 @@ export function MainEngineSurvivors() {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <AutoSortTable><table className="w-full text-xs">
             <thead>
               <tr className="text-left text-[9px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
                 <th className="py-2 px-2">#</th>
@@ -238,13 +239,13 @@ export function MainEngineSurvivors() {
                 );
               })}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       )}
 
       <TerminalCard title="Admission Thresholds" subtitle="All gates required at every grade">
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <AutoSortTable><table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 {["Stage", "T", "PF", "WR", "DD", "Sh"].map((header, index) => (
@@ -318,7 +319,7 @@ export function MainEngineSurvivors() {
                 );
               })}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       </TerminalCard>
 

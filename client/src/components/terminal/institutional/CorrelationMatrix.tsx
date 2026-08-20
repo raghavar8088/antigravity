@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { StrategyCorrelationPair, StrategyCorrelationSummary } from "@/lib/strategyAuthority/portfolioTypes";
+import { AutoSortTable } from "@/components/desk/ui";
 
 function corrColor(v: number): string {
   const abs = Math.abs(v);
@@ -79,7 +80,7 @@ export function CorrelationMatrix() {
 
       {view === "matrix" && (
         <div className="overflow-x-auto">
-          <table className="text-[8px] border-collapse">
+          <AutoSortTable><table className="text-[8px] border-collapse">
             <thead>
               <tr>
                 <th className="w-4" />
@@ -113,7 +114,7 @@ export function CorrelationMatrix() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       )}
 
@@ -122,7 +123,7 @@ export function CorrelationMatrix() {
           {/* Diversification leaderboard */}
           <div className="text-[9px] uppercase text-zinc-600 mb-1">Diversification Scores</div>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <AutoSortTable><table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-[9px] uppercase text-zinc-500 border-b border-zinc-800">
                   <th className="py-1 px-2">Strategy</th>
@@ -159,7 +160,7 @@ export function CorrelationMatrix() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></AutoSortTable>
           </div>
 
           {/* Top correlated pairs */}

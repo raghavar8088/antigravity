@@ -5,6 +5,7 @@ import { DeskButton, DeskChip } from "@/components/desk/ui";
 import type { ResearchEdgeScore } from "@/lib/ai/researchEdgeScore";
 import type { RegimeRosterOutput } from "@/lib/analytics/regimeRosterBuilder";
 import type { WalkForwardResult } from "@/lib/analytics/walkForwardValidation";
+import { AutoSortTable } from "@/components/desk/ui";
 
 // ─── API response shape ───────────────────────────────────────────────────────
 
@@ -197,7 +198,7 @@ function StrategyTable({ scores }: { scores: ResearchEdgeScore[] }) {
 
   return (
     <div style={{ overflowX: "auto" }}>
-      <table
+      <AutoSortTable><table
         style={{
           width: "100%",
           fontSize: "0.6875rem",
@@ -289,7 +290,7 @@ function StrategyTable({ scores }: { scores: ResearchEdgeScore[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }
@@ -363,7 +364,7 @@ function WalkForwardSection({ result }: { result: WalkForwardResult }) {
       </p>
       {result.windows.length > 0 && (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", fontSize: "0.625rem", borderCollapse: "collapse", fontFamily: "var(--desk-font-mono)" }}>
+          <AutoSortTable><table style={{ width: "100%", fontSize: "0.625rem", borderCollapse: "collapse", fontFamily: "var(--desk-font-mono)" }}>
             <thead>
               <tr style={{ color: "var(--desk-on-surface-variant)", borderBottom: "1px solid var(--desk-outline)" }}>
                 <th style={{ padding: "3px 6px", textAlign: "left" }}>Test window</th>
@@ -398,7 +399,7 @@ function WalkForwardSection({ result }: { result: WalkForwardResult }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       )}
     </div>

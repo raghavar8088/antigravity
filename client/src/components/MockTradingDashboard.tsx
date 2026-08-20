@@ -107,6 +107,7 @@ import { computeMockWalkForwardRows, type MockWalkForwardRow } from "@/lib/ai/mo
 import { computePortfolioAllocation, type PortfolioAllocationResult } from "@/lib/ai/mockResearchPortfolioAllocation";
 import { computeStrategyHealth, type StrategyHealthRow } from "@/lib/ai/strategyHealthEngine";
 import type { StrategyScore } from "@/lib/ai/strategyScoringEngine";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const selectStyle: React.CSSProperties = {
   padding: "4px 8px",
@@ -599,7 +600,7 @@ function MockTradingReadinessAuditCard({
       </div>
 
       <div style={{ marginTop: 10, maxHeight: 180, overflowY: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+        <AutoSortTable><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
           <thead>
             <tr style={{ color: "var(--text-muted)", textAlign: "left", borderBottom: "1px solid var(--border)" }}>
               <th style={{ padding: "4px 6px" }}>Strategy</th>
@@ -622,7 +623,7 @@ function MockTradingReadinessAuditCard({
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></AutoSortTable>
       </div>
     </TerminalPanel>
   );

@@ -6,6 +6,7 @@ import { StrictnessDial } from "@/components/StrictnessDial";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { Badge } from "@/components/ui/StatusChip";
+import { AutoSortTable } from "@/components/desk/ui";
 import type {
   ConfigChangeEntry,
   ThresholdCategory,
@@ -124,7 +125,7 @@ function SummaryStats({
 function SnapshotTable({ thresholds }: { thresholds: ThresholdConfigDTO[] }) {
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+      <AutoSortTable><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr style={{ textAlign: "left", color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
             <th style={{ padding: "8px 10px" }}>Threshold</th>
@@ -169,7 +170,7 @@ function SnapshotTable({ thresholds }: { thresholds: ThresholdConfigDTO[] }) {
             );
           })}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }

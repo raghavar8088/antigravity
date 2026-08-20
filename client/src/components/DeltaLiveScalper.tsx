@@ -11,6 +11,7 @@ import useDeltaLive, {
   type OpenOrder,
 } from "@/hooks/useDeltaLive";
 import useDeltaStrikes from "@/hooks/useDeltaStrikes";
+import { AutoSortTable } from "@/components/desk/ui";
 
 const CONFIG_LS_KEY = "delta_api_config_v1";
 
@@ -281,7 +282,7 @@ function LivePositionsTable({ positions }: { positions: LivePosition[] }) {
   }
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <AutoSortTable><table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
             <th style={thStyle}>Symbol</th>
@@ -314,7 +315,7 @@ function LivePositionsTable({ positions }: { positions: LivePosition[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }
@@ -326,7 +327,7 @@ function OpenOrdersTable({ orders }: { orders: OpenOrder[] }) {
   }
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <AutoSortTable><table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
             <th style={thStyle}>Order ID</th>
@@ -353,7 +354,7 @@ function OpenOrdersTable({ orders }: { orders: OpenOrder[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }
@@ -365,7 +366,7 @@ function MirroredTradesTable({ trades }: { trades: DeltaLiveTrade[] }) {
   }
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <AutoSortTable><table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
             <th style={thStyle}>ID</th>
@@ -406,7 +407,7 @@ function MirroredTradesTable({ trades }: { trades: DeltaLiveTrade[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/ai/strate
 import { closestSignalRows, signalTraceRatio } from "@/lib/ai/strategySignalTrace";
 import type { EntryFunnelSnapshot } from "@/lib/trading/deskEntryFunnelSnapshot";
 import { diagnoseNoTradeRootCause, type NoTradeRootCauseResult } from "@/lib/risk/noTradeRootCause";
+import { AutoSortTable } from "@/components/desk/ui";
 
 type TraceApiResponse = {
   ok: boolean;
@@ -286,7 +287,7 @@ export function SignalTracePanel({ accountKey }: { accountKey?: string | null })
           <div style={{ padding: "5px 6px", color: "#c9d1d9", fontWeight: 700 }}>
             Closest signals
           </div>
-          <table style={{ width: "100%", fontSize: 9, borderCollapse: "collapse", fontFamily: "var(--desk-font-mono, monospace)" }}>
+          <AutoSortTable><table style={{ width: "100%", fontSize: 9, borderCollapse: "collapse", fontFamily: "var(--desk-font-mono, monospace)" }}>
             <thead>
               <tr style={{ color: "#8b949e", textAlign: "left", borderTop: "1px solid #21262d", borderBottom: "1px solid #21262d" }}>
                 <th style={{ padding: "3px 6px" }}>Strategy</th>
@@ -317,14 +318,14 @@ export function SignalTracePanel({ accountKey }: { accountKey?: string | null })
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       )}
 
       {/* Table */}
       {rows.length > 0 && (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", fontSize: 9, borderCollapse: "collapse", fontFamily: "var(--desk-font-mono, monospace)" }}>
+          <AutoSortTable><table style={{ width: "100%", fontSize: 9, borderCollapse: "collapse", fontFamily: "var(--desk-font-mono, monospace)" }}>
             <thead>
               <tr style={{ color: "#8b949e", textAlign: "left", borderBottom: "1px solid #21262d" }}>
                 <th style={{ padding: "3px 6px" }}>Strategy</th>
@@ -416,7 +417,7 @@ export function SignalTracePanel({ accountKey }: { accountKey?: string | null })
                 );
               })}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       )}
 

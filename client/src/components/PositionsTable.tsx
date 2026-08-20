@@ -1,5 +1,7 @@
 "use client";
 
+import { AutoSortTable } from "@/components/desk/ui";
+
 export default function PositionsTable({ currentPrice }: { currentPrice: number }) {
   // Each position now carries SL/TP as absolute price levels.
   const positions = [
@@ -10,7 +12,7 @@ export default function PositionsTable({ currentPrice }: { currentPrice: number 
 
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <AutoSortTable><table className="w-full text-left text-sm">
         <thead className="text-xs text-gray-400 uppercase tracking-widest border-b border-gray-700/50">
           <tr>
             <th className="py-3 px-2">ID</th>
@@ -92,7 +94,7 @@ export default function PositionsTable({ currentPrice }: { currentPrice: number 
             </tr>
           )}
         </tbody>
-      </table>
+      </table></AutoSortTable>
     </div>
   );
 }

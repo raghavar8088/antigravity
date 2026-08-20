@@ -5,6 +5,7 @@ import type { MockTrade, MockAccountState, MockTradingConfig } from "@/lib/tradi
 import { computeExtendedMetrics, computeDailyPnl } from "@/lib/analytics/mockExtendedMetrics";
 import { runStressTest, buildScenarioComparisonTable } from "@/lib/analytics/mockStressTest";
 import { computeQualityAggregate } from "@/lib/ai/mockTradeQualityScorer";
+import { AutoSortTable } from "@/components/desk/ui";
 import {
   DeskCard,
   DeskSectionHeader,
@@ -108,7 +109,7 @@ function StressTestStrip({ trades }: { trades: readonly MockTrade[] }) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs border-separate border-spacing-y-0.5">
+      <AutoSortTable><table className="w-full text-xs border-separate border-spacing-y-0.5">
         <thead>
           <tr className="text-[10px] text-[var(--desk-muted)]">
             <th className="text-left py-1 px-2">Scenario</th>
@@ -135,7 +136,7 @@ function StressTestStrip({ trades }: { trades: readonly MockTrade[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></AutoSortTable>
       <p className="text-[10px] text-[var(--desk-muted)] mt-1">
         Most vulnerable: <strong>{report.summary.mostVulnerableScenario.replace(/_/g, " ")}</strong> |
         Most resilient: <strong>{report.summary.mostResilientScenario.replace(/_/g, " ")}</strong>

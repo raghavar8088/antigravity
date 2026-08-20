@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DeskButton, DeskChip, DeskCard, DeskSectionHeader } from "@/components/desk/ui";
 import type { VerificationTrackEvent } from "@/lib/verificationTrack/types";
+import { AutoSortTable } from "@/components/desk/ui";
 
 export function VerificationTrackPanel({ accountKey }: { accountKey?: string | null }) {
   const [events, setEvents] = useState<VerificationTrackEvent[]>([]);
@@ -64,7 +65,7 @@ export function VerificationTrackPanel({ accountKey }: { accountKey?: string | n
       <DeskCard padding="md">
         <div style={{ fontSize: 10, color: "#8b949e", marginBottom: 6 }}>Latest events (newest first)</div>
         <div style={{ maxHeight: 320, overflow: "auto" }}>
-          <table style={{ width: "100%", fontSize: 9, fontFamily: "var(--desk-font-mono, monospace)" }}>
+          <AutoSortTable><table style={{ width: "100%", fontSize: 9, fontFamily: "var(--desk-font-mono, monospace)" }}>
             <thead>
               <tr style={{ color: "#8b949e", textAlign: "left", borderBottom: "1px solid #30363d" }}>
                 <th>Time</th><th>Type</th><th>Strategy</th><th>Gate/Blocker</th><th>Summary</th>
@@ -82,7 +83,7 @@ export function VerificationTrackPanel({ accountKey }: { accountKey?: string | n
               ))}
               {events.length === 0 && <tr><td colSpan={5} style={{ color: "#8b949e" }}>No verification events yet.</td></tr>}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       </DeskCard>
     </div>

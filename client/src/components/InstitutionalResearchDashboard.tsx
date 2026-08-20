@@ -21,6 +21,7 @@ import {
   type InstitutionalStrategyMetrics,
 } from "@/lib/ai/institutionalResearchEngine";
 import { INSTITUTIONAL_STRATEGIES } from "@/lib/trading/btcInstitutionalStrategies";
+import { AutoSortTable } from "@/components/desk/ui";
 import {
   DeskCard,
   DeskChip,
@@ -338,7 +339,7 @@ function RegimeLeaderboardTab({ report }: { report: InstitutionalResearchReport 
       <div>
         <DeskSectionHeader title="Designed Regime Affinity (Research)" />
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", fontSize: "0.75rem", borderCollapse: "collapse" }}>
+          <AutoSortTable><table style={{ width: "100%", fontSize: "0.75rem", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--desk-outline)", color: "var(--desk-on-surface-variant)" }}>
                 {["Strategy", "Tier", "Best Regimes", "Avoid", "TP%", "SL%", "Est WR"].map((h) => (
@@ -364,7 +365,7 @@ function RegimeLeaderboardTab({ report }: { report: InstitutionalResearchReport 
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></AutoSortTable>
         </div>
       </div>
     </div>
