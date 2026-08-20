@@ -305,6 +305,12 @@ func BuildMTFPack() []RegistryEntry {
 		{"ATRThrust", patATRThrust},
 		{"PivotBreak", patPivotBreak},
 		{"GapFade", patGapFade},
+
+		// Volatility Contraction Pattern (Minervini). The longest-lookback
+		// family in the pack — three shrinking pullbacks on drying volume
+		// cannot be measured in a short window, so it self-rejects on most
+		// intraday series rather than finding a "base" in twenty bars.
+		{"VCP", patVCP},
 	}
 	out := make([]RegistryEntry, 0, len(tfs)*len(fams)*2)
 	for _, tf := range tfs {

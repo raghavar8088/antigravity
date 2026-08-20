@@ -33,15 +33,15 @@ func mtfCandles(n int, start, driftPct, noisePct float64) []Candle {
 // The pack must cover every timeframe and family, in both directions.
 func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 	p := BuildMTFPack()
-	// 41 families on 9 timeframes, both sides.
+	// 42 families on 9 timeframes, both sides.
 	//
 	// Was 26 families x 8 timeframes. 2026-08-17 added 45m and fifteen families
 	// completing the chart / candlestick / price-structure catalogue: Wedge,
 	// Pennant, CupHandle, Rounding, Broadening, Diamond, Hammer, Keltner,
 	// PriorSessionBreak, RoundNumber, TTMSqueeze, EMARibbon, ATRThrust,
 	// PivotBreak and GapFade.
-	if len(p) != 9*41*2 {
-		t.Fatalf("pack has %d strategies, want %d (9 timeframes x 41 families x 2 sides)", len(p), 9*41*2)
+	if len(p) != 9*42*2 {
+		t.Fatalf("pack has %d strategies, want %d (9 timeframes x 42 families x 2 sides)", len(p), 9*42*2)
 	}
 	seen := map[string]bool{}
 	for _, e := range p {

@@ -1525,6 +1525,8 @@ The content is organized as follows:
   strategy/scalpers/mtf_patterns3_test.go
   strategy/scalpers/mtf_patterns3.go
   strategy/scalpers/mtf_target_test.go
+  strategy/scalpers/mtf_vcp_test.go
+  strategy/scalpers/mtf_vcp.go
   strategy/scalpers/new10_batch.go
   strategy/scalpers/new10_batch2.go
   strategy/scalpers/overfit_demo_thisweek_widerr.go
@@ -1847,6 +1849,7 @@ The content is organized as follows:
   scalp_prelive/main.go
   scalp_prelive/mirror_test.go
   scalp_prelive/papercaps_test.go
+  scalp_prelive/paperdesk_sizemult_test.go
   scalp_prelive/paperdesk_test.go
   scalp_prelive/paperdesk.go
   scalp_prelive/paperpersist_test.go

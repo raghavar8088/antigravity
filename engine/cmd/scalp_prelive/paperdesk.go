@@ -187,6 +187,35 @@ var livePaperMaxConcurrent = paperEnvInt("SCALP_PAPER_MAX_CONCURRENT", 3)
 // unaffected.
 var livePaperPositionUSD = paperEnvFloat("SCALP_PAPER_POSITION_USD", 0)
 
+// livePaperSizeMultiplier scales ONE desk's position size without changing how
+// that desk behaves.
+//
+// Per account, because every sizing knob before this one was process-wide: six
+// numbered books, the gold book and the live paper mirror all run inside a
+// single binary and read the same environment. Making the Gold Desk trade
+// larger through SCALP_PAPER_POSITION_USD would have silently resized the other
+// seven, and their records are the only thing those desks exist to produce.
+//
+// Applied to the per-position notional AND to the aggregate budget by the same
+// factor, so the desk is a scale model of itself: three positions still exactly
+// fill the book, the leverage ratio is unchanged, and only the units differ.
+// Scaling the position alone would have made the aggregate cap bind at the
+// first trade and quietly clamp every position back to roughly its old size —
+// a 20x setting that produced a 1x desk, and no error anywhere.
+//
+//	SCALP_PAPER_SIZE_MULT_GOLD=20
+//
+// It multiplies P&L as well as position size, which is the whole point and also
+// the risk: a book that is down 20% becomes a book down 20x that in the same
+// market. Nothing about the strategies changes — only how much rides on them.
+func livePaperSizeMultiplier(account string) float64 {
+	key := "SCALP_PAPER_SIZE_MULT_" + strings.ToUpper(strings.TrimSpace(account))
+	if v := paperEnvFloat(key, 0); v > 0 {
+		return v
+	}
+	return 1
+}
+
 // livePaperProductLeverage is the leverage SET ON THE PRODUCT at Delta, which
 // decides how much margin the venue holds and therefore how far away it will
 // force-close the position. Matches delta.PerpLeverage.
@@ -400,12 +429,19 @@ func (d *livePaperDesk) onSignal(strategy, symbol, dir string, entry, stop, targ
 		// Historical formula: the whole budget divided evenly across the slots.
 		perPosition = d.equity * livePaperMaxLeverage / float64(livePaperMaxConcurrent)
 	}
+	// This desk's own scale factor. 1 for every desk that does not set one.
+	mult := livePaperSizeMultiplier(d.account)
+	perPosition *= mult
 	notional := perPosition
 	// Aggregate leverage cap across everything already open. One wallet means
 	// one budget: a fourth idea cannot be funded by pretending the first three
 	// were free. Skipped entirely when the cap is unlimited.
+	//
+	// The budget is scaled by the SAME multiplier as the position, or the cap
+	// would immediately clamp the larger position back to the old size and the
+	// setting would appear to do nothing.
 	if livePaperMaxLeverage > 0 {
-		budget := d.equity*livePaperMaxLeverage - d.openNotionalLocked()
+		budget := d.equity*livePaperMaxLeverage*mult - d.openNotionalLocked()
 		notional = math.Min(budget, perPosition)
 	}
 	if notional <= 0 {

@@ -120,12 +120,12 @@ func TestNewPatternsProduceCoherentSignals(t *testing.T) {
 }
 
 // The whole pack must build and evaluate. This is the check that would have
-// caught a family registered with a nil constructor — 738 strategies that all
+// caught a family registered with a nil constructor — 756 strategies that all
 // look present and one that panics the first time its symbol ticks.
 func TestFullMTFPackEvaluates(t *testing.T) {
 	pack := BuildMTFPack()
-	if len(pack) != 41*9*2 {
-		t.Fatalf("pack size %d, want 41 families x 9 timeframes x 2 directions = %d", len(pack), 41*9*2)
+	if len(pack) != 42*9*2 {
+		t.Fatalf("pack size %d, want 41 families x 9 timeframes x 2 directions = %d", len(pack), 42*9*2)
 	}
 	ctx := MarketContext{
 		Candles1m:  randomWalk(300, 100, 0.01, 11),
