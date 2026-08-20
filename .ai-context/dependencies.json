@@ -1,1 +1,1 @@
-{}
+{"client/src/components/desk/ui/DeskDataTable.tsx":{"imports":["client/src/components/desk/ui/sortValue.ts"]},"client/src/components/desk/ui/sortValue.test.ts":{"imports":["client/src/components/desk/ui/sortValue.ts"]},"client/src/components/desk/ui/useTableSort.tsx":{"imports":["client/src/components/desk/ui/sortValue.ts"]},"client/src/components/ui/DataTable.tsx":{"imports":["client/src/components/desk/ui/sortValue.ts"]}}

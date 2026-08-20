@@ -249,7 +249,10 @@ The content is organized as follows:
   components/desk/ui/DeskSwitch.tsx
   components/desk/ui/DeskTabs.tsx
   components/desk/ui/index.ts
+  components/desk/ui/sortValue.test.ts
+  components/desk/ui/sortValue.ts
   components/desk/ui/StatusBadge.tsx
+  components/desk/ui/useTableSort.tsx
   components/desk/WorkspaceNavPanel.tsx
   components/desk/WorkspaceSettingsCard.tsx
   components/deskCommandCenterHelpers.ts

@@ -5,18 +5,28 @@ import { EmptyState } from "./EmptyState";
 import { Skeleton } from "./Skeleton";
 import { TextField } from "./FormControls";
 import { cn } from "./cn";
+import { compareSortable, nodeText, parseSortable } from "../desk/ui/sortValue";
 
 export type DataTableColumn<T> = {
   id: string;
   header: ReactNode;
   cell: (row: T, index: number) => ReactNode;
   align?: "left" | "right" | "center";
+  /** Opt OUT with false. Sorting is on by default — a column nobody remembered
+   * to mark sortable is indistinguishable from one that cannot be sorted. */
   sortable?: boolean;
+  /** Explicit sort value. Optional: without it the column sorts on the text its
+   * cell renders, which is correct for currency, counts and names. */
   sortValue?: (row: T) => string | number;
   width?: string;
 };
 
 type SortDir = "asc" | "desc";
+
+/** An explicit sortValue may still be a formatted string like "$1,204.50". */
+function parseSortableValue(v: string | number): number | string | null {
+  return typeof v === "number" ? v : parseSortable(v);
+}
 
 export function DataTable<T>({
   columns,
@@ -60,13 +70,23 @@ export function DataTable<T>({
     }
     if (sortCol) {
       const col = columns.find((c) => c.id === sortCol);
-      if (col?.sortValue) {
-        result = [...result].sort((a, b) => {
-          const av = col.sortValue!(a);
-          const bv = col.sortValue!(b);
-          const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-          return sortDir === "asc" ? cmp : -cmp;
+      if (col && col.sortable !== false) {
+        // Falls back to the RENDERED text when the column declares no
+        // sortValue. Previously such a column rendered a sort button that did
+        // nothing at all — the control looked wired and silently was not.
+        const keyed = result.map((row, i) => ({
+          row,
+          i,
+          v:
+            col.sortValue !== undefined
+              ? parseSortableValue(col.sortValue(row))
+              : parseSortable(nodeText(col.cell(row, i))),
+        }));
+        keyed.sort((a, b) => {
+          const c = compareSortable(a.v, b.v, sortDir);
+          return c !== 0 ? c : a.i - b.i; // stable
         });
+        result = keyed.map((k) => k.row);
       }
     }
     return result;
@@ -76,8 +96,11 @@ export function DataTable<T>({
   const pageRows = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
   const toggleSort = (colId: string) => {
-    if (sortCol === colId) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortCol(colId); setSortDir("asc"); }
+    // First click DESCENDING, matching DeskDataTable: on these boards the
+    // interesting end is the top, so ascending-first makes every first click
+    // the wrong one.
+    if (sortCol === colId) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else { setSortCol(colId); setSortDir("desc"); }
     setPage(0);
   };
 
@@ -112,10 +135,17 @@ export function DataTable<T>({
             <tr>
               {columns.map((col) => (
                 <th key={col.id} style={{ width: col.width, textAlign: col.align ?? "left" }}>
-                  {col.sortable ? (
-                    <button type="button" className="m3-data-table__sort-btn" onClick={() => toggleSort(col.id)}>
+                  {col.sortable !== false ? (
+                    <button
+                      type="button"
+                      className="m3-data-table__sort-btn"
+                      onClick={() => toggleSort(col.id)}
+                      aria-label={`Sort by ${typeof col.header === "string" ? col.header : col.id}`}
+                    >
                       {col.header}
-                      {sortCol === col.id ? (sortDir === "asc" ? " ↑" : " ↓") : null}
+                      <span aria-hidden style={{ fontSize: 8, marginLeft: 4, opacity: sortCol === col.id ? 1 : 0.55 }}>
+                        {sortCol === col.id ? (sortDir === "asc" ? "▲" : "▼") : "▲▼"}
+                      </span>
                     </button>
                   ) : col.header}
                 </th>
