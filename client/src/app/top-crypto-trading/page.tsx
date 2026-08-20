@@ -23,7 +23,7 @@
  * a separate, deliberate decision made against these records.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   DeskBanner,
@@ -32,6 +32,7 @@ import {
   DeskDataTable,
   DeskLinearProgress,
   DeskMetricTile,
+  DeskSearchField,
   DeskSectionHeader,
   StatusBadge,
   type DeskColumn,
@@ -39,7 +40,7 @@ import {
 } from "@/components/desk/ui";
 import { fmtIST, fmtISTClock } from "@/lib/istTime";
 
-type Stream = {
+export type Stream = {
   strategy: string;
   symbol: string;
   live: boolean;
@@ -135,6 +136,96 @@ function ageLabel(iso?: string): string {
   return s < 60 ? `${s}s ago` : `${Math.round(s / 60)}m ago`;
 }
 /** "MTF_45m_Wedge_Short" -> timeframe + template, for grouping. */
+/** Columns the leaderboard can be ordered by. */
+export type SortKey = "n" | "wr" | "gross" | "fees" | "net" | "drag";
+type Side = "ALL" | "LONG" | "SHORT";
+
+/**
+ * Sort value for a column.
+ *
+ * A function rather than r[key], because two of the sortable columns — win rate
+ * and fee drag — are DERIVED at render time and are not fields on the row.
+ * Indexing the row for those silently sorts by undefined, which presents as a
+ * column whose arrows do nothing.
+ */
+export function streamMetric(r: Stream, k: SortKey): number {
+  switch (k) {
+    case "n":
+      return r.trades;
+    case "wr":
+      return r.trades ? (100 * r.wins) / r.trades : -1;
+    case "gross":
+      return r.grossUsd;
+    case "fees":
+      return r.feesUsd;
+    case "net":
+      return r.netUsd;
+    case "drag":
+      // A stream with no gross has no drag to speak of. Sent to the BOTTOM on a
+      // descending sort rather than treated as 0%, which would otherwise put
+      // every untraded stream at the top of the cheapest-first ordering.
+      return r.grossUsd > 0 ? (r.feesUsd / r.grossUsd) * 100 : Number.NEGATIVE_INFINITY;
+  }
+}
+
+/** LONG / SHORT read off the strategy name, which is where the side lives. */
+export function sideOf(name: string): Side {
+  if (name.endsWith("_Long")) return "LONG";
+  if (name.endsWith("_Short")) return "SHORT";
+  return "ALL";
+}
+
+function SortableHeader({
+  label, k, sortKey, sortDir, onSort,
+}: {
+  label: string; k: SortKey; sortKey: SortKey; sortDir: "asc" | "desc"; onSort: (k: SortKey) => void;
+}) {
+  const active = sortKey === k;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(k)}
+      className="ml-auto inline-flex items-center gap-1 transition-colors"
+      style={{ color: active ? "var(--desk-primary)" : "inherit" }}
+    >
+      {label}
+      <span style={{ fontSize: 8, lineHeight: 1 }}>{active ? (sortDir === "desc" ? "▼" : "▲") : "▲▼"}</span>
+    </button>
+  );
+}
+
+function segButtonStyle(active: boolean, tone: "primary" | "success" | "error" = "primary") {
+  const bg = active
+    ? tone === "success" ? "var(--desk-success-container)" : tone === "error" ? "var(--desk-error-container)" : "var(--desk-primary-container)"
+    : "transparent";
+  const color = active
+    ? tone === "success" ? "var(--desk-success)" : tone === "error" ? "var(--desk-error)" : "var(--desk-on-primary-container)"
+    : "var(--desk-on-surface-variant)";
+  return {
+    minHeight: 36,
+    padding: "0 12px",
+    borderRadius: "var(--desk-radius-input)",
+    border: `1px solid ${active ? "transparent" : "var(--desk-outline)"}`,
+    background: bg,
+    color,
+    fontSize: "0.8125rem",
+    fontWeight: active ? 700 : 400,
+    cursor: "pointer",
+  } as const;
+}
+
+const SELECT_STYLE = {
+  minHeight: 36,
+  borderRadius: "var(--desk-radius-input)",
+  border: "1px solid var(--desk-outline)",
+  background: "var(--desk-surface)",
+  color: "var(--desk-on-surface)",
+  fontSize: "0.8125rem",
+  padding: "0 10px",
+} as const;
+
+const MIN_N_OPTS = [0, 1, 10, 30, 50, 100];
+
 function parseStrategy(name: string): { tf: string; template: string } {
   const p = name.split("_");
   if (p.length >= 3 && p[0] === "MTF") {
@@ -151,6 +242,15 @@ export default function TopCryptoTradingPage() {
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [tfFilter, setTfFilter] = useState<string>("ALL");
   const [tradedOnly, setTradedOnly] = useState<boolean>(true);
+  const [query, setQuery] = useState<string>("");
+  const [template, setTemplate] = useState<string>("ALL");
+  const [side, setSide] = useState<Side>("ALL");
+  const [minN, setMinN] = useState<number>(0);
+  const [profitOnly, setProfitOnly] = useState<boolean>(false);
+  const [minWR, setMinWR] = useState<number>(0);
+  const [maxDrag, setMaxDrag] = useState<number>(0);
+  const [sortKey, setSortKey] = useState<SortKey>("net");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const refresh = useCallback(async () => {
     try {
@@ -192,8 +292,56 @@ export default function TopCryptoTradingPage() {
       return order.indexOf(a) - order.indexOf(b);
     },
   );
-  let streams = tfFilter === "ALL" ? allStreams : allStreams.filter((s) => parseStrategy(s.strategy).tf === tfFilter);
-  if (tradedOnly) streams = streams.filter((s) => s.trades > 0);
+  // Every template on this book, for the family dropdown. Built from ALL
+  // streams rather than the filtered set, or choosing one template would empty
+  // the list that chose it.
+  const templates = useMemo(
+    () => Array.from(new Set(allStreams.map((s) => parseStrategy(s.strategy).template.replace(/_(Long|Short)$/, "")))).sort(),
+    [allStreams],
+  );
+
+  const q = query.trim().toLowerCase();
+  const streams = useMemo(() => {
+    const out = allStreams
+      .filter((s) => tfFilter === "ALL" || parseStrategy(s.strategy).tf === tfFilter)
+      .filter((s) => !tradedOnly || s.trades > 0)
+      .filter((s) => q === "" || s.strategy.toLowerCase().includes(q))
+      .filter((s) => template === "ALL" || parseStrategy(s.strategy).template.replace(/_(Long|Short)$/, "") === template)
+      .filter((s) => side === "ALL" || sideOf(s.strategy) === side)
+      .filter((s) => s.trades >= minN)
+      .filter((s) => !profitOnly || s.netUsd > 0)
+      .filter((s) => minWR <= 0 || (s.trades > 0 && (100 * s.wins) / s.trades >= minWR))
+      .filter((s) => maxDrag <= 0 || (s.grossUsd > 0 && (s.feesUsd / s.grossUsd) * 100 <= maxDrag));
+    return out.sort((a, b) => {
+      const d = streamMetric(a, sortKey) - streamMetric(b, sortKey);
+      // Trades as the tiebreak, so equal rows are ordered by how much evidence
+      // stands behind them rather than by whatever order the API returned.
+      return (sortDir === "desc" ? -d : d) || b.trades - a.trades;
+    });
+  }, [allStreams, tfFilter, tradedOnly, q, template, side, minN, profitOnly, minWR, maxDrag, sortKey, sortDir]);
+
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else {
+      setSortKey(k);
+      // A new column starts descending: on every one of these, larger is the
+      // answer being looked for.
+      setSortDir("desc");
+    }
+  };
+
+  const filtersActive =
+    q !== "" || template !== "ALL" || side !== "ALL" || minN !== 0 || profitOnly || minWR !== 0 || maxDrag !== 0 || tfFilter !== "ALL";
+  const resetFilters = () => {
+    setQuery("");
+    setTemplate("ALL");
+    setSide("ALL");
+    setMinN(0);
+    setProfitOnly(false);
+    setMinWR(0);
+    setMaxDrag(0);
+    setTfFilter("ALL");
+  };
 
   const trades = streams.reduce((a, x) => a + x.trades, 0);
   const wins = streams.reduce((a, x) => a + x.wins, 0);
@@ -204,6 +352,15 @@ export default function TopCryptoTradingPage() {
   const totalStart = books.reduce((a, b) => a + b.startingEquityUsd, 0);
 
   const streamColumns: DeskColumn<Stream>[] = [
+    {
+      // Rank against the CURRENT ordering, so it renumbers when the sort or a
+      // filter changes. A rank frozen to the unfiltered list would label the
+      // top visible row something other than 1 and read as a rendering bug.
+      id: "rank",
+      header: "#",
+      align: "right",
+      cell: (_r, i) => <span style={{ color: "var(--desk-on-surface-variant)" }}>{(i ?? 0) + 1}</span>,
+    },
     {
       id: "strategy",
       header: "Strategy",
@@ -221,14 +378,14 @@ export default function TopCryptoTradingPage() {
         );
       },
     },
-    { id: "n", align: "right", header: "Trades", cell: (r) => r.trades },
-    { id: "wr", align: "right", header: "WR %", cell: (r) => (r.trades ? ((100 * r.wins) / r.trades).toFixed(1) : "—") },
-    { id: "gross", align: "right", header: "Gross", cell: (r) => <span className={pnlTone(r.grossUsd)}>{fmtUSD(r.grossUsd)}</span> },
-    { id: "fees", align: "right", header: "− Taker Fees", cell: (r) => <span className="desk-pnl-negative">{fmtUSD(-r.feesUsd)}</span> },
+    { id: "n", align: "right", header: <SortableHeader label="Trades" k="n" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.trades },
+    { id: "wr", align: "right", header: <SortableHeader label="WR %" k="wr" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => (r.trades ? ((100 * r.wins) / r.trades).toFixed(1) : "—") },
+    { id: "gross", align: "right", header: <SortableHeader label="Gross" k="gross" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => <span className={pnlTone(r.grossUsd)}>{fmtUSD(r.grossUsd)}</span> },
+    { id: "fees", align: "right", header: <SortableHeader label="− Taker Fees" k="fees" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => <span className="desk-pnl-negative">{fmtUSD(-r.feesUsd)}</span> },
     {
       id: "net",
       align: "right",
-      header: "= Net",
+      header: <SortableHeader label="= Net" k="net" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       cell: (r) => (
         <span className={pnlTone(r.netUsd)} style={{ fontWeight: 700 }}>
           {fmtUSD(r.netUsd)}
@@ -238,7 +395,7 @@ export default function TopCryptoTradingPage() {
     {
       id: "drag",
       align: "right",
-      header: "Fee Drag",
+      header: <SortableHeader label="Fee Drag" k="drag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       cell: (r) => (r.grossUsd > 0 ? `${((r.feesUsd / r.grossUsd) * 100).toFixed(0)}%` : "—"),
     },
     {
@@ -314,12 +471,12 @@ export default function TopCryptoTradingPage() {
       ),
     },
     { id: "hold", align: "right", header: "Held", cell: (r) => `${r.holdMin}m` },
-    { id: "gross", align: "right", header: "Gross", cell: (r) => <span className={pnlTone(r.grossUsd)}>{fmtUSD(r.grossUsd)}</span> },
+    { id: "gross", align: "right", header: <SortableHeader label="Gross" k="gross" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => <span className={pnlTone(r.grossUsd)}>{fmtUSD(r.grossUsd)}</span> },
     { id: "fees", align: "right", header: "− Fees", cell: (r) => <span className="desk-pnl-negative">{fmtUSD(-r.feesUsd)}</span> },
     {
       id: "net",
       align: "right",
-      header: "= Net",
+      header: <SortableHeader label="= Net" k="net" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       cell: (r) => (
         <span className={pnlTone(r.netUsd)} style={{ fontWeight: 600 }}>
           {fmtUSD(r.netUsd)}
@@ -470,6 +627,9 @@ export default function TopCryptoTradingPage() {
                 subtitle="Every template on every timeframe, ranked by what it actually returned after fees."
                 actions={
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                      {streams.length} of {allStreams.length} streams
+                    </span>
                     <button
                       type="button"
                       onClick={() => setTradedOnly((v) => !v)}
@@ -508,17 +668,97 @@ export default function TopCryptoTradingPage() {
                   </div>
                 }
               />
+              {/* Filters.
+                  The same controls as the Scalp Desk board, with one axis
+                  swapped: there the dropdown picks a SYMBOL, and here the
+                  symbol is already fixed by the tab above, so the equivalent
+                  question is which TEMPLATE — the axis that actually varies
+                  inside one book. */}
+              <div className="desk-toolbar" style={{ marginBottom: 12 }}>
+                <div className="desk-toolbar__actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                  <DeskSearchField value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search strategy…" />
+
+                  <select value={template} onChange={(e) => setTemplate(e.target.value)} style={SELECT_STYLE}>
+                    <option value="ALL">All templates</option>
+                    {templates.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+
+                  <div style={{ display: "inline-flex", gap: 4 }}>
+                    {(["ALL", "LONG", "SHORT"] as Side[]).map((sd) => (
+                      <button
+                        key={sd}
+                        type="button"
+                        onClick={() => setSide(sd)}
+                        style={segButtonStyle(side === sd, sd === "LONG" ? "success" : sd === "SHORT" ? "error" : "primary")}
+                      >
+                        {sd === "ALL" ? "Both" : sd === "LONG" ? "Long" : "Short"}
+                      </button>
+                    ))}
+                  </div>
+
+                  <select value={minN} onChange={(e) => setMinN(Number(e.target.value))} style={SELECT_STYLE}>
+                    {MIN_N_OPTS.map((n) => (
+                      <option key={n} value={n}>{n === 0 ? "Any trades" : `≥ ${n} trades`}</option>
+                    ))}
+                  </select>
+
+                  <button type="button" onClick={() => setProfitOnly((v) => !v)} style={segButtonStyle(profitOnly, "success")}>
+                    Net positive only
+                  </button>
+
+                  {[
+                    { label: "min WR %", value: minWR, set: setMinWR, opts: [0, 30, 40, 50, 60, 70] },
+                    { label: "max Fee Drag %", value: maxDrag, set: setMaxDrag, opts: [0, 25, 50, 75, 100] },
+                  ].map((f) => (
+                    <label key={f.label} className="desk-label-md" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ color: "var(--desk-on-surface-variant)" }}>{f.label}</span>
+                      <select
+                        value={f.value}
+                        onChange={(e) => f.set(Number(e.target.value))}
+                        style={{
+                          padding: "4px 8px",
+                          borderRadius: 6,
+                          border: "1px solid var(--desk-outline)",
+                          background: f.value !== 0 ? "var(--desk-primary-container)" : "transparent",
+                          color: "inherit",
+                          fontWeight: f.value !== 0 ? 700 : 400,
+                        }}
+                      >
+                        {f.opts.map((o) => (
+                          <option key={o} value={o}>{o === 0 ? "any" : o}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+
+                  {filtersActive && (
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="desk-label-md"
+                      style={{ color: "var(--desk-primary)", cursor: "pointer", fontWeight: 700, background: "none", border: "none" }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <DeskDataTable
                 columns={streamColumns}
-                rows={[...streams].sort((a, b) => b.netUsd - a.netUsd || b.trades - a.trades).slice(0, 250)}
+                rows={streams.slice(0, 250)}
                 getRowKey={(r) => `${r.strategy}|${r.symbol}`}
                 minWidth={1000}
                 stickyHeader
                 empty={
                   <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
-                    {tradedOnly
-                      ? `No strategy has filled on ${book.account} yet — switch to "all streams" to see the ${allStreams.length} being watched.`
-                      : "No strategies registered for this symbol."}
+                    {filtersActive
+                      ? `No stream on ${book.account} matches these filters — ${allStreams.length} are being watched. Reset to see them.`
+                      : tradedOnly
+                        ? `No strategy has filled on ${book.account} yet — switch to "all streams" to see the ${allStreams.length} being watched.`
+                        : "No strategies registered for this symbol."}
                   </p>
                 }
               />

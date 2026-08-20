@@ -208,6 +208,7 @@ The content is organized as follows:
   app/terminal/trade-engine/page.tsx
   app/terminal/trading/page.tsx
   app/top-crypto-trading/page.tsx
+  app/top-crypto-trading/sort.test.ts
   components/ActivityFeed.tsx
   components/AiAppTrackerPanel.tsx
   components/AIInsightPanel.tsx
