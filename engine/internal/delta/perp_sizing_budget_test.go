@@ -38,15 +38,14 @@ func TestRoster_EverySymbolCanBeSizedByRisk(t *testing.T) {
 		return int(notional / q.perContract) // SizeContracts rounds down
 	}
 
-	// Routed symbols that cannot size TODAY but can when volatility falls.
+	// No routed symbol currently relies on volatility to become fundable.
 	//
-	// ETHUSD is here at the owner's explicit instruction after the refusal was
-	// explained. It is refused now — $10.85 of risk-sized notional against a
-	// $23.08 contract — but its contract fits under the $30 ceiling, so a
-	// quieter market makes it fundable without anything else changing. The same
-	// measurement put ETH's stop at 0.069% on 2026-08-16, well inside the
-	// 0.260% it needs.
-	volatilityGated := map[string]bool{"ETHUSD": true}
+	// ETHUSD was in this set on 2026-08-20 and is not routed any more. Kept as
+	// an empty map rather than deleted, because the DISTINCTION it encodes is
+	// still live: a symbol whose contract fits the ceiling can be funded by a
+	// tighter stop, and one whose contract exceeds it never can. The next
+	// borderline symbol belongs here, not in the unconditional check below.
+	volatilityGated := map[string]bool{}
 
 	for _, st := range ScalpLiveStreams() {
 		q, ok := measured[st.Symbol]
@@ -84,12 +83,18 @@ func TestRoster_EverySymbolCanBeSizedByRisk(t *testing.T) {
 		}
 	}
 
-	// ETHUSD specifically: fits the ceiling, fails the budget. If this ever
-	// stops being true the comment in perp_roster.go explaining the difference
-	// is describing something that no longer happens.
+	// ETHUSD is excluded for a DIFFERENT reason and the difference must not
+	// blur: it fits the ceiling and fails only today's stop width. Asserting
+	// both halves keeps the two kinds of exclusion distinct, so a future reader
+	// does not lump it in with the three that are permanently impossible.
 	eth := measured["ETHUSD"]
 	if eth.perContract > equityUSD*maxLeverage {
-		t.Errorf("ETHUSD at $%.2f no longer fits the $%.2f ceiling; it is the example of a symbol "+
-			"refused by the RISK BUDGET while clearing the ceiling", eth.perContract, equityUSD*maxLeverage)
+		t.Errorf("ETHUSD at $%.2f no longer fits the ceiling; it is documented as fundable at a "+
+			"tighter stop, which would stop being true", eth.perContract)
 	}
+	if contractsFor(eth) >= 1 {
+		t.Errorf("ETHUSD now sizes to %d contract(s) and could be routed; it is off the roster on "+
+			"the grounds that it refuses continuously", contractsFor(eth))
+	}
+
 }

@@ -50,83 +50,53 @@ import (
 // NOT qualified. The gate asks for 200 trades per stream and these have 19-61,
 // selected from the right tail of 2,416 streams on in-sample data. Being on
 // this list is permission, not evidence.
-// Replaced 2026-08-20 at the owner's direction, from the TOP CRYPTO TRADING
-// board. The previous 67 streams are removed; this replaces them.
+// Replaced 2026-08-21 at the owner's direction: the live roster is the five
+// AVAXUSD streams from the Top Crypto board, and nothing else.
 //
-// Fifteen streams were selected across five books, to run on the EXISTING $10
-// account. NINE are routed: five on AVAXUSD, four on ETHUSD.
-//
-// None of the exclusions is a grid problem — every symbol involved clears the
-// tick grid with enormous margin (SOL 3952 ticks, BTC 646, AVAX 286, ETH 255,
-// ZEC 173). What decides it is RISK SIZING, and the order of operations matters:
+// Fifteen streams were selected across five books. Five are routed. The other
+// ten are not blocked by the tick grid — every symbol clears it easily (SOL
+// 3952 ticks, BTC 646, ETH 255, ZEC 173, AVAX 286) — they simply cannot be
+// FUNDED at $10 equity:
 //
 //	risk/trade = equity x 0.6%                       = $0.06
 //	notional   = risk / stop fraction
 //	notional   = min(notional, equity x maxLeverage) = min(notional, $30)
 //	contracts  = int(notional / per contract)          <- rounds DOWN
 //
-// The CAP is the load-bearing step. Because notional can never exceed $30, a
-// contract costing more than $30 sizes to zero at ANY volatility — no quiet
-// market rescues it. That splits the ten exclusions into two different kinds:
+//	symbol   1 ctr    stop%   notional  ctr  result
+//	SOLUSD   $87.07   0.454%   $13.22    0   refused
+//	BTCUSD   $72.44   0.446%   $13.45    0   refused
+//	ZECUSD   $56.45   0.307%   $19.54    0   refused
+//	ETHUSD   $23.08   0.553%   $10.85    0   refused
+//	AVAXUSD   $7.08   0.404%   $14.85    2   TRADES
 //
-//	symbol   1 ctr    stop now  stop needed  can it ever size at $10?
-//	SOLUSD   $87.07     0.454%      —        no  — contract exceeds the ceiling
-//	BTCUSD   $72.44     0.446%      —        no  — contract exceeds the ceiling
-//	ZECUSD   $56.45     0.307%      —        no  — contract exceeds the ceiling
-//	ETHUSD   $23.08     0.553%   0.260%      YES — when volatility falls 2.1x
-//	AVAXUSD   $7.08     0.404%   0.848%      trading now, 2 contracts
+// ETHUSD was briefly routed on 2026-08-20 and is removed again. It is the one
+// symbol of the four whose refusal is volatility-dependent rather than
+// arithmetic — its contract fits under the $30 ceiling, so a stop tighter than
+// 0.260% would fund it — but it has been refusing continuously, and a stream
+// that logs the same refusal on every signal is noise rather than evidence.
+// That is the LABUSD precedent, applied consistently.
 //
-// ETHUSD is routed on the strength of that last column, at the owner's explicit
-// instruction after the refusal was explained. It is refused TODAY: risk sizing
-// asks for $10.85 of notional against a $23.08 contract, so it rounds to zero
-// and returns ErrRiskTooSmall. But it is refused by VOLATILITY, not by
-// arithmetic, and the same measurement run on 2026-08-16 put ETH's stop at
-// 0.069% — comfortably inside the 0.260% it needs. These four streams trade
-// whenever ETH is quiet, which is the XAIUSD case rather than the BTCUSD one.
+// The distinction is still worth keeping in view: BTC, SOL and ZEC each cost
+// more per contract than the entire book, so no market condition can fund them
+// at this equity. ETH can, and will, when it quietens.
 //
-// The other six stay off precisely because they are the BTCUSD case: nothing
-// about the market can make a $72 contract fit a $30 ceiling, so routing them
-// would produce rows that refuse forever.
+// ONE POSITION AT A TIME. All five share AVAXUSD and MaxPositionsPerSymbol is
+// 1, so they compete for a single slot and the one that fills is whichever
+// signals first — a frequency property, not a quality one. The 10m stream will
+// win most of them.
 //
-// Fitting the ceiling and fitting the risk budget are separate questions, and
-// this corrects an earlier claim in this session that ETHUSD "fit" — it clears
-// the ceiling and fails the budget. Every symbol the desk had traded before
-// cost $0.17-$9 a contract, so the ceiling was the only limit that ever bound
-// and the budget had never been observed refusing anything.
-//
-// ONE POSITION PER SYMBOL. Five streams share AVAXUSD and four share ETHUSD,
-// and MaxPositionsPerSymbol is 1, so each group competes for a single slot and
-// the one that fills is whichever signals first — frequency, not quality.
-//
-// EVIDENCE. These come from Top Crypto, a PAPER-ONLY module where no stream is
-// on the venue allow-list, so none has ever placed a real order. Records run
-// 11-24 trades against a gate asking for 200, and the AVAX book is net NEGATIVE
+// EVIDENCE. From Top Crypto, a PAPER-ONLY module where no stream is on the
+// venue allow-list, so none had placed a real order before this. Records run
+// 12-24 trades against a gate asking for 200, and the AVAX book is net NEGATIVE
 // at -$32.47 — these are the winners inside a losing book, which is what the
 // top of a leaderboard is by construction. Permission, not evidence.
 var defaultScalpLiveStreams = []PerpStream{
-	// AVAXUSD — $7.08 a contract. Sizes to 2 contracts today and trades.
 	{Strategy: "MTF_4h_DoubleTopBottom_Long", Symbol: "AVAXUSD"},
 	{Strategy: "MTF_4h_TripleTopBottom_Long", Symbol: "AVAXUSD"},
 	{Strategy: "MTF_1h_PriorSessionBreak_Long", Symbol: "AVAXUSD"},
 	{Strategy: "MTF_1h_Keltner_Long", Symbol: "AVAXUSD"},
 	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "AVAXUSD"},
-
-	// ETHUSD — $23.08 a contract, under the $30 ceiling. Refused while ETH's
-	// stop is wider than 0.260%; trades when it is not.
-	{Strategy: "MTF_1d_TTMSqueeze_Long", Symbol: "ETHUSD"},
-	{Strategy: "MTF_1d_ATRThrust_Long", Symbol: "ETHUSD"},
-	{Strategy: "MTF_1d_Keltner_Long", Symbol: "ETHUSD"},
-	{Strategy: "MTF_1h_StructureBreak_Long", Symbol: "ETHUSD"},
-
-	// Chosen and NOT routed. Each contract costs more than the entire $30 book
-	// ceiling, so no volatility makes them expressible on this account:
-	//
-	//   MTF_1d_EMARibbon_Long|BTCUSD           30 trades, net $11.30
-	//   MTF_1d_TTMSqueeze_Long|BTCUSD          28 trades, net  $6.63
-	//   MTF_1d_Keltner_Long|SOLUSD             22 trades, net  $5.57
-	//   MTF_1h_PriorSessionBreak_Long|SOLUSD   19 trades, net $13.48
-	//   MTF_1d_DirectionalTriangle_Long|ZECUSD 33 trades, net $14.60
-	//   MTF_1d_StructureBreak_Long|ZECUSD      15 trades, net $13.14
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine

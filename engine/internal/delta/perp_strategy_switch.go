@@ -63,11 +63,42 @@ func (b *PerpBridge) DisabledStrategies() []string {
 }
 
 // setDisabledStrategies restores the switch state from disk. Caller holds b.mu.
+//
+// Entries for streams that are no longer on the ALLOW-LIST are dropped.
+//
+// The switch is a standing owner decision and it survives a roster change,
+// which is right while a stream is still routed and wrong once it is not: the
+// file had accumulated 183 entries naming streams from rosters retired weeks
+// earlier. They could never trade — the bridge consults the allow-list, not
+// this map — so every one was a preference about nothing, and they were the
+// reason the board could report more switched-off strategies than the desk has
+// ever run.
+//
+// Dropping rather than keeping is the safe direction here BECAUSE the entries
+// are all "off". Losing an off switch for a stream that is not routed changes
+// nothing; keeping it makes the board describe a roster that no longer exists.
+// A stream that is re-routed later starts enabled, which is the documented
+// default for an unknown name.
 func (b *PerpBridge) setDisabledStrategiesLocked(names []string) {
 	b.strategyOff = make(map[string]bool, len(names))
+	dropped := 0
 	for _, n := range names {
-		if n = strings.TrimSpace(n); n != "" {
-			b.strategyOff[n] = true
+		if n = strings.TrimSpace(n); n == "" {
+			continue
 		}
+		// The stored key is "strategy|SYMBOL" — the same shape perpStreamKey
+		// writes — so it is split and put through the real gate rather than
+		// matched against a second, parallel notion of what is routed.
+		if b.allow != nil {
+			parts := strings.SplitN(n, "|", 2)
+			if len(parts) != 2 || !b.allow.Allowed(parts[0], parts[1]) {
+				dropped++
+				continue
+			}
+		}
+		b.strategyOff[n] = true
+	}
+	if dropped > 0 {
+		log.Printf("[PERP LIVE] dropped %d switched-off entr(ies) for streams no longer on the roster", dropped)
 	}
 }

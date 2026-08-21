@@ -5,28 +5,28 @@ import (
 	"testing"
 )
 
-// The roster is 9 streams — 5 on AVAXUSD, 4 on ETHUSD.
+// The roster is 5 streams, all on AVAXUSD.
 //
 // Pinned because it is an owner decision, and because the number carries the
-// finding. Fifteen streams were selected off the Top Crypto board on
-// 2026-08-20; six are on symbols whose single contract costs more than the
-// entire $30 book, so a roster of nine is the correct outcome rather than a
-// dropped edit.
+// finding. Fifteen streams were selected off the Top Crypto board; ten cannot
+// be funded at $10 equity, so a roster of five is the correct outcome rather
+// than a dropped edit.
 //
-// None of the six is grid-blocked — every symbol clears the tick grid easily.
-// They fail risk sizing, and specifically its CAP: notional can never exceed
-// equity x leverage, so a $72 contract sizes to zero at any volatility.
-// TestRoster_EverySymbolCanBeSizedByRisk holds that reasoning, including why
-// ETHUSD is routed while currently refusing.
+// None of the ten is grid-blocked — every symbol clears the tick grid easily.
+// They fail risk sizing. BTC, SOL and ZEC fail its CAP, which no market
+// condition can lift: notional never exceeds equity x leverage, so a contract
+// dearer than $30 sizes to zero at any volatility. ETHUSD fails only today's
+// stop width and would fund at a tighter one; it was routed on 2026-08-20 and
+// removed again on the 21st because it refused continuously, which is noise
+// rather than evidence. TestRoster_EverySymbolCanBeSizedByRisk holds both.
 //
 // If this count climbs without desk equity changing, something routed a stream
 // the account cannot fund — the populated-but-unfillable roster this file has
 // warned about through four rewrites.
 func TestDefaultScalpLiveStreams_HoldsOnlyMTFStreams(t *testing.T) {
-	if len(defaultScalpLiveStreams) != 9 {
-		t.Errorf("roster has %d streams, want 9 (5 AVAXUSD + 4 ETHUSD); "+
-			"15 were selected from Top Crypto and 6 cost more per contract than the whole book",
-			len(defaultScalpLiveStreams))
+	if len(defaultScalpLiveStreams) != 5 {
+		t.Errorf("roster has %d streams, want the 5 AVAXUSD streams; 15 were selected from Top "+
+			"Crypto and 10 cannot be funded at $10 equity", len(defaultScalpLiveStreams))
 	}
 	// Every retired pack name must stay off it. The Scalp100/Delta20/Curated
 	// strategies no longer exist on the desk, so a roster entry naming one
