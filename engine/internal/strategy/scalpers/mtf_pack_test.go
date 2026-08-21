@@ -40,8 +40,8 @@ func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 	// Pennant, CupHandle, Rounding, Broadening, Diamond, Hammer, Keltner,
 	// PriorSessionBreak, RoundNumber, TTMSqueeze, EMARibbon, ATRThrust,
 	// PivotBreak and GapFade.
-	if len(p) != 9*62*2 {
-		t.Fatalf("pack has %d strategies, want %d (9 timeframes x 62 families x 2 sides)", len(p), 9*62*2)
+	if len(p) != 9*70*2 {
+		t.Fatalf("pack has %d strategies, want %d (9 timeframes x 70 families x 2 sides)", len(p), 9*70*2)
 	}
 	seen := map[string]bool{}
 	for _, e := range p {
@@ -73,6 +73,10 @@ func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 		"MTF_15m_OrderBlock_Long", "MTF_1h_FairValueGap_Short", "MTF_4h_LiquiditySweep_Long",
 		"MTF_1d_BreakerBlock_Short", "MTF_45m_MitigationBlock_Long", "MTF_30m_OptimalTradeEntry_Short",
 		"MTF_5m_PremiumDiscount_Long",
+		// Harmonics.
+		"MTF_4h_Gartley_Long", "MTF_1d_Bat_Short", "MTF_1h_Butterfly_Long",
+		"MTF_4h_Crab_Short", "MTF_1d_Cypher_Long", "MTF_1h_Shark_Short",
+		"MTF_45m_ABCD_Long", "MTF_4h_ThreeDrives_Short",
 		"MTF_45m_Rounding_Short",
 	} {
 		if !seen[want] {

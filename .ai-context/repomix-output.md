@@ -1516,6 +1516,8 @@ The content is organized as follows:
   strategy/scalpers/mtf_candles4_test.go
   strategy/scalpers/mtf_candles4.go
   strategy/scalpers/mtf_families.go
+  strategy/scalpers/mtf_harmonic_test.go
+  strategy/scalpers/mtf_harmonic.go
   strategy/scalpers/mtf_indicators.go
   strategy/scalpers/mtf_pack_test.go
   strategy/scalpers/mtf_pack.go

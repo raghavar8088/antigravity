@@ -345,6 +345,21 @@ func BuildMTFPack() []RegistryEntry {
 		{"MitigationBlock", patMitigationBlock},
 		{"OptimalTradeEntry", patOptimalTradeEntry},
 		{"PremiumDiscount", patPremiumDiscount},
+
+		// Harmonics. Every five-swing sequence looks like SOMETHING if the
+		// ratios are allowed to drift, so each pattern is a set of numeric
+		// windows and a sequence either lands inside all of them or is refused.
+		// Gartley and Bat differ mainly in one leg (0.786 vs 0.886 of XA), which
+		// is exactly why they must not share a tolerance wide enough to cover
+		// both.
+		{"Gartley", harmonicFamily(harmonicSpecs["Gartley"])},
+		{"Bat", harmonicFamily(harmonicSpecs["Bat"])},
+		{"Butterfly", harmonicFamily(harmonicSpecs["Butterfly"])},
+		{"Crab", harmonicFamily(harmonicSpecs["Crab"])},
+		{"Cypher", harmonicFamily(harmonicSpecs["Cypher"])},
+		{"Shark", harmonicFamily(harmonicSpecs["Shark"])},
+		{"ABCD", patABCD},
+		{"ThreeDrives", patThreeDrives},
 	}
 	out := make([]RegistryEntry, 0, len(tfs)*len(fams)*2)
 	for _, tf := range tfs {
