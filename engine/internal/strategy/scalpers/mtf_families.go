@@ -360,6 +360,34 @@ func BuildMTFPack() []RegistryEntry {
 		{"Shark", harmonicFamily(harmonicSpecs["Shark"])},
 		{"ABCD", patABCD},
 		{"ThreeDrives", patThreeDrives},
+
+		// Indicator families, REGIME GATED. The Choppiness Index decides which
+		// may fire: mean-reversion only in a range, breakout and trend only in a
+		// trend. Ungated, the two lose money in exactly the conditions the other
+		// one wants and the desk's net result is the fee bill.
+		{"Supertrend", stratSupertrend},
+		{"Ichimoku", stratIchimoku},
+		{"ParabolicSAR", stratPSAR},
+		{"Aroon", stratAroon},
+		{"Vortex", stratVortex},
+		{"HMAFlip", stratHMAFlip},
+		{"TEMACross", stratTEMACross},
+		{"KAMATrend", stratKAMATrend},
+		{"GoldenCross", stratGoldenCross},
+		{"CCIExtreme", stratCCI()},
+		{"WilliamsR", stratWilliamsR()},
+		{"CMOExtreme", stratCMO()},
+		{"MFIExtreme", stratMFI()},
+		{"StochCross", stratStochCross},
+		{"FisherReversal", stratFisher},
+		{"TSICross", stratTSICross},
+		{"TRIXCross", stratTRIXCross},
+		{"MomentumBurst", stratMomentumBurst},
+		{"OBVBreak", stratOBVBreak},
+		{"CMFConfirm", stratCMFConfirm},
+		{"ZScoreReversion", stratZScore},
+		{"LinRegBreak", stratLinRegBreak},
+		{"LinRegFade", stratLinRegFade},
 	}
 	out := make([]RegistryEntry, 0, len(tfs)*len(fams)*2)
 	for _, tf := range tfs {

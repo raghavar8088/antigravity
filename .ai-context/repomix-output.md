@@ -1519,6 +1519,8 @@ The content is organized as follows:
   strategy/scalpers/mtf_families.go
   strategy/scalpers/mtf_harmonic_test.go
   strategy/scalpers/mtf_harmonic.go
+  strategy/scalpers/mtf_indicator_strats_test.go
+  strategy/scalpers/mtf_indicator_strats.go
   strategy/scalpers/mtf_indicators.go
   strategy/scalpers/mtf_indicators2.go
   strategy/scalpers/mtf_pack_test.go

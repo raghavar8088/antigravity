@@ -40,8 +40,8 @@ func TestBuildMTFPack_CoversEveryTimeframe(t *testing.T) {
 	// Pennant, CupHandle, Rounding, Broadening, Diamond, Hammer, Keltner,
 	// PriorSessionBreak, RoundNumber, TTMSqueeze, EMARibbon, ATRThrust,
 	// PivotBreak and GapFade.
-	if len(p) != 9*70*2 {
-		t.Fatalf("pack has %d strategies, want %d (9 timeframes x 70 families x 2 sides)", len(p), 9*70*2)
+	if len(p) != 9*93*2 {
+		t.Fatalf("pack has %d strategies, want %d (9 timeframes x 93 families x 2 sides)", len(p), 9*93*2)
 	}
 	seen := map[string]bool{}
 	for _, e := range p {
