@@ -165,6 +165,7 @@ The content is organized as follows:
   app/live-demo-engine/page.tsx
   app/live-engine-paper/page.tsx
   app/live-engine/page.tsx
+  app/live-engine/routed.test.ts
   app/login/page.tsx
   app/mobile/page.tsx
   app/mock-trading/error.tsx
@@ -1519,6 +1520,7 @@ The content is organized as follows:
   strategy/scalpers/mtf_harmonic_test.go
   strategy/scalpers/mtf_harmonic.go
   strategy/scalpers/mtf_indicators.go
+  strategy/scalpers/mtf_indicators2.go
   strategy/scalpers/mtf_pack_test.go
   strategy/scalpers/mtf_pack.go
   strategy/scalpers/mtf_patterns_test.go

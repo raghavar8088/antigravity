@@ -251,6 +251,17 @@ type LeaderRow = {
   stopOuts: number;
   /** Whether this strategy may open new live positions. */
   enabled: boolean;
+  /**
+   * Whether this stream is on the engine's ALLOW-LIST at all.
+   *
+   * Distinct from `enabled`, and the distinction is the point. The switch is an
+   * owner preference stored per stream and it survives a roster change; the
+   * allow-list is what the bridge actually consults. A stream that filled under
+   * an older roster and was never explicitly switched off therefore reads
+   * `enabled: true` forever while being unable to place a single order — 13 of
+   * them were rendering as "on" against a 9-stream roster.
+   */
+  routed: boolean;
   /** Signals refused pre-trade because the symbol's tick grid is too coarse. */
   gridRefusals: number;
   lastStopTicks: number;
@@ -1236,6 +1247,10 @@ export default function LiveEnginePage() {
         // Rendered from the engine's disabled set, so the switch shows what the
         // engine will actually do rather than what this tab last clicked.
         enabled: !(perp.disabledStrategies ?? []).includes(`${name}|${symbol.toUpperCase()}`),
+        // FALSE until the roster loop below says otherwise. Defaulting to true
+        // would restore the exact bug this field exists to fix: history-only
+        // rows claiming to be live.
+        routed: false,
         gridRefusals: 0,
         lastStopTicks: 0,
         notionalUsd: 0,
@@ -1255,6 +1270,7 @@ export default function LiveEnginePage() {
       const streamKey = (strategy: string, symbol: string) => `${strategy}|${(symbol || "").toUpperCase()}`;
       for (const st of perp.liveStreams ?? []) {
         const row = blankPerp(st.strategy, st.symbol);
+        row.routed = true;
         row.gridRefusals = st.gridRefusals ?? 0;
         row.lastStopTicks = st.lastStopTicks ?? 0;
         perpRows.set(streamKey(st.strategy, st.symbol), row);
@@ -1408,7 +1424,10 @@ export default function LiveEnginePage() {
     () =>
       liveFilter === "all"
         ? leaderRows
-        : leaderRows.filter((r) => (liveFilter === "on" ? r.enabled : !r.enabled)),
+        : // On/Off describe streams the engine will actually consult. A row that
+          // is not routed is neither: it is a record, and counting it as "off"
+          // would imply switching it on could make it trade.
+          leaderRows.filter((r) => r.routed && (liveFilter === "on" ? r.enabled : !r.enabled)),
     [leaderRows, liveFilter],
   );
 
@@ -1585,21 +1604,38 @@ export default function LiveEnginePage() {
         // Governs ENTRY only. A strategy switched off opens nothing from the
         // next signal; whatever it already holds keeps its stop and target and
         // exits normally. Flattening is close-all, deliberately louder.
-        cell: (r) => (
-          <DeskSwitch
-            id={`strategy-switch-${r.strategy}-${r.symbol}`}
-            checked={r.enabled}
-            disabled={busy}
-            ariaLabel={`${r.strategy} on ${r.symbol} live trading`}
-            // Short label so a 31-row table stays readable; the strategy name
-            // is already the row, and ariaLabel carries the full context for
-            // screen readers.
-            label={r.enabled ? "on" : "off"}
-            onColor="var(--desk-success)"
-            offColor="var(--desk-error)"
-            onChange={(next) => void toggleStrategy(r.strategy, r.symbol, next)}
-          />
-        ),
+        cell: (r) =>
+          // NOT ROUTED is its own state, shown instead of a switch.
+          //
+          // These rows are history: a strategy that filled under an earlier
+          // roster and is no longer on the allow-list. Rendering a switch for
+          // them offers a control that changes nothing — the bridge consults
+          // the allow-list, not this toggle — and reading "on" against a
+          // 9-stream roster is how a board comes to claim 22 live strategies
+          // when 9 can trade.
+          !r.routed ? (
+            <span
+              className="desk-label-md"
+              title="This stream is not on the live roster. It appears because it has closed trades in the record; it cannot place an order."
+              style={{ color: "var(--desk-on-surface-variant)", whiteSpace: "nowrap" }}
+            >
+              not routed
+            </span>
+          ) : (
+            <DeskSwitch
+              id={`strategy-switch-${r.strategy}-${r.symbol}`}
+              checked={r.enabled}
+              disabled={busy}
+              ariaLabel={`${r.strategy} on ${r.symbol} live trading`}
+              // Short label so a 31-row table stays readable; the strategy name
+              // is already the row, and ariaLabel carries the full context for
+              // screen readers.
+              label={r.enabled ? "on" : "off"}
+              onColor="var(--desk-success)"
+              offColor="var(--desk-error)"
+              onChange={(next) => void toggleStrategy(r.strategy, r.symbol, next)}
+            />
+          ),
       },
       {
         id: "grid",
@@ -2069,9 +2105,16 @@ export default function LiveEnginePage() {
             title="Strategy Leaderboard"
             subtitle={
               leaderRows.some((r) => r.trades > 0)
-                ? `best first by average ROI per trade · ${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} filled · realized ${fmtMoney(
-                    leaderRows.reduce((s, r) => s + r.netUsd, 0),
-                  )}`
+                ? // Says ROUTED and HISTORY separately, because they are
+                  // different questions and this board answers both at once:
+                  // what can trade now, and what has ever traded. Reporting
+                  // only the row count invited "why does the live engine have
+                  // 39 strategies" against a roster of 9.
+                  `${leaderRows.filter((r) => r.routed).length} routed · ${
+                    leaderRows.filter((r) => !r.routed && r.trades > 0).length
+                  } with history only · ${leaderRows.filter((r) => r.trades > 0).length} of ${
+                    leaderRows.length
+                  } filled · realized ${fmtMoney(leaderRows.reduce((s, r) => s + r.netUsd, 0))}`
                 : "best first by average net per fill · streams under 10 fills rank below proven ones, however good they look"
             }
             actions={
@@ -2114,8 +2157,12 @@ export default function LiveEnginePage() {
             </span>
             {([
               ["all", "All", leaderRows.length],
-              ["on", "On", leaderRows.filter((r) => r.enabled).length],
-              ["off", "Off", leaderRows.filter((r) => !r.enabled).length],
+              // Routed only. "On" previously counted every history row that had
+              // never been explicitly switched off, so it read 22 against a
+              // 9-stream roster — a number that described a stored preference
+              // rather than anything the engine would act on.
+              ["on", "On", leaderRows.filter((r) => r.routed && r.enabled).length],
+              ["off", "Off", leaderRows.filter((r) => r.routed && !r.enabled).length],
             ] as const).map(([key, label, count]) => (
               <DeskButton
                 key={key}
