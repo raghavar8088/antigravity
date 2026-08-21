@@ -59,6 +59,18 @@ type Account = {
   /** Wallet balance ROI is measured from; 0 until a baseline is captured. */
   inceptionEquityUsd?: number;
   inceptionAt?: string;
+  /**
+   * Set when the baseline has been deliberately re-based.
+   *
+   * An account re-based this morning and an account that has never lost a rupee
+   * both display 0.00%. Only these fields separate them, so the label changes
+   * when they are present rather than leaving the reader to assume a lifetime
+   * figure.
+   */
+  inceptionResets?: number;
+  inceptionResetAt?: string;
+  inceptionResetFrom?: number;
+  inceptionResetReason?: string;
   roiUsd?: number;
   roiPct?: number;
   distanceToBreakerPct: number;
@@ -1982,7 +1994,21 @@ export default function LiveEnginePage() {
                 : na.account ?? "—"
             }
           />
-          <div className="desk-metrics-row">
+          {/* Two tiers, not eight equal tiles.
+              desk-metrics-row is auto-fit minmax(130px), so eight tiles land in
+              130px columns each and the wallet balance gets the same visual
+              weight as "premium at risk". These are not equally important: two
+              of them say what the account IS and six say how it is currently
+              arranged. Scoped here rather than by changing the shared class,
+              which other desks rely on at their own tile counts. */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: "var(--desk-space-3)",
+              marginBottom: "var(--desk-space-3)",
+            }}
+          >
             <DeskMetricTile
               label="Real Equity"
               value={account ? fmtMoney(account.equityUsd) : "—"}
@@ -1992,32 +2018,62 @@ export default function LiveEnginePage() {
             {/*
               ROI beside the capital it is measured on. Against the FIRST wallet
               balance recorded, not the configured desk equity: the desk risks
-              $10 of a wallet holding $61, and dividing by the risk budget would
+              $10 of a wallet holding $51, and dividing by the risk budget would
               report a return on money that was never the denominator.
 
               Shown as "—" until a baseline exists rather than as 0%, because
               "0% return" is a claim about performance and "no baseline yet" is
               a claim about the record.
+
+              And the LABEL changes once the baseline has been re-based. A reset
+              account reads 0.00% on the day it is reset, which is identical to
+              what a flawless account reads; calling both "since inception"
+              makes the tile assert something it cannot know. "Since reset" with
+              the date is the same number and a true sentence.
             */}
+            {(() => {
+              const hasBaseline = !!account?.inceptionEquityUsd && account.inceptionEquityUsd > 0;
+              const wasReset = (account?.inceptionResets ?? 0) > 0;
+              const resetOn = account?.inceptionResetAt ? fmtIST(account.inceptionResetAt) : "";
+              return (
+                <DeskMetricTile
+                  label={wasReset ? "ROI since reset" : "ROI since inception"}
+                  value={
+                    hasBaseline
+                      ? `${(account?.roiPct ?? 0) >= 0 ? "+" : ""}${(account?.roiPct ?? 0).toFixed(2)}%`
+                      : "—"
+                  }
+                  valueClassName={hasBaseline ? pnlTone(account?.roiPct ?? 0) : undefined}
+                  sub={
+                    !hasBaseline
+                      ? "no baseline captured yet"
+                      : wasReset
+                        ? `${fmtMoney(account?.roiUsd ?? 0)} since ${resetOn || "the reset"} · re-based from ${fmtMoney(
+                            account?.inceptionResetFrom ?? 0,
+                          )}`
+                        : `${fmtMoney(account?.roiUsd ?? 0)} on ${fmtMoney(account?.inceptionEquityUsd ?? 0)} opening`
+                  }
+                />
+              );
+            })()}
+          </div>
+
+          {/* The six supporting figures, compact. Ordered capital → risk →
+              record, so a reader moves from what can be deployed, to what is
+              committed, to what it has produced. */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gap: "var(--desk-space-3)",
+            }}
+          >
+            <DeskMetricTile compact label={`Tradable (≤ $${CEILING})`} value={account ? fmtMoney(account.tradableUsd) : "—"} sub="ceiling enforced server-side" />
+            <DeskMetricTile compact label="Available" value={account ? fmtMoney(account.availableUsd) : "—"} sub="equity − margin" />
+            <DeskMetricTile compact label="Margin Used" value={account ? fmtMoney(account.marginUsedUsd) : "—"} sub="delta positions" />
+            <DeskMetricTile compact label="Open Risk" value={account ? fmtMoney(account.openRiskUsd) : "—"} sub="premium at risk (long)" />
             <DeskMetricTile
-              label="ROI since inception"
-              value={
-                account?.inceptionEquityUsd && account.inceptionEquityUsd > 0
-                  ? `${(account.roiPct ?? 0) >= 0 ? "+" : ""}${(account.roiPct ?? 0).toFixed(2)}%`
-                  : "—"
-              }
-              valueClassName={account?.inceptionEquityUsd ? pnlTone(account.roiPct ?? 0) : undefined}
-              sub={
-                account?.inceptionEquityUsd && account.inceptionEquityUsd > 0
-                  ? `${fmtMoney(account.roiUsd)} on ${fmtMoney(account.inceptionEquityUsd)} opening`
-                  : "no baseline captured yet"
-              }
-            />
-            <DeskMetricTile label={`Tradable (≤ $${CEILING})`} value={account ? fmtMoney(account.tradableUsd) : "—"} sub="ceiling enforced server-side" />
-            <DeskMetricTile label="Available" value={account ? fmtMoney(account.availableUsd) : "—"} sub="equity − margin" />
-            <DeskMetricTile label="Margin Used" value={account ? fmtMoney(account.marginUsedUsd) : "—"} sub="delta positions" />
-            <DeskMetricTile label="Open Risk" value={account ? fmtMoney(account.openRiskUsd) : "—"} sub="premium at risk (long)" />
-            <DeskMetricTile
+              compact
               label="Win rate"
               value={deskRecord.scored > 0 ? `${deskRecord.winRatePct.toFixed(1)}%` : "—"}
               valueClassName={
@@ -2035,7 +2091,7 @@ export default function LiveEnginePage() {
                   : "no closed trades yet"
               }
             />
-            <DeskMetricTile label="Realized Today" value={account ? fmtMoney(account.realizedTodayUsd) : "—"} valueClassName={account ? pnlTone(account.realizedTodayUsd) : undefined} sub="to daily breaker" />
+            <DeskMetricTile compact label="Realized Today" value={account ? fmtMoney(account.realizedTodayUsd) : "—"} valueClassName={account ? pnlTone(account.realizedTodayUsd) : undefined} sub="to daily breaker" />
           </div>
         </DeskCard>
 

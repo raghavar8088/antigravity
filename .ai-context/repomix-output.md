@@ -1093,6 +1093,7 @@ The content is organized as follows:
   liveengine/controller.go
   liveengine/http_test.go
   liveengine/http.go
+  liveengine/inception_reset_test.go
   liveengine/inception_test.go
   liveengine/inception.go
   liveengine/recon_no_halt_test.go
@@ -1838,6 +1839,7 @@ The content is organized as follows:
   delta_full_qualify/main.go
   delta_week_backtest/main.go
   fetch_historical/main.go
+  inception_reset/main.go
   m1_scalp_qualify/main.go
   mtf_qualify/data.go
   mtf_qualify/grade.go

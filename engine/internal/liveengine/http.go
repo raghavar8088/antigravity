@@ -30,12 +30,21 @@ type AccountView struct {
 	// show no ROI rather than treat it as a starting balance of nothing.
 	InceptionEquityUSD float64   `json:"inceptionEquityUsd"`
 	InceptionAt        time.Time `json:"inceptionAt,omitempty"`
-	ROIUSD             float64   `json:"roiUsd"`
-	ROIPct             float64   `json:"roiPct"`
-	DistanceToBreaker  float64   `json:"distanceToBreakerPct"`
-	Source             string    `json:"source"`
-	AsOf               time.Time `json:"asOf"`
-	Stale              bool      `json:"stale"`
+	// Set when the baseline has been deliberately re-based.
+	//
+	// Carried to the UI so a 0.00% can never read as a lifetime figure. An
+	// account re-based this morning and an account that has never lost a rupee
+	// display the same number, and only these fields tell them apart.
+	InceptionResets      int       `json:"inceptionResets,omitempty"`
+	InceptionResetAt     time.Time `json:"inceptionResetAt,omitempty"`
+	InceptionResetFrom   float64   `json:"inceptionResetFrom,omitempty"`
+	InceptionResetReason string    `json:"inceptionResetReason,omitempty"`
+	ROIUSD               float64   `json:"roiUsd"`
+	ROIPct               float64   `json:"roiPct"`
+	DistanceToBreaker    float64   `json:"distanceToBreakerPct"`
+	Source               string    `json:"source"`
+	AsOf                 time.Time `json:"asOf"`
+	Stale                bool      `json:"stale"`
 }
 
 // ReconciliationView reports engine state vs. Delta truth. Mismatch is shown loudly.
