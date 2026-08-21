@@ -137,7 +137,14 @@ func (b *PerpBridge) Restore(ctx context.Context) error {
 	// forgotten on restart.
 	b.mu.Lock()
 	b.setDisabledStrategiesLocked(st.DisabledStrategies)
-	nOff := len(st.DisabledStrategies)
+	// What was KEPT, not what the file held.
+	//
+	// setDisabledStrategiesLocked drops entries for streams that are no longer
+	// routed, so the file count stopped being the restored count the moment
+	// pruning was added — the first boot after it logged "dropped 183" and
+	// "restored 183" one line apart. Reading the map is the only figure that
+	// describes the state the desk is actually in.
+	nOff := len(b.strategyOff)
 	// Restored before the monitor starts, so a close that happens moments after
 	// boot appends to the real record rather than to an empty one.
 	if len(st.History) > 0 {
@@ -149,7 +156,19 @@ func (b *PerpBridge) Restore(ctx context.Context) error {
 		log.Printf("[PERP LIVE] restored %d closed trade(s)", nHist)
 	}
 	if nOff > 0 {
-		log.Printf("[PERP LIVE] restored %d switched-off strateg(ies): %v", nOff, st.DisabledStrategies)
+		// The names, not the file's list, and only when there are few enough to
+		// read. A 183-entry dump buried every other boot line in a wall of
+		// retired stream names.
+		kept := make([]string, 0, nOff)
+		for n := range b.strategyOff {
+			kept = append(kept, n)
+		}
+		sort.Strings(kept)
+		if len(kept) > 12 {
+			log.Printf("[PERP LIVE] restored %d switched-off strateg(ies)", nOff)
+		} else {
+			log.Printf("[PERP LIVE] restored %d switched-off strateg(ies): %v", nOff, kept)
+		}
 	}
 
 	// No client means the venue cannot be consulted AT ALL. That is not the same
