@@ -330,6 +330,21 @@ func BuildMTFPack() []RegistryEntry {
 		{"BeltHold", patBeltHold},
 		{"LongLeggedDoji", patLongLeggedDoji},
 		{"DragonflyGravestone", patDragonflyGravestone},
+
+		// Smart Money Concepts. Usually taught by drawing on a chart, which is
+		// exactly why each one is stated here as arithmetic: an order block is
+		// the last opposing candle before a move that CLOSED beyond a swing, a
+		// fair value gap is a three-candle window whose outer wicks do not
+		// overlap, a liquidity sweep is a wick through a level with a close back
+		// inside it. That last distinction matters most — a CLOSE beyond the
+		// level is a structure break and the opposite trade.
+		{"OrderBlock", patOrderBlock},
+		{"FairValueGap", patFairValueGap},
+		{"LiquiditySweep", patLiquiditySweep},
+		{"BreakerBlock", patBreakerBlock},
+		{"MitigationBlock", patMitigationBlock},
+		{"OptimalTradeEntry", patOptimalTradeEntry},
+		{"PremiumDiscount", patPremiumDiscount},
 	}
 	out := make([]RegistryEntry, 0, len(tfs)*len(fams)*2)
 	for _, tf := range tfs {

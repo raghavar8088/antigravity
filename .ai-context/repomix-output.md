@@ -1526,6 +1526,8 @@ The content is organized as follows:
   strategy/scalpers/mtf_patterns3_fire_test.go
   strategy/scalpers/mtf_patterns3_test.go
   strategy/scalpers/mtf_patterns3.go
+  strategy/scalpers/mtf_smc_test.go
+  strategy/scalpers/mtf_smc.go
   strategy/scalpers/mtf_target_test.go
   strategy/scalpers/mtf_vcp_test.go
   strategy/scalpers/mtf_vcp.go
