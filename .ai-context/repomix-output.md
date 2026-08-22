@@ -59,6 +59,7 @@ The content is organized as follows:
   app/api/cron/mock-trading-tick/route.ts
   app/api/cron/policy-snapshot/route.ts
   app/api/crypto-fno/[...path]/route.ts
+  app/api/crypto-screener/[...path]/route.ts
   app/api/delta/account/route.ts
   app/api/delta/mirror/route.ts
   app/api/delta/myip/route.ts
@@ -157,6 +158,7 @@ The content is organized as follows:
   app/btc-future-trading/page.tsx
   app/btc-pre-live/page.tsx
   app/crypto-fno/page.tsx
+  app/crypto-screener/page.tsx
   app/favicon.ico
   app/globals.css
   app/gold-desk/page.tsx
@@ -532,6 +534,15 @@ The content is organized as follows:
   lib/btcSpotPrice.test.ts
   lib/chartTime.test.ts
   lib/commandPaletteItems.test.ts
+  lib/cryptoScreener/delta.ts
+  lib/cryptoScreener/derivatives.ts
+  lib/cryptoScreener/engine.ts
+  lib/cryptoScreener/horizons.ts
+  lib/cryptoScreener/patterns.ts
+  lib/cryptoScreener/plans.ts
+  lib/cryptoScreener/reasons.ts
+  lib/cryptoScreener/sectors.ts
+  lib/cryptoScreener/universe.ts
   lib/deskSelfHealing.test.ts
   lib/deskSelfHealingExecutor.test.ts
   lib/futuresDeskPolicy.test.ts

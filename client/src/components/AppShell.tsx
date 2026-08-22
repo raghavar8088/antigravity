@@ -65,11 +65,23 @@ const ic = {
       <path d="M12 2v8" /><path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
     </svg>
   ),
+  // Bar chart with a magnifier: screening a universe, not monitoring one desk.
+  screener: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 20V10M9 20V4M14 20v-6" /><circle cx="18.5" cy="15.5" r="3.5" /><path d="m21 18 1.5 1.5" />
+    </svg>
+  ),
 };
 
 const PRIMARY_NAV: NavItem[] = [
   { href: "/terminal", label: "Command Center", icon: ic.monitor },
   { href: "/live-engine", label: "Live Engine", icon: ic.live },
+  // Directly below the Live Engine because it is the question that comes BEFORE
+  // that page rather than after it: which of the ~220 Delta perpetuals is
+  // moving, why, on whose positioning, and which of them a stop can even be
+  // placed on. Read-only and it never calls the engine — every input is public
+  // Delta market data — so nothing here can touch the real-money process.
+  { href: "/crypto-screener", label: "Crypto Screener", icon: ic.screener },
   // Directly below the Live Engine, because it is the same desk against the
   // demo venue: same layout, same controls, same fee and bracket handling,
   // separate process and separate credentials so the two wallets can never be
