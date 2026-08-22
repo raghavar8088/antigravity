@@ -120,6 +120,7 @@ The content is organized as follows:
   app/api/options-buying/[...path]/route.ts
   app/api/options-selling/[...path]/route.ts
   app/api/options/paper-snapshot/route.ts
+  app/api/paper-trading/[...path]/route.ts
   app/api/pre-live/[...path]/route.ts
   app/api/probe/delta-btc/route.ts
   app/api/replay-walkforward/route.ts
@@ -159,7 +160,9 @@ The content is organized as follows:
   app/btc-pre-live/page.tsx
   app/crypto-fno/page.tsx
   app/crypto-screener/page.tsx
+  app/delta-paper-trading/page.tsx
   app/favicon.ico
+  app/forex-paper-trading/page.tsx
   app/globals.css
   app/gold-desk/page.tsx
   app/high-volume-crypto/page.tsx
@@ -291,6 +294,7 @@ The content is organized as follows:
   components/NotePadPanel.tsx
   components/observability/GrafanaEmbed.tsx
   components/OptionsAccountHeader.tsx
+  components/paperTrading/TradingTerminal.tsx
   components/PerformanceCharts.tsx
   components/PineEditorPanel.tsx
   components/PortfolioAnalyticsDashboard.tsx
@@ -592,6 +596,13 @@ The content is organized as follows:
   lib/mockTradingSignalEvaluator.test.ts
   lib/mongoTradesClient.test.ts
   lib/navRoutes.test.ts
+  lib/paperTrading/engine.ts
+  lib/paperTrading/matching.ts
+  lib/paperTrading/paperTrading.test.ts
+  lib/paperTrading/store.ts
+  lib/paperTrading/types.ts
+  lib/paperTrading/venues/delta.ts
+  lib/paperTrading/venues/forex.ts
   lib/perpMarketFeatures.test.ts
   lib/portfolio/backupManager.server.ts
   lib/portfolio/backupManager.ts

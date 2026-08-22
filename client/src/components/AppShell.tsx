@@ -14,7 +14,18 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type NavItem = { href: string; label: string; icon: ReactNode; external?: boolean };
+type NavItem = {
+  href: string;
+  label: string;
+  icon: ReactNode;
+  external?: boolean;
+  /**
+   * Renders one level in, under the row above it. Used where a module is
+   * genuinely a sub-module rather than a sibling — Forex Paper Trading lives
+   * inside Delta Paper Trading, and a flat list would say otherwise.
+   */
+  nested?: boolean;
+};
 type NavSection = { title: string; items: NavItem[] };
 
 const sora = { fontFamily: "var(--font-sora), system-ui, sans-serif" };
@@ -65,6 +76,18 @@ const ic = {
       <path d="M12 2v8" /><path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
     </svg>
   ),
+  // Candlestick: a trading terminal rather than a monitored desk.
+  candles: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 3v4M7 17v4M17 3v2M17 15v6" /><rect x="4.5" y="7" width="5" height="10" rx="1" /><rect x="14.5" y="5" width="5" height="10" rx="1" />
+    </svg>
+  ),
+  // Globe: the foreign-exchange desk.
+  globe: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z" />
+    </svg>
+  ),
   // Bar chart with a magnifier: screening a universe, not monitoring one desk.
   screener: (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -76,6 +99,15 @@ const ic = {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/terminal", label: "Command Center", icon: ic.monitor },
   { href: "/live-engine", label: "Live Engine", icon: ic.live },
+  // Directly under the Live Engine: the same venue and the same mechanics, with
+  // paper money. Real Delta quotes, real contract specs, real funding and the
+  // venue's real order book — a market order is walked through actual depth —
+  // but no key and no order-routing path, so nothing here can reach a broker.
+  { href: "/delta-paper-trading", label: "Delta Paper Trading", icon: ic.candles },
+  // NESTED under it, because it is the same terminal pointed at a different
+  // market rather than a peer desk: lots instead of contracts, pips instead of
+  // ticks, swap instead of funding, and an account stopped out on margin level.
+  { href: "/forex-paper-trading", label: "Forex Paper Trading", icon: ic.globe, nested: true },
   // Directly below the Live Engine because it is the question that comes BEFORE
   // that page rather than after it: which of the ~220 Delta perpetuals is
   // moving, why, on whose positioning, and which of them a stop can even be
@@ -186,6 +218,13 @@ function NavRow({ item, active }: { item: NavItem; active: boolean }) {
         boxShadow: "inset 3px 0 0 var(--desk-primary)",
       }
     : { color: "var(--desk-on-surface-variant)" };
+  if (item.nested) {
+    // Indented and hung off a rule, so the nesting is visible rather than
+    // implied by adjacency. The active pill's own inset bar still reads.
+    style.marginLeft = 16;
+    style.paddingLeft = 10;
+    if (!active) style.borderLeft = "1px solid var(--desk-outline)";
+  }
   const iconWrapStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
