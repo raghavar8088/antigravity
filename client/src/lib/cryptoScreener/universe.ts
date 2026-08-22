@@ -36,8 +36,10 @@ import {
   fetchDailyBarsMany,
   fetchHourlyBarsMany,
   fetchPerpTickers,
+  fetchProductSpecs,
   type Bar,
   type PerpTicker,
+  type ProductSpec,
 } from "./delta";
 import {
   readBasis,
@@ -154,6 +156,15 @@ export type ScreenerRow = {
   tradability: number | null;
   tradabilityBlockers: string[];
 
+  /**
+   * Venue margin spec, from `/v2/products`. Absent from the ticker payload, and
+   * required before any leveraged paper position can be sized: it is what says
+   * where the venue would liquidate.
+   */
+  maintenanceMarginPct: number | null;
+  initialMarginPct: number | null;
+  venueMaxLeverage: number | null;
+
   btcCorrelation30d: number | null;
   btcBeta30d: number | null;
 
@@ -177,6 +188,8 @@ export type Snapshot = {
   coverage: Record<HorizonKey, ReturnType<typeof H.coverage>>;
   universeListed: number;
   universeScanned: number;
+  /** How many contracts returned a margin spec. 0 means the paper desk cannot size. */
+  marginSpecs: number;
   barsMissing: string[];
   hourlyMissing: string[];
   totalTurnoverUsd24h: number;
@@ -246,9 +259,14 @@ async function build(): Promise<Snapshot> {
   const symbols = tickers.map((t) => t.symbol);
   // Both bar passes run together: they hit different resolutions of the same
   // endpoint and neither depends on the other's result.
-  const [daily, hourly] = await Promise.all([
+  const [daily, hourly, specs] = await Promise.all([
     fetchDailyBarsMany(symbols, H.LOOKBACK_DAYS, 16),
     fetchHourlyBarsMany(symbols, 48, 16),
+    // One request for the whole universe. Failing soft: without it the paper
+    // desk refuses to size a position rather than assuming a margin number,
+    // which is the safe direction for the one input that decides where the
+    // venue closes a trade out from under you.
+    fetchProductSpecs().catch(() => new Map<string, ProductSpec>()),
   ]);
 
   const benchBars = daily.bars.get(BENCHMARK_SYMBOL) ?? [];
@@ -357,6 +375,16 @@ async function build(): Promise<Snapshot> {
       tradability: trad.score,
       tradabilityBlockers: trad.blockers,
 
+      maintenanceMarginPct: specs.get(t.symbol)?.maintenanceMarginPct ?? null,
+      initialMarginPct: specs.get(t.symbol)?.initialMarginPct ?? null,
+      // The venue's own cap, derived from initial margin where the ticker's
+      // `leverage` field disagrees. 100 / 0.5% = 200x on BTC.
+      venueMaxLeverage:
+        t.maxLeverage ??
+        (specs.get(t.symbol)?.initialMarginPct
+          ? Math.floor(100 / specs.get(t.symbol)!.initialMarginPct!)
+          : null),
+
       btcCorrelation30d:
         t.symbol === BENCHMARK_SYMBOL ? 1 : H.round(H.correlation(closes, benchCloses), 3),
       btcBeta30d: t.symbol === BENCHMARK_SYMBOL ? 1 : H.round(H.beta(closes, benchCloses), 3),
@@ -391,6 +419,7 @@ async function build(): Promise<Snapshot> {
     },
     universeListed: tickers.length,
     universeScanned: rows.length,
+    marginSpecs: specs.size,
     barsMissing: daily.failed,
     hourlyMissing: hourly.failed,
     totalTurnoverUsd24h: totalTurnover,

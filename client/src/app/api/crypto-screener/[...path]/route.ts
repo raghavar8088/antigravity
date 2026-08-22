@@ -13,9 +13,12 @@
  * handler. The neighbouring proxies re-verify because they mint an engine token
  * off the session; there is no token to mint here.
  *
- * READ-ONLY. There is no POST. A screener describes the market; it has nothing
- * to mutate, and an endpoint that could be POSTed to would be an invitation to
- * find out what it does.
+ * MOSTLY READ-ONLY. Every screener board is a GET; a screener describes the
+ * market and has nothing to mutate. The two exceptions belong to the paper
+ * desk, which does own state: `POST /paper/run` forces a manage-then-scan
+ * cycle, and `POST /paper/reset` wipes the desk behind an explicit
+ * `?confirm=true`. Neither can reach a broker — the desk holds no keys and has
+ * no order-routing path.
  *
  * `?fresh=true` bypasses the snapshot cache and rebuilds from the venue. It is
  * the expensive path — roughly 440 requests to Delta — so it is behind an
@@ -43,6 +46,14 @@ import {
   volumeBoard,
 } from "@/lib/cryptoScreener/engine";
 import { DeltaFeedError } from "@/lib/cryptoScreener/delta";
+import {
+  listPositions,
+  manualRun,
+  paperConfigured,
+  PaperUnavailableError,
+  reset as paperReset,
+  summary as paperSummary,
+} from "@/lib/cryptoScreener/paper/engine";
 import type { HorizonKey } from "@/lib/cryptoScreener/horizons";
 import type { PlanKind } from "@/lib/cryptoScreener/plans";
 
@@ -189,6 +200,22 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
       case "sources":
         return ok(await sources(fresh));
 
+      case "paper": {
+        const sub = (path?.[1] ?? "summary").toLowerCase();
+        if (!paperConfigured()) return ok(paperOffline());
+        if (sub === "summary") return ok(await paperSummary(true));
+        if (sub === "positions") {
+          const status = (qp(req, "status") ?? "OPEN").toUpperCase() === "CLOSED" ? "CLOSED" : "OPEN";
+          return ok(
+            await listPositions(status, qp(req, "family"), qp(req, "symbol"), qn(req, "limit", 200)),
+          );
+        }
+        return NextResponse.json(
+          { ok: false, error: `unknown paper read: ${sub}`, available: ["paper/summary", "paper/positions"] },
+          { status: 404 },
+        );
+      }
+
       default:
         return NextResponse.json(
           {
@@ -210,6 +237,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
               "patterns",
               "setups",
               "sources",
+              "paper/summary",
+              "paper/positions",
             ],
           },
           { status: 404 },
@@ -221,6 +250,12 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
     // one happened instead of showing one generic error for both.
     if (e instanceof ScreenerRequestError) {
       return NextResponse.json({ ok: false, error: e.message }, { status: 422 });
+    }
+    // The desk being unconfigured is not a failure of this request — it is a
+    // deployment fact, and it gets a 503 with the reason rather than a 500 that
+    // reads as a crash.
+    if (e instanceof PaperUnavailableError) {
+      return NextResponse.json({ ok: false, error: e.message }, { status: 503 });
     }
     if (e instanceof DeltaFeedError) {
       return NextResponse.json(
@@ -245,4 +280,77 @@ function ok(body: unknown): NextResponse {
   return NextResponse.json({ ok: true, ...(body as object) }, {
     headers: { "cache-control": "no-store" },
   });
+}
+
+/**
+ * What the paper tab is told when the desk has no database.
+ *
+ * A 200 with `configured: false` rather than an error, because this is a
+ * complete and correct answer to "what is the state of the desk" — it lets the
+ * page explain the situation instead of rendering a red banner that looks like
+ * an outage.
+ */
+function paperOffline() {
+  return {
+    configured: false,
+    reason:
+      "MONGODB_URI is not set on this deployment, so the paper desk has nowhere to keep positions. " +
+      "It is reported as unavailable rather than run from memory: on serverless, an in-memory desk " +
+      "loses positions between requests and then reports the survivors as its record, which is worse " +
+      "than having no desk at all.",
+    books: [],
+    families: [],
+    totals: null,
+  };
+}
+
+/**
+ * Paper-desk mutations only.
+ *
+ * `run` forces a cycle past the 60-second throttle that read-triggered ticks
+ * obey. `reset` deletes every book, position and trade, and refuses without an
+ * explicit confirmation: the trade log is the only record of which signals
+ * worked, and deleting it is not undoable.
+ */
+export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextResponse> {
+  const { path } = await ctx.params;
+  if ((path?.[0] ?? "").toLowerCase() !== "paper") {
+    return NextResponse.json(
+      { ok: false, error: "the crypto screener has no mutations outside the paper desk" },
+      { status: 404 },
+    );
+  }
+  const action = (path?.[1] ?? "").toLowerCase();
+
+  try {
+    if (action === "run") {
+      return ok({ cycle: await manualRun() });
+    }
+    if (action === "reset") {
+      if (qp(req, "confirm") !== "true") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Refusing to wipe the paper desk without ?confirm=true. The trade log is the only " +
+              "record of which signals actually worked; deleting it is not undoable.",
+          },
+          { status: 400 },
+        );
+      }
+      return ok({ cleared: await paperReset() });
+    }
+    return NextResponse.json(
+      { ok: false, error: `unknown paper action: ${action}`, available: ["paper/run", "paper/reset"] },
+      { status: 404 },
+    );
+  } catch (e) {
+    if (e instanceof PaperUnavailableError) {
+      return NextResponse.json({ ok: false, error: e.message }, { status: 503 });
+    }
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : "paper action failed" },
+      { status: 500 },
+    );
+  }
 }

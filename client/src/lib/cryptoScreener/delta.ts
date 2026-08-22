@@ -284,6 +284,39 @@ export async function fetchHourlyBars(symbol: string, hours: number): Promise<Ba
   return fetchBars(symbol, "1h", Math.max(2, hours) * 3_600, 3_600);
 }
 
+/**
+ * Bars between two explicit instants, at any resolution the venue offers
+ * (`1m`, `5m`, `15m`, `1h`, `4h`, `1d`).
+ *
+ * The paper desk manages open positions by REPLAYING the bars that elapsed
+ * since it last looked, rather than by comparing the current price to a stop.
+ * That needs a window with both ends pinned — "the last 48 hours" is the wrong
+ * question when a position opened five days ago.
+ *
+ * `from` and `to` are unix seconds. A window is padded by one bucket on each
+ * side so a stop touched in the bar straddling `from` is not missed.
+ */
+export async function fetchBarsBetween(
+  symbol: string,
+  resolution: string,
+  from: number,
+  to: number,
+): Promise<Bar[]> {
+  const bucket = RESOLUTION_SECONDS[resolution] ?? 900;
+  const start = Math.max(0, Math.floor(from) - bucket);
+  const end = Math.max(start + bucket, Math.ceil(to) + bucket);
+  return fetchBarsRange(symbol, resolution, start, end, bucket);
+}
+
+export const RESOLUTION_SECONDS: Record<string, number> = {
+  "1m": 60,
+  "5m": 300,
+  "15m": 900,
+  "1h": 3_600,
+  "4h": 14_400,
+  "1d": 86_400,
+};
+
 async function fetchBars(
   symbol: string,
   resolution: string,
@@ -291,7 +324,16 @@ async function fetchBars(
   bucketSeconds: number,
 ): Promise<Bar[]> {
   const end = Math.floor(Date.now() / 1000);
-  const start = end - spanSeconds;
+  return fetchBarsRange(symbol, resolution, end - spanSeconds, end, bucketSeconds);
+}
+
+async function fetchBarsRange(
+  symbol: string,
+  resolution: string,
+  start: number,
+  end: number,
+  bucketSeconds: number,
+): Promise<Bar[]> {
   const path =
     `/v2/history/candles?resolution=${resolution}&symbol=${encodeURIComponent(symbol)}` +
     `&start=${start}&end=${end}`;
@@ -371,4 +413,55 @@ export function fetchHourlyBarsMany(
   concurrency = 16,
 ): Promise<{ bars: Map<string, Bar[]>; failed: string[] }> {
   return fetchBarsMany(symbols, (s) => fetchHourlyBars(s, hours), concurrency);
+}
+
+// ── product specs ───────────────────────────────────────────────────────────
+
+/**
+ * Margin specification for one contract, from `/v2/products`.
+ *
+ * WHY A SECOND ENDPOINT. `/v2/tickers` does NOT carry `maintenance_margin` —
+ * measured on the live venue, it is absent for all 220 perpetuals. `/v2/products`
+ * carries it for all 220, along with the initial margin the venue's maximum
+ * leverage is derived from.
+ *
+ * This matters because a paper desk that sizes with leverage has to know where
+ * the venue would liquidate the position. Assuming a maintenance margin is the
+ * precise shape of a failure this codebase has already had: an assumed number
+ * put the liquidation price INSIDE the strategy's own stop, so the venue closed
+ * trades the strategy believed it was still managing. The values here span
+ * 0.25% to 2.5% — a tenfold range — so no single assumption is safe.
+ */
+export type ProductSpec = {
+  symbol: string;
+  /** Maintenance margin as a PERCENT of notional. 0.25 to 2.5 on this venue. */
+  maintenanceMarginPct: number | null;
+  /** Initial margin as a PERCENT of notional. Max leverage is 100 / this. */
+  initialMarginPct: number | null;
+  positionSizeLimit: number | null;
+  tradingStatus: string;
+};
+
+type ProductsResponse = { success?: boolean; result?: Array<Record<string, unknown>> };
+
+/** Margin specs for every listed perpetual, keyed by symbol. One request. */
+export async function fetchProductSpecs(): Promise<Map<string, ProductSpec>> {
+  const body = await getJson<ProductsResponse>(
+    "/v2/products?contract_types=perpetual_futures&page_size=500",
+    25_000,
+  );
+  const out = new Map<string, ProductSpec>();
+  if (!Array.isArray(body.result)) return out;
+  for (const p of body.result) {
+    const symbol = str(p.symbol).toUpperCase();
+    if (!symbol) continue;
+    out.set(symbol, {
+      symbol,
+      maintenanceMarginPct: num(p.maintenance_margin),
+      initialMarginPct: num(p.initial_margin),
+      positionSizeLimit: num(p.position_size_limit),
+      tradingStatus: str(p.trading_status) || "unknown",
+    });
+  }
+  return out;
 }

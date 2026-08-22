@@ -538,6 +538,11 @@ The content is organized as follows:
   lib/cryptoScreener/derivatives.ts
   lib/cryptoScreener/engine.ts
   lib/cryptoScreener/horizons.ts
+  lib/cryptoScreener/paper/engine.ts
+  lib/cryptoScreener/paper/paperEngine.test.ts
+  lib/cryptoScreener/paper/signals.ts
+  lib/cryptoScreener/paper/sizing.ts
+  lib/cryptoScreener/paper/store.ts
   lib/cryptoScreener/patterns.ts
   lib/cryptoScreener/plans.ts
   lib/cryptoScreener/reasons.ts

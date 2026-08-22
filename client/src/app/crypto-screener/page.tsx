@@ -157,6 +157,7 @@ type TabKey =
   | "correlation"
   | "patterns"
   | "setups"
+  | "paper"
   | "sources";
 
 const TABS: DeskTabItem<TabKey>[] = [
@@ -170,6 +171,7 @@ const TABS: DeskTabItem<TabKey>[] = [
   { key: "correlation", label: "BTC Correlation" },
   { key: "patterns", label: "Chart Patterns" },
   { key: "setups", label: "Setups" },
+  { key: "paper", label: "Paper Desk" },
   { key: "sources", label: "Sources" },
 ];
 
@@ -496,6 +498,8 @@ function TabBody({ tab, reloadToken }: { tab: TabKey; reloadToken: number }) {
       return <PatternsTab key={reloadToken} />;
     case "setups":
       return <SetupsTab key={reloadToken} />;
+    case "paper":
+      return <PaperTab key={reloadToken} />;
     case "sources":
       return <SourcesTab key={reloadToken} />;
   }
@@ -2162,5 +2166,585 @@ function SourcesTab() {
         ) : null}
       </Board>
     </DeskCard>
+  );
+}
+
+// ── paper desk ──────────────────────────────────────────────────────────────
+
+type PaperView = "books" | "families" | "open" | "closed";
+
+const PAPER_VIEWS: { key: PaperView; label: string }[] = [
+  { key: "books", label: "Books (per symbol)" },
+  { key: "families", label: "Signal families" },
+  { key: "open", label: "Open positions" },
+  { key: "closed", label: "Closed trades" },
+];
+
+const FAMILY_TONE: Record<string, "success" | "error" | "warning" | "primary" | "default"> = {
+  scalp: "primary",
+  swing: "success",
+  breakout: "warning",
+  pattern: "default",
+  momentum: "primary",
+};
+
+const EXIT_TONE: Record<string, "success" | "error" | "warning" | "default"> = {
+  TARGET: "success",
+  STOP: "error",
+  TIME: "warning",
+  LIQUIDATION: "error",
+  MANUAL: "default",
+};
+
+type PaperSummary = {
+  configured: boolean;
+  reason?: string;
+  books: Row[];
+  families: Row[];
+  totals: Record<string, number | null> | null;
+  perSymbolEquityUsd?: number;
+  maxOpenTotal?: number;
+  maxOpenPerSymbol?: number;
+  integrity?: { sameBarAmbiguities: number; assumedStopFirst: number; gappedFills: number; note: string };
+  tick?: {
+    lastTickAt: number | null;
+    lastTickMs: number | null;
+    ticks: number;
+    lastOpened: number;
+    lastClosed: number;
+    lastError: string | null;
+    note: string;
+    thisRequest: { ran: boolean; opened: number; closed: number; managed: number; skippedReason?: string; refusals?: { reason: string; n: number }[] } | null;
+  };
+};
+
+function PaperTab() {
+  const [view, setView] = useState<PaperView>("books");
+  const [nonce, setNonce] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [runNote, setRunNote] = useState("");
+
+  const { data, error, loading } = useBoard<PaperSummary>(`paper/summary?n=${nonce}`);
+
+  const runCycle = useCallback(async () => {
+    setRunning(true);
+    setRunNote("");
+    try {
+      const r = await fetch("/api/crypto-screener/paper/run", { method: "POST", cache: "no-store" });
+      const body = (await r.json()) as { ok?: boolean; error?: string; cycle?: { opened: number; closed: number; managed: number } };
+      setRunNote(
+        r.ok && body.cycle
+          ? `Cycle done — managed ${body.cycle.managed}, closed ${body.cycle.closed}, opened ${body.cycle.opened}.`
+          : body.error ?? "cycle failed",
+      );
+      setNonce((n) => n + 1);
+    } catch (e) {
+      setRunNote(e instanceof Error ? e.message : "cycle failed");
+    } finally {
+      setRunning(false);
+    }
+  }, []);
+
+  if (!loading && data && data.configured === false) {
+    return (
+      <DeskCard padding="lg">
+        <DeskBanner variant="warning" title="The paper desk is not configured on this deployment">
+          {data.reason}
+        </DeskBanner>
+      </DeskCard>
+    );
+  }
+
+  const t = data?.totals ?? null;
+  const tick = data?.tick;
+  const staleMin = tick?.lastTickAt ? Math.round((Date.now() - tick.lastTickAt) / 60000) : null;
+
+  return (
+    <DeskCard padding="lg">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 14 }}>
+        <Pills options={PAPER_VIEWS} value={view} onChange={setView} />
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          {runNote ? (
+            <span className="desk-label-md" style={{ fontWeight: 400, opacity: 0.75 }}>
+              {runNote}
+            </span>
+          ) : null}
+          <DeskButton variant="tonal" onClick={() => void runCycle()} disabled={running}>
+            {running ? "Running cycle…" : "Run a cycle now"}
+          </DeskButton>
+        </div>
+      </div>
+
+      <Basis>
+        Every signal on this page&apos;s other tabs, taken automatically at the entry, stop and target
+        those tabs published, with <strong>${(data?.perSymbolEquityUsd ?? 10000).toLocaleString()} of
+        its own capital for every symbol</strong>. Nothing here can reach a broker: the desk holds no
+        keys and has no order-routing path. Size comes from risk, not from a fixed ticket — each
+        position risks 2% of its own book, so an R multiple means the same thing on a contract with a
+        0.5% stop and one with a 30% stop. Costs are charged in full: the taker fee on both legs, half
+        the quoted spread as slippage on both legs, and every 8-hour funding settlement the position
+        was open across — signed by direction, so a short is CREDITED when longs are paying.
+      </Basis>
+
+      {tick ? (
+        <div style={{ marginBottom: "var(--desk-space-4)" }}>
+          <DeskBanner variant={tick.lastError ? "error" : "info"} title="How this desk keeps time">
+            {tick.lastError ? `Last cycle errored: ${tick.lastError}. ` : ""}
+            {tick.note}
+            {staleMin !== null ? ` Last cycle ran ${staleMin === 0 ? "moments" : `${staleMin} min`} ago (${tick.ticks} total).` : " No cycle has run yet."}
+          </DeskBanner>
+        </div>
+      ) : null}
+
+      {t ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(158px, 1fr))",
+            gap: "var(--desk-space-3)",
+            marginBottom: "var(--desk-space-4)",
+          }}
+        >
+          <DeskMetricTile
+            label="Books"
+            value={String(t.booksOpened ?? 0)}
+            detail={`${fmtCompactUsd(t.startingEquityUsd)} allocated`}
+            compact
+          />
+          <DeskMetricTile
+            label="Mark to market"
+            value={fmtCompactUsd(t.markToMarketUsd)}
+            detail="equity + open P&L"
+            valueClassName={pnlClass((t.markToMarketUsd ?? 0) - (t.startingEquityUsd ?? 0))}
+            compact
+          />
+          <DeskMetricTile
+            label="Realised"
+            value={fmtUsd(t.realisedPnlUsd, 2)}
+            detail={t.roiPct !== null && t.roiPct !== undefined ? `${fmtPct(t.roiPct)} ROI` : "—"}
+            valueClassName={pnlClass(t.realisedPnlUsd)}
+            compact
+          />
+          <DeskMetricTile
+            label="Unrealised"
+            value={fmtUsd(t.unrealisedPnlUsd, 2)}
+            detail="net of exit costs"
+            valueClassName={pnlClass(t.unrealisedPnlUsd)}
+            compact
+            title="Marked at what it would cost to close right now — the exit taker fee, the spread, and funding already accrued. An unrealised figure quoted gross is the number that makes a desk look profitable until it closes something."
+          />
+          <DeskMetricTile
+            label="Open"
+            value={`${t.openPositions ?? 0} / ${data?.maxOpenTotal ?? 60}`}
+            detail={`max ${data?.maxOpenPerSymbol ?? 2} per symbol`}
+            compact
+          />
+          <DeskMetricTile label="Closed trades" value={String(t.trades ?? 0)} detail={t.winRate !== null && t.winRate !== undefined ? `${t.winRate}% won` : "none yet"} compact />
+          <DeskMetricTile
+            label="Profit factor"
+            value={t.profitFactor !== null && t.profitFactor !== undefined ? fmtNum(t.profitFactor, 2) : "—"}
+            detail={t.expectancyUsd !== null && t.expectancyUsd !== undefined ? `${fmtUsd(t.expectancyUsd, 2)} / trade` : "—"}
+            compact
+            title="Gross wins over gross losses. Profit factor and expectancy are the two that rank a strategy; win rate alone ranks a martingale first."
+          />
+          <DeskMetricTile
+            label="Costs paid"
+            value={fmtUsd(t.costsUsd, 2)}
+            detail={`incl. ${fmtUsd(t.fundingUsd, 2)} funding`}
+            compact
+          />
+        </div>
+      ) : null}
+
+      {data?.integrity && (data.integrity.sameBarAmbiguities > 0 || data.integrity.gappedFills > 0) ? (
+        <div style={{ marginBottom: "var(--desk-space-4)" }}>
+          <DeskBanner variant="warning" title="Fill integrity">
+            {data.integrity.sameBarAmbiguities} trade(s) had their stop and target inside one replay bar
+            {data.integrity.assumedStopFirst > 0
+              ? `, and ${data.integrity.assumedStopFirst} of those could not be resolved even at 1-minute resolution — those assumed the STOP came first`
+              : ", all resolved at 1-minute resolution"}
+            . {data.integrity.gappedFills} exit(s) filled at a bar&apos;s open because price gapped past
+            the level. {data.integrity.note}
+          </DeskBanner>
+        </div>
+      ) : null}
+
+      <Board loading={loading} error={error}>
+        {view === "books" ? <PaperBooks rows={data?.books ?? []} /> : null}
+        {view === "families" ? <PaperFamilies rows={data?.families ?? []} /> : null}
+        {view === "open" ? <PaperPositions status="OPEN" nonce={nonce} /> : null}
+        {view === "closed" ? <PaperPositions status="CLOSED" nonce={nonce} /> : null}
+      </Board>
+    </DeskCard>
+  );
+}
+
+function PaperBooks({ rows }: { rows: Row[] }) {
+  const cols: DeskColumn<Row>[] = [
+    { id: "symbol", header: "Book", cell: (r) => <SymbolCell row={r} />, sortValue: (r) => String(r.symbol) },
+    {
+      id: "mtm",
+      header: "Mark to market",
+      align: "right",
+      cell: (r) => <strong className={pnlClass((r.markToMarketUsd as number) - (r.startingEquityUsd as number))}>{fmtUsd(r.markToMarketUsd as number, 2)}</strong>,
+      sortValue: (r) => (r.markToMarketUsd as number) ?? null,
+    },
+    {
+      id: "realised",
+      header: "Realised",
+      align: "right",
+      cell: (r) => <span className={pnlClass(r.realisedPnlUsd as number)}>{fmtUsd(r.realisedPnlUsd as number, 2)}</span>,
+      sortValue: (r) => (r.realisedPnlUsd as number) ?? null,
+    },
+    {
+      id: "unrealised",
+      header: "Unrealised",
+      align: "right",
+      cell: (r) => <span className={pnlClass(r.unrealisedPnlUsd as number)}>{fmtUsd(r.unrealisedPnlUsd as number, 2)}</span>,
+      sortValue: (r) => (r.unrealisedPnlUsd as number) ?? null,
+    },
+    {
+      id: "roi",
+      header: "ROI",
+      align: "right",
+      cell: (r) => <Pct v={r.roiPct as number} />,
+      sortValue: (r) => (r.roiPct as number) ?? null,
+    },
+    {
+      id: "open",
+      header: "Open",
+      align: "right",
+      cell: (r) => (
+        <span title={`${fmtUsd(r.marginPostedUsd as number, 0)} of this book is posted as margin`}>
+          {String(r.openPositions)}
+        </span>
+      ),
+      sortValue: (r) => (r.openPositions as number) ?? null,
+    },
+    {
+      id: "trades",
+      header: "Trades",
+      align: "right",
+      cell: (r) => (r.trades ? `${r.trades} (${r.wins}W/${r.losses}L)` : "—"),
+      sortValue: (r) => (r.trades as number) ?? null,
+    },
+    {
+      id: "wr",
+      header: "Win rate",
+      align: "right",
+      cell: (r) => (r.winRate === null ? <Missing why="no closed trades in this book yet" /> : `${fmtNum(r.winRate as number, 0)}%`),
+      sortValue: (r) => (r.winRate as number) ?? null,
+    },
+    {
+      id: "pf",
+      header: "Profit factor",
+      align: "right",
+      cell: (r) => (r.profitFactor === null ? <Missing why="no losing trade yet, so the ratio has no denominator" /> : fmtNum(r.profitFactor as number, 2)),
+      sortValue: (r) => (r.profitFactor as number) ?? null,
+    },
+    {
+      id: "avgr",
+      header: "Avg R",
+      align: "right",
+      cell: (r) => (r.avgR === null ? "—" : <span className={pnlClass(r.avgR as number)}>{fmtNum(r.avgR as number, 2)}</span>),
+      sortValue: (r) => (r.avgR as number) ?? null,
+    },
+  ];
+  return (
+    <>
+      <p className="desk-label-md" style={{ fontWeight: 400, marginBottom: 10, opacity: 0.75 }}>
+        One book per contract, each spending only from its own $10,000. Per-symbol rather than one
+        shared pool because the question is which CONTRACT suits these signals — a shared balance
+        would let BTC&apos;s results pay for a loss on DOGE and hide it. A book is created the first
+        time a symbol produces a signal the desk will act on, so symbols that never signal never
+        appear here.
+      </p>
+      <DeskDataTable
+        columns={cols}
+        rows={rows}
+        getRowKey={(r) => String(r.symbol)}
+        minWidth={1250}
+        empty={
+          <DeskBanner variant="info" title="No books yet">
+            No symbol has produced a signal that cleared the desk&apos;s gates. Books are created on
+            first trade, so an empty list means nothing qualified — not that the desk is broken.
+          </DeskBanner>
+        }
+      />
+    </>
+  );
+}
+
+function PaperFamilies({ rows }: { rows: Row[] }) {
+  const cols: DeskColumn<Row>[] = [
+    {
+      id: "family",
+      header: "Signal family",
+      cell: (r) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <DeskChip tone={FAMILY_TONE[String(r.family)] ?? "default"}>{String(r.label)}</DeskChip>
+          <span className="desk-label-md" style={{ fontWeight: 400, opacity: 0.65, fontSize: "0.6875rem" }}>
+            max hold {String(r.maxHoldHours)}h
+          </span>
+        </div>
+      ),
+      sortValue: (r) => String(r.label),
+    },
+    { id: "open", header: "Open", align: "right", cell: (r) => String(r.openPositions), sortValue: (r) => (r.openPositions as number) ?? null },
+    {
+      id: "unreal",
+      header: "Unrealised",
+      align: "right",
+      cell: (r) => <span className={pnlClass(r.unrealisedPnlUsd as number)}>{fmtUsd(r.unrealisedPnlUsd as number, 2)}</span>,
+      sortValue: (r) => (r.unrealisedPnlUsd as number) ?? null,
+    },
+    { id: "trades", header: "Trades", align: "right", cell: (r) => (r.trades ? `${r.trades} (${r.wins}W/${r.losses}L)` : "—"), sortValue: (r) => (r.trades as number) ?? null },
+    {
+      id: "net",
+      header: "Realised",
+      align: "right",
+      cell: (r) => <strong className={pnlClass(r.netPnlUsd as number)}>{fmtUsd(r.netPnlUsd as number, 2)}</strong>,
+      sortValue: (r) => (r.netPnlUsd as number) ?? null,
+    },
+    { id: "wr", header: "Win rate", align: "right", cell: (r) => (r.winRate === null ? <Missing why="no closed trades in this family yet" /> : `${fmtNum(r.winRate as number, 0)}%`), sortValue: (r) => (r.winRate as number) ?? null },
+    { id: "pf", header: "Profit factor", align: "right", cell: (r) => (r.profitFactor === null ? <Missing why="no losing trade yet" /> : fmtNum(r.profitFactor as number, 2)), sortValue: (r) => (r.profitFactor as number) ?? null },
+    { id: "exp", header: "Expectancy", align: "right", cell: (r) => (r.expectancyUsd === null ? "—" : <span className={pnlClass(r.expectancyUsd as number)}>{fmtUsd(r.expectancyUsd as number, 2)}</span>), sortValue: (r) => (r.expectancyUsd as number) ?? null },
+    { id: "avgr", header: "Avg R", align: "right", cell: (r) => (r.avgR === null ? "—" : <span className={pnlClass(r.avgR as number)}>{fmtNum(r.avgR as number, 2)}</span>), sortValue: (r) => (r.avgR as number) ?? null },
+    { id: "hold", header: "Avg hold", align: "right", cell: (r) => (r.avgHoldHours === null ? "—" : `${fmtNum(r.avgHoldHours as number, 1)}h`), sortValue: (r) => (r.avgHoldHours as number) ?? null },
+    { id: "funding", header: "Funding", align: "right", cell: (r) => <span className={pnlClass(-(r.fundingUsd as number))}>{fmtUsd(r.fundingUsd as number, 2)}</span>, sortValue: (r) => (r.fundingUsd as number) ?? null },
+  ];
+  return (
+    <>
+      <p className="desk-label-md" style={{ fontWeight: 400, marginBottom: 10, opacity: 0.75 }}>
+        The same trades, attributed to the KIND of signal that produced them rather than to the
+        contract. Capital is per symbol, so these five share it — which is why the desk fills its
+        openings round-robin across families rather than best-first. A flat sort by reward-to-risk
+        handed twelve of twelve slots to Swing on the first run, and a leaderboard comparing twelve
+        trades against one would be measuring allocation rather than edge.
+      </p>
+      <DeskDataTable columns={cols} rows={rows} getRowKey={(r) => String(r.family)} minWidth={1350} />
+    </>
+  );
+}
+
+function PaperPositions({ status, nonce }: { status: "OPEN" | "CLOSED"; nonce: number }) {
+  const [family, setFamily] = useState("all");
+  const path = useMemo(() => {
+    const p = new URLSearchParams({ status, limit: "300", n: String(nonce) });
+    if (family !== "all") p.set("family", family);
+    return `paper/positions?${p.toString()}`;
+  }, [status, family, nonce]);
+
+  const { data, error, loading } = useBoard<{ count: number; rows: Row[] }>(path);
+
+  const openCols: DeskColumn<Row>[] = [
+    { id: "symbol", header: "Contract", cell: (r) => <SymbolCell row={r} />, sortValue: (r) => String(r.symbol) },
+    {
+      id: "family",
+      header: "Signal",
+      cell: (r) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <DeskChip tone={FAMILY_TONE[String(r.family)] ?? "default"} title={String(r.signal_reason ?? "")}>
+            {String(r.familyLabel)}
+          </DeskChip>
+          <span className="desk-label-md" style={{ fontWeight: 400, fontSize: "0.6875rem", opacity: 0.7 }}>
+            {String(r.side).toUpperCase()}
+            {r.pattern ? ` · ${String(r.pattern)}` : ""}
+          </span>
+        </div>
+      ),
+      sortValue: (r) => String(r.familyLabel),
+    },
+    { id: "entry", header: "Entry", align: "right", cell: (r) => fmtPx(r.entry as number) },
+    { id: "mark", header: "Mark", align: "right", cell: (r) => (r.mark === null ? <Missing why="no live price this cycle" /> : fmtPx(r.mark as number)) },
+    {
+      id: "stop",
+      header: "Stop",
+      align: "right",
+      cell: (r) => (
+        <span title={`Venue liquidation sits at ${fmtPx(r.liquidation_price as number)} — further away than the stop, which is checked before every fill.`}>
+          {fmtPx(r.stop as number)}{" "}
+          <span style={{ opacity: 0.6, fontSize: "0.6875rem" }}>({fmtPct(r.toStopPct as number, 1)})</span>
+        </span>
+      ),
+    },
+    {
+      id: "target",
+      header: "Target",
+      align: "right",
+      cell: (r) => (
+        <span>
+          {fmtPx(r.target as number)}{" "}
+          <span style={{ opacity: 0.6, fontSize: "0.6875rem" }}>({fmtPct(r.toTargetPct as number, 1)})</span>
+        </span>
+      ),
+    },
+    {
+      id: "size",
+      header: "Size",
+      align: "right",
+      cell: (r) => (
+        <span title={`${r.contracts} contracts at ${r.leverage}x. Margin posted ${fmtUsd(r.margin_usd as number, 2)}; risk to the stop ${fmtUsd(r.risk_usd as number, 2)}.`}>
+          {fmtCompactUsd(r.notional_usd as number)} <span style={{ opacity: 0.6, fontSize: "0.6875rem" }}>{String(r.leverage)}x</span>
+        </span>
+      ),
+      sortValue: (r) => (r.notional_usd as number) ?? null,
+    },
+    {
+      id: "unreal",
+      header: "Unrealised",
+      align: "right",
+      cell: (r) =>
+        r.unrealisedUsd === null ? (
+          <Missing why="no live price" />
+        ) : (
+          <strong className={pnlClass(r.unrealisedUsd as number)}>
+            {fmtUsd(r.unrealisedUsd as number, 2)}{" "}
+            <span style={{ opacity: 0.7, fontSize: "0.6875rem" }}>({fmtPct(r.unrealisedPct as number, 1)})</span>
+          </strong>
+        ),
+      sortValue: (r) => (r.unrealisedUsd as number) ?? null,
+    },
+    {
+      id: "funding",
+      header: "Funding",
+      align: "right",
+      cell: (r) => <span className={pnlClass(-(r.funding_usd as number))}>{fmtUsd(r.funding_usd as number, 3)}</span>,
+      sortValue: (r) => (r.funding_usd as number) ?? null,
+    },
+    {
+      id: "age",
+      header: "Age",
+      align: "right",
+      cell: (r) => (
+        <span title={`Closed on the clock at ${r.max_hold_hours}h if neither level is reached.`}>
+          {fmtNum(r.ageHours as number, 1)}h / {String(r.max_hold_hours)}h
+        </span>
+      ),
+      sortValue: (r) => (r.ageHours as number) ?? null,
+    },
+  ];
+
+  const closedCols: DeskColumn<Row>[] = [
+    { id: "symbol", header: "Contract", cell: (r) => <SymbolCell row={r} />, sortValue: (r) => String(r.symbol) },
+    {
+      id: "family",
+      header: "Signal",
+      cell: (r) => (
+        <DeskChip tone={FAMILY_TONE[String(r.family)] ?? "default"} title={String(r.signal_reason ?? "")}>
+          {String(r.familyLabel)} · {String(r.side).toUpperCase()}
+        </DeskChip>
+      ),
+      sortValue: (r) => String(r.familyLabel),
+    },
+    { id: "entry", header: "Entry", align: "right", cell: (r) => fmtPx(r.entry as number) },
+    {
+      id: "exit",
+      header: "Exit",
+      align: "right",
+      cell: (r) => {
+        const gapped = r.exit !== r.exit_level && r.exit_reason !== "TIME";
+        return (
+          <span
+            title={
+              gapped
+                ? `Price gapped past the ${fmtPx(r.exit_level as number)} level, so the fill is the bar's open — which is what a stop order actually does.`
+                : `Level ${fmtPx(r.exit_level as number)}, filled at ${fmtPx(r.exit as number)} after crossing the spread.`
+            }
+          >
+            {fmtPx(r.exit as number)}
+            {gapped ? <span style={{ color: "var(--desk-warning)", fontSize: "0.6875rem" }}> gap</span> : null}
+          </span>
+        );
+      },
+    },
+    {
+      id: "reason",
+      header: "Why it closed",
+      cell: (r) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <DeskChip tone={EXIT_TONE[String(r.exit_reason)] ?? "default"}>{String(r.exit_reason)}</DeskChip>
+          {r.same_bar_ambiguity ? (
+            <span
+              className="desk-label-md"
+              style={{ fontWeight: 400, fontSize: "0.6875rem", color: "var(--desk-warning)" }}
+              title={
+                r.ambiguity_resolved_by === "1m-bars"
+                  ? "Stop and target both fell inside one replay bar; 1-minute bars settled which came first."
+                  : "Stop and target both fell inside one replay bar and even 1-minute bars could not settle it, so the STOP was assumed — the unfavourable branch."
+              }
+            >
+              {r.ambiguity_resolved_by === "1m-bars" ? "resolved at 1m" : "assumed stop first"}
+            </span>
+          ) : null}
+        </div>
+      ),
+      sortValue: (r) => String(r.exit_reason),
+    },
+    {
+      id: "net",
+      header: "Net P&L",
+      align: "right",
+      cell: (r) => <strong className={pnlClass(r.net_pnl_usd as number)}>{fmtUsd(r.net_pnl_usd as number, 2)}</strong>,
+      sortValue: (r) => (r.net_pnl_usd as number) ?? null,
+    },
+    {
+      id: "r",
+      header: "R",
+      align: "right",
+      cell: (r) => <span className={pnlClass(r.r_multiple as number)} title="Net P&L over the risk the position was sized to. Comparable across contracts because every position risks the same 2% of its book.">{fmtNum(r.r_multiple as number, 2)}</span>,
+      sortValue: (r) => (r.r_multiple as number) ?? null,
+    },
+    {
+      id: "costs",
+      header: "Costs",
+      align: "right",
+      cell: (r) => (
+        <span title={`Taker fees ${fmtUsd((r.entry_fee_usd as number) + (r.exit_fee_usd as number), 3)}, funding ${fmtUsd(r.funding_usd as number, 3)}, slippage ${fmtUsd((r.entry_slippage_usd as number) + (r.exit_slippage_usd as number), 3)} (already inside the fills).`}>
+          {fmtUsd(r.costs_usd as number, 2)}
+        </span>
+      ),
+      sortValue: (r) => (r.costs_usd as number) ?? null,
+    },
+    { id: "hold", header: "Hold", align: "right", cell: (r) => `${fmtNum(r.hold_hours as number, 1)}h`, sortValue: (r) => (r.hold_hours as number) ?? null },
+    {
+      id: "closed",
+      header: "Closed",
+      align: "right",
+      cell: (r) => fmtISTClock((r.closed_at as number) * 1000),
+      sortValue: (r) => (r.closed_at as number) ?? null,
+    },
+  ];
+
+  return (
+    <>
+      <div style={{ marginBottom: 12 }}>
+        <Pills
+          options={[
+            { key: "all", label: "All families" },
+            { key: "scalp", label: "Scalp" },
+            { key: "swing", label: "Swing" },
+            { key: "breakout", label: "Breakout" },
+            { key: "pattern", label: "Chart Pattern" },
+            { key: "momentum", label: "Momentum" },
+          ]}
+          value={family}
+          onChange={setFamily}
+        />
+      </div>
+      <Board
+        loading={loading}
+        error={error}
+        empty={(data?.rows.length ?? 0) === 0}
+      >
+        <DeskDataTable
+          columns={status === "OPEN" ? openCols : closedCols}
+          rows={data?.rows ?? []}
+          getRowKey={(r, i) => `${r.position_id ?? r.symbol}-${i}`}
+          minWidth={1450}
+          defaultSort={status === "OPEN" ? { id: "unreal", dir: "desc" } : { id: "closed", dir: "desc" }}
+        />
+      </Board>
+    </>
   );
 }
