@@ -129,6 +129,22 @@ async function marketState(venue: VenueAdapter): Promise<{
   };
 }
 
+/**
+ * The canonical spelling of a symbol on a venue, or null if it is not listed.
+ *
+ * Exists because not every symbol is uppercase — `BTCUSD.fx` names the CFD
+ * apart from the Delta perpetual — and the API used to uppercase inbound
+ * symbols before handing them on, which made that instrument unaddressable.
+ * Every entry point resolves through here so casing can never decide whether an
+ * instrument exists.
+ */
+export async function resolveSymbol(venueId: string, input: string): Promise<string | null> {
+  const venue = getVenue(venueId);
+  const { instruments } = await marketState(venue);
+  const needle = input.trim().toLowerCase();
+  return instruments.find((i) => i.symbol.toLowerCase() === needle)?.symbol ?? null;
+}
+
 function conversion(inst: Instrument, quotes: Map<string, number>): number {
   const c = usdPerQuoteUnit(inst, quotes);
   if (c === null) {
@@ -311,7 +327,8 @@ export async function placeOrder(venueId: string, params: PlaceParams) {
   const account = await ensureAccount(venue.id, defaultsFor(venue));
   const { bySymbol, quotes } = await marketState(venue);
 
-  const inst = bySymbol.get(params.symbol.toUpperCase());
+  const wanted = params.symbol.trim().toLowerCase();
+  const inst = [...bySymbol.values()].find((i) => i.symbol.toLowerCase() === wanted);
   if (!inst) throw new OrderRejected(`${params.symbol} is not listed on this venue`);
 
   if (venue.id === "forex" && !marketOpen() && params.type === "market") {

@@ -106,7 +106,11 @@ const SPECS: Spec[] = [
   { symbol: "US500", yahoo: "^GSPC", name: "S&P 500 Index", kind: "index", contractSize: 10, pipSize: 0.1, pricePrecision: 2, spreadPips: 4, swapLong: -12.8, swapShort: 2.4, maxLeverage: 200 },
   { symbol: "USTEC", yahoo: "^NDX", name: "Nasdaq 100 Index", kind: "index", contractSize: 5, pipSize: 0.1, pricePrecision: 2, spreadPips: 12, swapLong: -15.2, swapShort: 3.1, maxLeverage: 200 },
   // ── crypto, as a broker lists it ──────────────────────────────────────────
-  { symbol: "BTCUSD.fx", yahoo: "BTC-USD", name: "Bitcoin / US Dollar (CFD)", kind: "crypto", contractSize: 1, pipSize: 0.01, pricePrecision: 2, spreadPips: 2_500, swapLong: -30, swapShort: -30, maxLeverage: 400 },
+  // A BTC CFD is quoted in WHOLE DOLLARS. Carrying the FX convention of a
+  // hundredth-of-a-unit pip made the ticket read "25000.0 pts" of spread on a
+  // $77,000 instrument, which looks like a broken number rather than the $25 it
+  // actually is.
+  { symbol: "BTCUSD.fx", yahoo: "BTC-USD", name: "Bitcoin / US Dollar (CFD)", kind: "crypto", contractSize: 1, pipSize: 1, pricePrecision: 2, spreadPips: 25, swapLong: -30, swapShort: -30, maxLeverage: 400 },
 ];
 
 /**
@@ -262,6 +266,7 @@ function toInstrument(spec: Spec, q: YahooQuote, accountType: AccountType): Inst
     minSize: 0.01,
     sizeStep: 0.01,
     tickSize: spec.pipSize / 10, // brokers quote a fractional pip
+    pipSize: spec.pipSize,
     pricePrecision: spec.pricePrecision,
     maxLeverage: spec.maxLeverage,
     // Retail forex margin is set by leverage, not by a separate maintenance
@@ -291,13 +296,34 @@ function toInstrument(spec: Spec, q: YahooQuote, accountType: AccountType): Inst
   };
 }
 
+/**
+ * Find a spec regardless of how the caller cased the symbol.
+ *
+ * Symbols on this desk are NOT all uppercase — `BTCUSD.fx` distinguishes the
+ * CFD from the Delta perpetual of the same name. The API normalises inbound
+ * symbols to uppercase, so an exact match silently failed for that one
+ * instrument: its chart, book and tape all came back empty and an order on it
+ * was rejected as "not listed", while the ticker kept quoting a price because
+ * listing does not take a symbol. Matching case-insensitively removes the whole
+ * class of failure rather than renaming the one symbol that tripped it.
+ */
+function findSpec(symbol: string): Spec | undefined {
+  const needle = symbol.trim().toLowerCase();
+  return SPECS.find((s) => s.symbol.toLowerCase() === needle);
+}
+
+/** The canonical spelling of a symbol on this venue, or null if unknown. */
+export function canonicalSymbol(symbol: string): string | null {
+  return findSpec(symbol)?.symbol ?? null;
+}
+
 /** The pip size for an instrument, which the P&L display needs. */
 export function pipSizeOf(symbol: string): number {
-  return SPECS.find((s) => s.symbol === symbol)?.pipSize ?? 0.0001;
+  return findSpec(symbol)?.pipSize ?? 0.0001;
 }
 
 export function specFor(symbol: string): Spec | undefined {
-  return SPECS.find((s) => s.symbol === symbol);
+  return findSpec(symbol);
 }
 
 async function listInstruments(accountType: AccountType = "standard"): Promise<Instrument[]> {
@@ -393,7 +419,7 @@ export const forexVenue: VenueAdapter = {
   listInstruments: () => listInstruments("standard"),
 
   async getInstrument(symbol: string) {
-    const spec = SPECS.find((s) => s.symbol === symbol);
+    const spec = findSpec(symbol);
     if (!spec) return null;
     const q = await quoteFor(spec);
     return q ? toInstrument(spec, q, "standard") : null;
@@ -408,7 +434,7 @@ export const forexVenue: VenueAdapter = {
    * ladder, and the UI says so.
    */
   async getBook(symbol: string, depth: number): Promise<OrderBook | null> {
-    const spec = SPECS.find((s) => s.symbol === symbol);
+    const spec = findSpec(symbol);
     if (!spec) return null;
     const q = await quoteFor(spec);
     if (!q) return null;
@@ -422,7 +448,7 @@ export const forexVenue: VenueAdapter = {
       price: inst.ask + i * step,
       size: Math.round((1 + i * 0.6) * 100) / 100,
     }));
-    return { symbol, bids, asks, asOf: Date.now(), modelled: true };
+    return { symbol: spec.symbol, bids, asks, asOf: Date.now(), modelled: true };
   },
 
   /**
@@ -444,7 +470,7 @@ export const forexVenue: VenueAdapter = {
    * `staleAfter` on the chart notes how old the newest bar is.
    */
   async getCandles(symbol: string, resolution: string, from: number, to: number): Promise<Candle[]> {
-    const spec = SPECS.find((s) => s.symbol === symbol);
+    const spec = findSpec(symbol);
     if (!spec) return [];
     const interval = YAHOO_INTERVAL[resolution] ?? "5m";
     let q = await yahoo(spec.yahoo, RANGE_FOR[resolution] ?? "5d", interval);
@@ -484,7 +510,7 @@ export { SPECS as FOREX_SPECS };
 export async function fetchDerivedTape(symbol: string, limit = 40): Promise<
   { price: number; size: number; side: "buy" | "sell"; at: number }[]
 > {
-  const spec = SPECS.find((s) => s.symbol === symbol);
+  const spec = findSpec(symbol);
   if (!spec) return [];
   const q = await yahoo(spec.yahoo, "1d", "1m");
   if (!q) return [];

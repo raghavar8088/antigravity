@@ -79,6 +79,9 @@ function specToInstrument(t: PerpTicker, spec: ProductSpec | undefined): Instrum
     minSize: 1,
     sizeStep: 1,
     tickSize: t.tickSize ?? 0.5,
+    // A perpetual has no pip convention; the tick IS the unit a spread is
+    // quoted in, so the two coincide.
+    pipSize: t.tickSize ?? 0.5,
     pricePrecision: precisionFor(t.tickSize ?? 0.5),
     maxLeverage: Math.max(1, maxLev),
     // 2.5 is the WIDEST value Delta uses, not the narrowest. An unknown

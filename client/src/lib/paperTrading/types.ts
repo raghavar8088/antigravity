@@ -63,6 +63,13 @@ export type Instrument = {
   minSize: number;
   sizeStep: number;
   tickSize: number;
+  /**
+   * The unit a spread is quoted in. A pip on FX (the FOURTH decimal, or the
+   * second on yen pairs), and one tick on a crypto perpetual. Carried per
+   * instrument because it cannot be derived from the tick: brokers quote a
+   * fractional pip, so tick is a tenth of pip on this desk.
+   */
+  pipSize: number;
   pricePrecision: number;
   maxLeverage: number;
   /** Percent of notional the venue keeps before it liquidates. */

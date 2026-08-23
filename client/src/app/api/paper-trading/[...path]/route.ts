@@ -34,6 +34,7 @@ import {
   PaperTradingUnavailable,
   placeOrder,
   resetAccount,
+  resolveSymbol,
   restoreGeneration,
   runCycle,
   setAccountSettings,
@@ -71,6 +72,14 @@ function ok(body: unknown): NextResponse {
   return NextResponse.json({ ok: true, ...(body as object) }, { headers: { "cache-control": "no-store" } });
 }
 
+/** A symbol this venue does not list. 404 with the name, not an empty result. */
+function unknownSymbol(symbol: string, venueLabel: string): NextResponse {
+  return NextResponse.json(
+    { ok: false, error: `${venueLabel} does not list ${symbol}` },
+    { status: 404 },
+  );
+}
+
 function fail(e: unknown): NextResponse {
   // A rejected order and an unconfigured deployment are different failures and
   // get different codes, so the terminal can show the trader a reason rather
@@ -103,9 +112,11 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
         return ok({ instruments: await venue.listInstruments() });
 
       case "book": {
-        const symbol = qp(req, "symbol");
-        if (!symbol) return NextResponse.json({ ok: false, error: "book needs ?symbol=" }, { status: 400 });
-        const book = await venue.getBook(symbol.toUpperCase(), qn(req, "depth", DISPLAY_DEPTH));
+        const raw = qp(req, "symbol");
+        if (!raw) return NextResponse.json({ ok: false, error: "book needs ?symbol=" }, { status: 400 });
+        const symbol = await resolveSymbol(venueId, raw);
+        if (!symbol) return unknownSymbol(raw, venue.label);
+        const book = await venue.getBook(symbol, qn(req, "depth", DISPLAY_DEPTH));
         if (!book) {
           return NextResponse.json(
             { ok: false, error: `no order book available for ${symbol} right now` },
@@ -116,8 +127,10 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
       }
 
       case "candles": {
-        const symbol = qp(req, "symbol");
-        if (!symbol) return NextResponse.json({ ok: false, error: "candles needs ?symbol=" }, { status: 400 });
+        const raw = qp(req, "symbol");
+        if (!raw) return NextResponse.json({ ok: false, error: "candles needs ?symbol=" }, { status: 400 });
+        const symbol = await resolveSymbol(venueId, raw);
+        if (!symbol) return unknownSymbol(raw, venue.label);
         const resolution = qp(req, "resolution") ?? "5m";
         const spec = venue.resolutions.find((x) => x.key === resolution);
         if (!spec) {
@@ -130,9 +143,9 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
         const to = Math.floor(Date.now() / 1000);
         const from = to - bars * spec.seconds;
         return ok({
-          symbol: symbol.toUpperCase(),
+          symbol,
           resolution,
-          candles: await venue.getCandles(symbol.toUpperCase(), resolution, from, to),
+          candles: await venue.getCandles(symbol, resolution, from, to),
         });
       }
 
@@ -144,17 +157,19 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
       }
 
       case "trades": {
-        const symbol = qp(req, "symbol");
-        if (!symbol) return NextResponse.json({ ok: false, error: "trades needs ?symbol=" }, { status: 400 });
+        const raw = qp(req, "symbol");
+        if (!raw) return NextResponse.json({ ok: false, error: "trades needs ?symbol=" }, { status: 400 });
+        const symbol = await resolveSymbol(venueId, raw);
+        if (!symbol) return unknownSymbol(raw, venue.label);
         const limit = Math.max(5, Math.min(qn(req, "limit", 40), 100));
         // Delta publishes a real print-by-print tape. The forex venue does not,
         // and no free feed does, so its tape is reconstructed from 1-minute
         // bars and flagged `derived` — the UI renders the two differently
         // rather than passing a reconstruction off as prints.
         if (venueId === "delta") {
-          return ok({ symbol: symbol.toUpperCase(), derived: false, trades: await fetchTrades(symbol.toUpperCase(), limit) });
+          return ok({ symbol, derived: false, trades: await fetchTrades(symbol, limit) });
         }
-        return ok({ symbol: symbol.toUpperCase(), derived: true, trades: await fetchDerivedTape(symbol.toUpperCase(), limit) });
+        return ok({ symbol, derived: true, trades: await fetchDerivedTape(symbol, limit) });
       }
 
       default:

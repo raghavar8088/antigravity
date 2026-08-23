@@ -62,6 +62,7 @@ type Instrument = {
   minSize: number;
   sizeStep: number;
   tickSize: number;
+  pipSize: number;
   pricePrecision: number;
   maxLeverage: number;
   maintenanceMarginPct: number;
@@ -609,7 +610,12 @@ function InstrumentPicker({
 
 function TickerStrip({ inst }: { inst: Instrument }) {
   const spread = inst.ask - inst.bid;
-  const spreadPts = inst.tickSize > 0 ? spread / inst.tickSize : 0;
+  // Quoted in the instrument's OWN unit — pips on FX, ticks on a perpetual.
+  // Measuring it in fractional-pip "points" instead put "25000.0 pts" on a
+  // $77,000 CFD, which reads as a broken number rather than as $25.
+  const unit = inst.pipSize > 0 ? inst.pipSize : inst.tickSize;
+  const spreadUnits = unit > 0 ? spread / unit : 0;
+  const unitLabel = inst.sizeUnit === "lots" ? "pips" : "ticks";
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "center", marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--desk-outline-variant)" }}>
       <div>
@@ -627,7 +633,7 @@ function TickerStrip({ inst }: { inst: Instrument }) {
       <Field label="Ask" value={px(inst.ask, inst.pricePrecision)} />
       <Field
         label={inst.spreadIsModelled ? "Spread (modelled)" : "Spread"}
-        value={`${spreadPts.toFixed(1)} pts`}
+        value={`${spreadUnits.toFixed(1)} ${unitLabel} · ${px(spread, inst.pricePrecision)}`}
         warn={inst.spreadIsModelled}
         title={
           inst.spreadIsModelled
