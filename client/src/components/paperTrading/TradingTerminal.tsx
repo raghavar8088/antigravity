@@ -339,7 +339,13 @@ export default function TradingTerminal({ venue }: { venue: "delta" | "forex" })
                 </button>
               ))}
             </div>
-            <PriceChart venue={venue} symbol={symbol} resolution={resolution} positions={snap!.positions ?? []} />
+            <PriceChart
+              venue={venue}
+              symbol={symbol}
+              resolution={resolution}
+              positions={snap!.positions ?? []}
+              venueResolutions={v.resolutions}
+            />
           </DeskCard>
         </div>
 
@@ -679,16 +685,28 @@ function PriceChart({
   symbol,
   resolution,
   positions,
+  venueResolutions,
 }: {
   venue: string;
   symbol: string;
   resolution: string;
   positions: Row[];
+  venueResolutions: { key: string; label: string; seconds: number }[];
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const [err, setErr] = useState("");
+  /** Age of the newest bar, in ms. Non-null only when it is meaningfully old. */
+  const [staleMs, setStaleMs] = useState<number | null>(null);
+
+  // Derived to a PRIMITIVE outside the effect. `venueResolutions` is rebuilt on
+  // every snapshot poll, so depending on the array itself would tear down and
+  // restart the candle fetch every few seconds; the number it yields is stable.
+  const intervalMs = useMemo(
+    () => (venueResolutions.find((r) => r.key === resolution)?.seconds ?? 300) * 1000,
+    [venueResolutions, resolution],
+  );
 
   useEffect(() => {
     if (!ref.current) return undefined;
@@ -742,6 +760,12 @@ function PriceChart({
         seriesRef.current.setData(data);
         chartRef.current?.timeScale().fitContent();
         setErr(data.length === 0 ? "The venue returned no bars for this instrument and interval." : "");
+
+        // A closed market is not a failure. When the newest bar is older than a
+        // few intervals the chart says how old it is, rather than either
+        // pretending it is current or reporting an error it is not.
+        const newest = data.length > 0 ? Number(data[data.length - 1]!.time) * 1000 : null;
+        setStaleMs(newest !== null && Date.now() - newest > intervalMs * 3 ? Date.now() - newest : null);
       } catch (e) {
         if (live) setErr(e instanceof Error ? e.message : "chart failed");
       }
@@ -752,7 +776,7 @@ function PriceChart({
       live = false;
       clearInterval(t);
     };
-  }, [venue, symbol, resolution]);
+  }, [venue, symbol, resolution, intervalMs]);
 
   // Entry, take-profit and stop lines for whatever is open on this instrument,
   // so the chart shows the position rather than just the market.
@@ -799,6 +823,15 @@ function PriceChart({
       {err ? (
         <p className="desk-label-md" style={{ fontWeight: 400, color: "var(--desk-error)", marginTop: 8 }}>
           {err}
+        </p>
+      ) : staleMs !== null ? (
+        <p
+          className="desk-label-md"
+          style={{ fontWeight: 400, color: "var(--desk-warning)", marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}
+          title="This market is not trading right now, so the chart shows the most recent session rather than the last few hours."
+        >
+          <span className="tk-live-dot" data-state="stale" />
+          Last session — the newest bar is {formatAge(staleMs)} old. This market is closed.
         </p>
       ) : null}
     </div>
@@ -1895,4 +1928,15 @@ function ArchivePanel({ venue, busy, onRestored }: { venue: string; busy: boolea
       </Panel>
     </div>
   );
+}
+
+/** "3h" / "2d 4h" — for saying how stale a chart is without a date. */
+function formatAge(ms: number): string {
+  const mins = Math.round(ms / 60_000);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const rem = hours % 24;
+  return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
 }

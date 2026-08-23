@@ -337,6 +337,29 @@ const RANGE_FOR: Record<string, string> = {
   "1h": "3mo",
   "1d": "2y",
 };
+/**
+ * A wider range to retry with when the first request comes back empty.
+ *
+ * Needed because the range that serves an interval is not the same for every
+ * instrument class. `range=1d&interval=1m` returns the last trading day for an
+ * FX pair, and NOTHING for the futures-backed instruments (gold, silver, oil)
+ * once their session has closed — Yahoo has the bars, it just will not scope
+ * them to a calendar day with no trading in it. `range=5d` returns 5,158 of
+ * them for the same contract.
+ *
+ * Widening rather than special-casing three symbols: the same shape will bite
+ * the next instrument class added here, and a retry costs one request on a path
+ * that was returning an empty chart anyway. 1-minute data is capped at seven
+ * days upstream, which is why its fallback stops at 5d rather than a month.
+ */
+const FALLBACK_RANGE: Record<string, string> = {
+  "1m": "5d",
+  "5m": "1mo",
+  "15m": "3mo",
+  "1h": "1y",
+  "1d": "5y",
+};
+
 const YAHOO_INTERVAL: Record<string, string> = {
   "1m": "1m",
   "5m": "5m",
@@ -402,12 +425,43 @@ export const forexVenue: VenueAdapter = {
     return { symbol, bids, asks, asOf: Date.now(), modelled: true };
   },
 
+  /**
+   * Bars for the chart.
+   *
+   * THE WINDOW IS A PREFERENCE, NOT A FILTER — because this market closes.
+   *
+   * The caller asks for "the last N bars" by turning N into a time range, which
+   * is exactly right on a 24/7 venue and wrong here. On a Sunday morning the
+   * newest FX print is Friday 21:00 UTC; a request for the last 25 hours of
+   * 5-minute bars therefore matched NOTHING, and the chart rendered "the venue
+   * returned no bars for this instrument and interval" while Yahoo was in fact
+   * returning 1,422 perfectly good ones. The market being shut is not a data
+   * failure, and it must not be reported as one.
+   *
+   * So the window is applied when it contains something, and otherwise the most
+   * recent bars are returned instead. That is what a real terminal shows over a
+   * weekend: the last session. The page already says the market is closed, and
+   * `staleAfter` on the chart notes how old the newest bar is.
+   */
   async getCandles(symbol: string, resolution: string, from: number, to: number): Promise<Candle[]> {
     const spec = SPECS.find((s) => s.symbol === symbol);
     if (!spec) return [];
-    const q = await yahoo(spec.yahoo, RANGE_FOR[resolution] ?? "5d", YAHOO_INTERVAL[resolution] ?? "5m");
-    if (!q) return [];
-    return q.candles.filter((c) => c.time >= from && c.time <= to);
+    const interval = YAHOO_INTERVAL[resolution] ?? "5m";
+    let q = await yahoo(spec.yahoo, RANGE_FOR[resolution] ?? "5d", interval);
+    if (!q || q.candles.length === 0) {
+      const wider = FALLBACK_RANGE[resolution];
+      if (wider) q = await yahoo(spec.yahoo, wider, interval);
+    }
+    if (!q || q.candles.length === 0) return [];
+
+    const inWindow = q.candles.filter((c) => c.time >= from && c.time <= to);
+    if (inWindow.length > 0) return inWindow;
+
+    // Nothing traded in the requested window. Hand back the same NUMBER of bars
+    // the caller asked for, taken from the end of what exists.
+    const seconds = RESOLUTIONS.find((r) => r.key === resolution)?.seconds ?? 300;
+    const wanted = Math.max(1, Math.round((to - from) / seconds));
+    return q.candles.slice(-wanted);
   },
 };
 

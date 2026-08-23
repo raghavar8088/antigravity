@@ -1,1 +1,1 @@
-{"client-components":{"communities":[0],"files":1,"symbols":12,"top_files":[{"file":"client/src/components/AppShell.tsx","symbols":12}]},"other":{"communities":[1],"files":1,"symbols":1,"top_files":[{"file":"client/src/app/forex-paper-trading/page.tsx","symbols":1}]}}
+{"client-components":{"communities":[0,2,4,5],"files":1,"symbols":28,"top_files":[{"file":"client/src/components/paperTrading/TradingTerminal.tsx","symbols":28}]},"client-lib":{"communities":[1,3,6,7],"files":1,"symbols":23,"top_files":[{"file":"client/src/lib/paperTrading/venues/forex.ts","symbols":23}]}}
