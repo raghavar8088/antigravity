@@ -3,6 +3,9 @@
 @import "../styles/desk-tokens.css";
 @import "../styles/desk-trading.css";
 @import "../styles/tokens.css";
+/* Terminal Kit: the futuristic layer for the paper terminals and the screener.
+   Imported last so it can build on every token declared above it. */
+@import "../styles/terminal.css";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    INSTITUTIONAL TRADING TERMINAL — Design System

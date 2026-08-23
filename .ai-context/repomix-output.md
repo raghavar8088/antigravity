@@ -366,6 +366,7 @@ The content is organized as follows:
   components/terminal/TerminalPanel.tsx
   components/terminal/TerminalWorkspace.tsx
   components/terminal/TopBar.tsx
+  components/terminalkit/index.tsx
   components/TestnetOpsPanel.tsx
   components/TradeHistory.tsx
   components/TradeReplayDrawer.tsx
@@ -768,6 +769,7 @@ The content is organized as follows:
   styles/desk-tokens.css
   styles/desk-trading.css
   styles/m3-tokens.css
+  styles/terminal.css
   styles/tokens.css
   types/trading.ts
 

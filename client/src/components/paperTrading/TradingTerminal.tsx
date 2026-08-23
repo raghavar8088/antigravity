@@ -22,7 +22,7 @@
  *   - why an order was rejected, in the venue's own terms.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { createChart, CandlestickSeries, LineStyle } from "lightweight-charts";
 import type { CandlestickData, IChartApi, ISeriesApi, Time } from "lightweight-charts";
 import {
@@ -32,13 +32,24 @@ import {
   DeskChip,
   DeskDataTable,
   DeskLinearProgress,
-  DeskMetricTile,
   DeskSearchField,
   DeskTabs,
   type DeskColumn,
   type DeskTabItem,
 } from "@/components/desk/ui";
 import { fmtISTClock } from "@/lib/istTime";
+import {
+  DepthChart,
+  FundingCountdown,
+  Kbd,
+  LiveDot,
+  Meter,
+  Panel,
+  Segmented,
+  SplitMeter,
+  Stat,
+  Ticking,
+} from "@/components/terminalkit";
 
 // ── types mirroring the API ─────────────────────────────────────────────────
 
@@ -113,7 +124,9 @@ type Snapshot = {
   tick?: { lastTickAt: number | null; ticks: number; lastError: string | null; note: string };
 };
 
-type Book = { bids: { price: number; size: number }[]; asks: { price: number; size: number }[]; modelled: boolean };
+type Book = { bids: { price: number; size: number }[]; asks: { price: number; size: number }[]; modelled: boolean; asOf?: number };
+
+type Tape = { derived: boolean; trades: { price: number; size: number; side: "buy" | "sell"; at: number }[] };
 
 // ── formatting ──────────────────────────────────────────────────────────────
 
@@ -142,7 +155,10 @@ export default function TradingTerminal({ venue }: { venue: "delta" | "forex" })
   const [loading, setLoading] = useState(true);
   const [symbol, setSymbol] = useState<string>("");
   const [book, setBook] = useState<Book | null>(null);
+  const [tape, setTape] = useState<Tape | null>(null);
   const [resolution, setResolution] = useState("5m");
+  /** Lets the ladder push a clicked level straight into the ticket. */
+  const ticketRef = useRef<TicketHandle | null>(null);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<"positions" | "orders" | "history" | "account">("positions");
@@ -189,6 +205,28 @@ export default function TradingTerminal({ venue }: { venue: "delta" | "forex" })
     };
     void pull();
     const t = setInterval(pull, 5_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [symbol, api]);
+
+  // The tape polls on its own, slower than the book: it is a longer request and
+  // a print older than a few seconds is still a print, whereas a stale book
+  // would mislead the fill estimate on the ticket.
+  useEffect(() => {
+    if (!symbol) return undefined;
+    let live = true;
+    const pull = async () => {
+      try {
+        const t = (await api(`trades?symbol=${encodeURIComponent(symbol)}&limit=32`)) as unknown as Tape;
+        if (live) setTape(t);
+      } catch {
+        if (live) setTape(null);
+      }
+    };
+    void pull();
+    const t = setInterval(pull, 9_000);
     return () => {
       live = false;
       clearInterval(t);
@@ -264,7 +302,7 @@ export default function TradingTerminal({ venue }: { venue: "delta" | "forex" })
         </DeskBanner>
       ) : null}
 
-      <AccountStrip acct={acct} venue={v} stats={snap!.stats ?? {}} />
+      <AccountStrip acct={acct} venue={v} stats={snap!.stats ?? {}} bookAsOf={book?.asOf ?? null} />
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 330px", gap: "var(--desk-space-4)", alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--desk-space-4)", minWidth: 0 }}>
@@ -318,11 +356,14 @@ export default function TradingTerminal({ venue }: { venue: "delta" | "forex" })
               venue={v}
               accountLeverage={acct.account.leverage}
               freeMargin={acct.freeMargin}
+              equity={acct.equity}
               busy={busy}
+              book={book}
+              ref={ticketRef}
               onPlace={(payload) => act("order", payload, "Order accepted.")}
             />
           ) : null}
-          <BookLadder book={book} inst={instrument} />
+          <MarketDepth book={book} tape={tape} inst={instrument} onPick={(p) => ticketRef.current?.applyPrice(p)} />
         </div>
       </div>
 
@@ -345,7 +386,9 @@ export default function TradingTerminal({ venue }: { venue: "delta" | "forex" })
               rows={snap!.positions ?? []}
               venue={v}
               busy={busy}
-              onClose={(positionId) => act("close", { positionId }, "Position closed.")}
+              onClose={(positionId, size) =>
+                act("close", size === undefined ? { positionId } : { positionId, size }, size === undefined ? "Position closed." : `Closed ${size}.`)
+              }
               onModify={(positionId, patch) => act("modify", { positionId, ...patch }, "Levels updated.")}
             />
           ) : null}
@@ -388,64 +431,103 @@ export default function TradingTerminal({ venue }: { venue: "delta" | "forex" })
 
 // ── account strip ───────────────────────────────────────────────────────────
 
+/**
+ * The account hero.
+ *
+ * One dense strip rather than eight cards: on a trading screen the account
+ * summary is glanced at between decisions, and a grid of large tiles pushes the
+ * chart and the ticket — the things being decided with — below the fold.
+ */
 function AccountStrip({
   acct,
   venue,
   stats,
+  bookAsOf,
 }: {
   acct: NonNullable<Snapshot["account"]>;
   venue: VenueMeta;
   stats: Record<string, number | null>;
+  bookAsOf: number | null;
 }) {
   const level = acct.marginLevelPct;
-  const levelTone =
-    level === null ? "" : level < venue.stopOutLevelPct ? "desk-pnl-negative" : level < venue.marginCallLevelPct ? "" : "desk-pnl-positive";
+  const levelTone: "success" | "error" | "warning" | null =
+    level === null
+      ? null
+      : level < venue.stopOutLevelPct
+        ? "error"
+        : level < venue.marginCallLevelPct
+          ? "warning"
+          : "success";
+  const pnl = acct.equity - acct.account.startingBalance;
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "var(--desk-space-3)" }}>
-      <DeskMetricTile label="Balance" value={usd(acct.balance)} detail="realised cash" compact />
-      <DeskMetricTile
-        label="Equity"
-        value={usd(acct.equity)}
-        detail="balance + open P&L"
-        valueClassName={pnlClass(acct.equity - acct.account.startingBalance)}
-        compact
-      />
-      <DeskMetricTile
-        label="Unrealised"
-        value={usd(acct.unrealisedPnlUsd)}
-        detail="net of exit costs"
-        valueClassName={pnlClass(acct.unrealisedPnlUsd)}
-        compact
-        title="Marked at the price the position would CLOSE at — a long exits on the bid — and net of the fees and carry already accrued."
-      />
-      <DeskMetricTile label="Used margin" value={usd(acct.usedMargin)} detail={`${acct.openPositions} open`} compact />
-      <DeskMetricTile label="Free margin" value={usd(acct.freeMargin)} detail="available to commit" compact />
-      <DeskMetricTile
-        label="Margin level"
-        value={level === null ? "—" : `${level.toFixed(1)}%`}
-        detail={venue.stopOutLevelPct > 0 ? `stop out at ${venue.stopOutLevelPct}%` : "no account-wide stop out"}
-        valueClassName={levelTone}
-        compact
-        title={
-          venue.stopOutLevelPct > 0
-            ? "Equity over used margin. Below the stop-out level the desk closes the worst position and re-checks, repeating until the level recovers."
-            : "This venue liquidates position by position against maintenance margin rather than on an account-wide level."
-        }
-      />
-      <DeskMetricTile
-        label="Closed trades"
-        value={String(stats.trades ?? 0)}
-        detail={stats.winRate !== null && stats.winRate !== undefined ? `${stats.winRate}% won` : "none yet"}
-        compact
-      />
-      <DeskMetricTile
-        label="Realised P&L"
-        value={usd(stats.netPnlUsd ?? 0)}
-        detail={stats.profitFactor ? `PF ${stats.profitFactor}` : "—"}
-        valueClassName={pnlClass(stats.netPnlUsd ?? 0)}
-        compact
-      />
-    </div>
+    <section className="tk-panel tk-grid" style={{ padding: "14px 18px" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(104px, 1fr))",
+          gap: 16,
+          alignItems: "start",
+        }}
+      >
+        <Stat
+          label="Equity"
+          value={<Ticking value={acct.equity} format={(x) => usd(x)} />}
+          sub={`${pnl >= 0 ? "+" : ""}${usd(pnl)} all time`}
+          tone={pnl > 0 ? "success" : pnl < 0 ? "error" : null}
+        />
+        <Stat label="Balance" value={usd(acct.balance)} sub="realised cash" />
+        <Stat
+          label="Unrealised"
+          value={<Ticking value={acct.unrealisedPnlUsd} format={(x) => usd(x)} />}
+          sub="net of exit costs"
+          tone={acct.unrealisedPnlUsd > 0 ? "success" : acct.unrealisedPnlUsd < 0 ? "error" : null}
+          title="Marked at the price the position would CLOSE at — a long exits on the bid — and net of the fees and carry already accrued."
+        />
+        <Stat label="Used margin" value={usd(acct.usedMargin)} sub={`${acct.openPositions} open`} />
+        <Stat label="Free margin" value={usd(acct.freeMargin)} sub="available" />
+        <div>
+          <Stat
+            label="Margin level"
+            value={level === null ? "—" : `${level.toFixed(1)}%`}
+            tone={levelTone}
+            title={
+              venue.stopOutLevelPct > 0
+                ? "Equity over used margin. Below the stop-out level the desk closes the worst position and re-checks, repeating until the level recovers."
+                : "This venue liquidates position by position against maintenance margin rather than on an account-wide level."
+            }
+          />
+          {level !== null && venue.stopOutLevelPct > 0 ? (
+            <div style={{ marginTop: 4 }}>
+              {/* Scaled against 5x the stop-out level, so the bar is nearly full
+                  at a comfortable margin and visibly draining as it approaches
+                  the threshold that actually closes positions. */}
+              <Meter
+                pct={Math.min(100, (level / (venue.stopOutLevelPct * 5)) * 100)}
+                tone={levelTone === "error" ? "error" : levelTone === "warning" ? "warning" : "success"}
+                title={`Stop out at ${venue.stopOutLevelPct}%`}
+              />
+            </div>
+          ) : null}
+        </div>
+        <Stat
+          label="Realised"
+          value={usd(stats.netPnlUsd ?? 0)}
+          sub={`${stats.trades ?? 0} trades${stats.winRate != null ? ` · ${stats.winRate}% won` : ""}`}
+          tone={(stats.netPnlUsd ?? 0) > 0 ? "success" : (stats.netPnlUsd ?? 0) < 0 ? "error" : null}
+        />
+        <Stat
+          label="Feed"
+          value={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <LiveDot asOfMs={bookAsOf ? bookAsOf * 1000 : null} />
+              <span style={{ fontSize: "0.8rem" }}>{bookAsOf ? "live" : "—"}</span>
+            </span>
+          }
+          sub="book age"
+        />
+      </div>
+    </section>
   );
 }
 
@@ -520,9 +602,12 @@ function TickerStrip({ inst }: { inst: Instrument }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "center", marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--desk-outline-variant)" }}>
       <div>
-        <div style={{ fontWeight: 800, fontSize: "1.35rem", fontFamily: "var(--desk-font-mono)" }}>
-          {px(inst.last, inst.pricePrecision)}
-        </div>
+        <Ticking
+          as="div"
+          value={inst.last}
+          format={(v) => px(v, inst.pricePrecision)}
+          className="tk-num-lg"
+        />
         <div className={pnlClass(inst.change24hPct)} style={{ fontSize: "0.8125rem", fontWeight: 600 }}>
           {pct(inst.change24hPct, 2)} · 24h
         </div>
@@ -542,11 +627,21 @@ function TickerStrip({ inst }: { inst: Instrument }) {
       <Field label="24h High" value={px(inst.high24h, inst.pricePrecision)} />
       <Field label="24h Low" value={px(inst.low24h, inst.pricePrecision)} />
       {inst.carryKind === "funding" ? (
-        <Field
-          label="Funding / 8h"
-          value={inst.fundingRatePct8h === null ? "—" : `${inst.fundingRatePct8h.toFixed(4)}%`}
-          title="Published by the venue. Positive means longs pay shorts, every eight hours."
-        />
+        <>
+          <Field
+            label="Funding / 8h"
+            value={inst.fundingRatePct8h === null ? "—" : `${inst.fundingRatePct8h.toFixed(4)}%`}
+            title="Published by the venue. Positive means longs pay shorts, every eight hours."
+          />
+          <div title="Funding settles at the stamp, not pro-rata — a position opened a minute before one still pays a full interval.">
+            <div className="desk-label-md" style={{ fontWeight: 400, opacity: 0.65, fontSize: "0.6875rem" }}>
+              Next funding
+            </div>
+            <div style={{ fontSize: "0.875rem" }}>
+              <FundingCountdown />
+            </div>
+          </div>
+        </>
       ) : (
         <Field
           label="Swap L/S (modelled)"
@@ -705,73 +800,160 @@ function PriceChart({
   );
 }
 
-// ── order book ──────────────────────────────────────────────────────────────
+// ── market depth: ladder, cumulative curve, imbalance and tape ──────────────
 
-function BookLadder({ book, inst }: { book: Book | null; inst: Instrument | null }) {
+function MarketDepth({
+  book,
+  tape,
+  inst,
+  onPick,
+}: {
+  book: Book | null;
+  tape: Tape | null;
+  inst: Instrument | null;
+  onPick: (p: number) => void;
+}) {
+  const [view, setView] = useState<"book" | "tape">("book");
+
   if (!book || !inst) {
     return (
-      <DeskCard padding="md">
+      <Panel title="Market depth">
         <div className="desk-label-md" style={{ opacity: 0.6 }}>
           No order book available for this instrument right now.
         </div>
-      </DeskCard>
+      </Panel>
     );
   }
-  const maxSize = Math.max(...book.bids.map((b) => b.size), ...book.asks.map((a) => a.size), 1);
-  const spread = (book.asks[0]?.price ?? 0) - (book.bids[0]?.price ?? 0);
+
+  const bids = book.bids.slice(0, 9);
+  const asks = book.asks.slice(0, 9);
+  const maxSize = Math.max(...bids.map((b) => b.size), ...asks.map((a) => a.size), 1);
+  const spread = (asks[0]?.price ?? 0) - (bids[0]?.price ?? 0);
+
+  // Imbalance over the VISIBLE ladder rather than the touch alone: one large
+  // order at the best price is noise, and the shape of the near book is the
+  // reading people actually mean by "bid heavy".
+  const bidVol = bids.reduce((t, b) => t + b.size, 0);
+  const askVol = asks.reduce((t, a) => t + a.size, 0);
+  const imbalance = bidVol + askVol > 0 ? (bidVol - askVol) / (bidVol + askVol) : 0;
 
   const Row = ({ price, size, side }: { price: number; size: number; side: "bid" | "ask" }) => (
-    <div style={{ position: "relative", display: "flex", justifyContent: "space-between", padding: "2px 8px", fontSize: "0.75rem", fontFamily: "var(--desk-font-mono)" }}>
-      <div
-        aria-hidden
+    <div
+      className="tk-book-row"
+      onClick={() => onPick(price)}
+      title={`Click to load ${px(price, inst.pricePrecision)} into the ticket's limit price`}
+    >
+      <span
+        className="tk-book-depth"
         style={{
-          position: "absolute",
-          inset: 0,
           width: `${Math.min(100, (size / maxSize) * 100)}%`,
-          background: side === "bid" ? "rgba(22,163,74,0.13)" : "rgba(220,38,38,0.13)",
           [side === "bid" ? "left" : "right"]: 0,
+          background: side === "bid" ? "color-mix(in srgb, var(--desk-success) 16%, transparent)" : "color-mix(in srgb, var(--desk-error) 16%, transparent)",
         }}
       />
-      <span style={{ position: "relative", color: side === "bid" ? "var(--desk-success)" : "var(--desk-error)" }}>
+      <span className="tk-num" style={{ position: "relative", color: side === "bid" ? "var(--desk-success)" : "var(--desk-error)" }}>
         {px(price, inst.pricePrecision)}
       </span>
-      <span style={{ position: "relative", opacity: 0.75 }}>{size.toLocaleString()}</span>
+      <span className="tk-num" style={{ position: "relative", opacity: 0.75 }}>{size.toLocaleString()}</span>
+      <span />
     </div>
   );
 
   return (
-    <DeskCard padding="md">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span className="desk-label-md" style={{ fontWeight: 700 }}>
-          Order book
-        </span>
-        {book.modelled ? (
-          <DeskChip
-            tone="warning"
-            title="This venue publishes no depth. The ladder is a synthetic decay around a real mid price and exists so the ticket has a bid and an ask — it is not anyone's resting liquidity."
+    <Panel
+      title="Market depth"
+      padding={0}
+      actions={
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {book.modelled ? (
+            <DeskChip tone="warning" title="This venue publishes no depth. The ladder is a synthetic decay around a real mid price and exists so the ticket has a bid and an ask — it is not anyone's resting liquidity.">
+              modelled
+            </DeskChip>
+          ) : (
+            <DeskChip tone="success" title="Real resting depth, straight from the venue.">live</DeskChip>
+          )}
+          <Segmented
+            size="sm"
+            options={[
+              { key: "book", label: "Book" },
+              { key: "tape", label: "Tape" },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+        </div>
+      }
+    >
+      {view === "book" ? (
+        <div>
+          <div style={{ padding: "8px 12px 4px" }}>
+            <SplitMeter
+              value={imbalance}
+              title={`Resting size across the visible ladder is ${(Math.abs(imbalance) * 100).toFixed(0)}% skewed to the ${imbalance >= 0 ? "bid" : "ask"}.`}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.62rem", opacity: 0.62, marginTop: 3 }}>
+              <span style={{ color: "var(--desk-success)" }}>{bidVol.toLocaleString()} bid</span>
+              <span>{imbalance >= 0 ? "bid" : "ask"} heavy {(Math.abs(imbalance) * 100).toFixed(0)}%</span>
+              <span style={{ color: "var(--desk-error)" }}>{askVol.toLocaleString()} ask</span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column-reverse" }}>
+            {asks.map((a, i) => <Row key={`a${i}`} price={a.price} size={a.size} side="ask" />)}
+          </div>
+          <div
+            style={{
+              padding: "6px 12px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: "0.72rem",
+              borderTop: "1px solid var(--desk-outline-variant)",
+              borderBottom: "1px solid var(--desk-outline-variant)",
+              margin: "3px 0",
+              background: "var(--desk-surface-container)",
+            }}
           >
-            modelled
-          </DeskChip>
-        ) : (
-          <DeskChip tone="success" title="Real resting depth, straight from the venue.">
-            live depth
-          </DeskChip>
-        )}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column-reverse" }}>
-        {book.asks.slice(0, 8).map((a, i) => (
-          <Row key={`a${i}`} price={a.price} size={a.size} side="ask" />
-        ))}
-      </div>
-      <div style={{ padding: "6px 8px", textAlign: "center", fontSize: "0.75rem", opacity: 0.7, borderTop: "1px solid var(--desk-outline-variant)", borderBottom: "1px solid var(--desk-outline-variant)", margin: "4px 0" }}>
-        spread {px(spread, inst.pricePrecision)}
-      </div>
-      <div>
-        {book.bids.slice(0, 8).map((b, i) => (
-          <Row key={`b${i}`} price={b.price} size={b.size} side="bid" />
-        ))}
-      </div>
-    </DeskCard>
+            <span style={{ opacity: 0.65 }}>spread</span>
+            <span className="tk-num" style={{ fontWeight: 700 }}>
+              {px(spread, inst.pricePrecision)}
+              <span style={{ opacity: 0.6, fontWeight: 400 }}> · {inst.tickSize > 0 ? (spread / inst.tickSize).toFixed(1) : "—"} ticks</span>
+            </span>
+          </div>
+          <div>
+            {bids.map((b, i) => <Row key={`b${i}`} price={b.price} size={b.size} side="bid" />)}
+          </div>
+
+          <div style={{ padding: "10px 12px 4px", borderTop: "1px solid var(--desk-outline-variant)", marginTop: 4 }}>
+            <DepthChart bids={book.bids.slice(0, 60)} asks={book.asks.slice(0, 60)} height={78} precision={inst.pricePrecision} />
+          </div>
+        </div>
+      ) : (
+        <div style={{ maxHeight: 380, overflowY: "auto" }}>
+          {tape?.derived ? (
+            <div style={{ padding: "7px 12px", fontSize: "0.64rem", color: "var(--desk-warning)", lineHeight: 1.45 }}>
+              Reconstructed from 1-minute bars — this venue publishes no public tape, so each row is one
+              closed minute rather than an executed print.
+            </div>
+          ) : null}
+          {(tape?.trades ?? []).length === 0 ? (
+            <div style={{ padding: 12, opacity: 0.6, fontSize: "0.75rem" }}>No recent prints.</div>
+          ) : (
+            (tape?.trades ?? []).map((t, i) => (
+              <div key={`${t.at}-${i}`} className="tk-tape-row">
+                <span className="tk-num" style={{ color: t.side === "buy" ? "var(--desk-success)" : "var(--desk-error)" }}>
+                  {px(t.price, inst.pricePrecision)}
+                </span>
+                <span className="tk-num" style={{ opacity: 0.75 }}>{t.size.toLocaleString()}</span>
+                <span className="tk-num" style={{ opacity: 0.45, fontSize: "0.62rem" }}>
+                  {new Date(t.at * 1000).toLocaleTimeString(undefined, { hour12: false })}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </Panel>
   );
 }
 
@@ -791,19 +973,28 @@ type TicketPayload = {
   postOnly: boolean;
 };
 
+/** What the ladder can ask the ticket to do when a level is clicked. */
+export type TicketHandle = { applyPrice: (price: number) => void };
+
 function OrderTicket({
   inst,
   venue,
   accountLeverage,
   freeMargin,
+  equity,
   busy,
+  book,
+  ref,
   onPlace,
 }: {
   inst: Instrument;
   venue: VenueMeta;
   accountLeverage: number;
   freeMargin: number;
+  equity: number;
   busy: boolean;
+  book: Book | null;
+  ref?: React.Ref<TicketHandle>;
   onPlace: (p: TicketPayload) => void;
 }) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -816,12 +1007,74 @@ function OrderTicket({
   const [sl, setSl] = useState("");
   const [reduceOnly, setReduceOnly] = useState(false);
   const [postOnly, setPostOnly] = useState(false);
+  /** When set, size is DERIVED from this risk budget and the stop distance. */
+  const [riskPct, setRiskPct] = useState<number | null>(null);
 
-  const sizeNum = Number(size) || 0;
+  /**
+   * A price clicked in the ladder lands in whichever box is currently in play.
+   *
+   * Exposed imperatively rather than passed down as a `pickedPrice` prop and
+   * synced with an effect. Clicking a level is an EVENT, not a piece of state
+   * the ticket should mirror — syncing it meant the parent had to hold the
+   * value, hand it over, and then be told to clear it, with a render in between
+   * where the ticket and the parent disagreed about what was in the box.
+   */
+  useImperativeHandle(
+    ref,
+    () => ({
+      applyPrice: (price: number) => {
+        const v = price.toFixed(inst.pricePrecision + 1);
+        setType((cur) => {
+          if (cur === "stop_market" || cur === "stop_limit") {
+            setStopPrice(v);
+            return cur;
+          }
+          setLimitPrice(v);
+          // A click on the ladder is a request for a resting order; leaving the
+          // ticket on Market would ignore the price just chosen.
+          return cur === "market" ? "limit" : cur;
+        });
+      },
+    }),
+    [inst.pricePrecision],
+  );
+
   const lev = Math.min(leverage, inst.maxLeverage);
-  const refPrice = type === "limit" || type === "stop_limit" ? Number(limitPrice) || inst.ask : side === "buy" ? inst.ask : inst.bid;
+  const refPrice =
+    type === "limit" || type === "stop_limit"
+      ? Number(limitPrice) || inst.ask
+      : type === "stop_market"
+        ? Number(stopPrice) || inst.ask
+        : side === "buy"
+          ? inst.ask
+          : inst.bid;
 
-  // Estimated up front, so the trader sees the commitment before committing.
+  const slNum = sl.trim() === "" ? null : Number(sl);
+
+  /**
+   * RISK-BASED SIZING.
+   *
+   * The box a trader actually wants: "risk 1% of the account on this idea" —
+   * the size falls out of the stop distance rather than being guessed and then
+   * checked. It needs a stop, so it is disabled without one rather than
+   * silently sizing off something else, and it recomputes whenever either input
+   * moves.
+   */
+  const derivedSize = useMemo(() => {
+    if (riskPct === null || slNum === null || !(refPrice > 0)) return null;
+    const stopDist = Math.abs(refPrice - slNum);
+    if (!(stopDist > 0)) return null;
+    const riskUsd = (equity * riskPct) / 100;
+    const perUnit = stopDist * inst.contractSize;
+    if (!(perUnit > 0)) return null;
+    const raw = riskUsd / perUnit;
+    const stepped = Math.floor(raw / inst.sizeStep) * inst.sizeStep;
+    const rounded = Math.round(stepped * 1e8) / 1e8;
+    return rounded >= inst.minSize ? rounded : null;
+  }, [riskPct, slNum, refPrice, equity, inst.contractSize, inst.sizeStep, inst.minSize]);
+
+  const sizeNum = derivedSize ?? (Number(size) || 0);
+
   const notional = sizeNum * inst.contractSize * refPrice;
   const margin = lev > 0 ? notional / lev : notional;
   const fee = notional * inst.takerFeeRate + inst.commissionPerLotUsd * sizeNum;
@@ -834,72 +1087,157 @@ function OrderTicket({
       : null;
   const affordable = margin <= freeMargin;
 
-  const numOrNull = (s: string) => (s.trim() === "" ? null : Number(s));
+  // What a market order of this size would ACTUALLY average, walked through the
+  // book on screen. Shown before the click rather than discovered after it.
+  const estFill = useMemo(() => {
+    if (type !== "market" || !book || !(sizeNum > 0)) return null;
+    const levels = side === "buy" ? book.asks : book.bids;
+    if (levels.length === 0) return null;
+    let remaining = sizeNum;
+    let cost = 0;
+    for (const l of levels) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, l.size);
+      cost += take * l.price;
+      remaining -= take;
+    }
+    const filled = sizeNum - remaining;
+    if (filled <= 0) return null;
+    const avg = cost / filled;
+    const touch = levels[0]!.price;
+    return { avg, slipPts: inst.tickSize > 0 ? Math.abs(avg - touch) / inst.tickSize : 0, short: remaining > 0 };
+  }, [type, book, sizeNum, side, inst.tickSize]);
+
+  const riskUsd = slNum !== null && refPrice > 0 ? Math.abs(refPrice - slNum) * sizeNum * inst.contractSize : null;
+  const rewardUsd =
+    tp.trim() !== "" && refPrice > 0 ? Math.abs(Number(tp) - refPrice) * sizeNum * inst.contractSize : null;
+  const rr = riskUsd && rewardUsd && riskUsd > 0 ? rewardUsd / riskUsd : null;
+
+  const numOrNull = (x: string) => (x.trim() === "" ? null : Number(x));
+
+  const submit = useCallback(() => {
+    onPlace({
+      symbol: inst.symbol,
+      side,
+      type,
+      size: sizeNum,
+      limitPrice: numOrNull(limitPrice),
+      stopPrice: numOrNull(stopPrice),
+      leverage: lev,
+      takeProfit: numOrNull(tp),
+      stopLoss: numOrNull(sl),
+      reduceOnly,
+      postOnly,
+    });
+  }, [onPlace, inst.symbol, side, type, sizeNum, limitPrice, stopPrice, lev, tp, sl, reduceOnly, postOnly]);
+
+  /**
+   * Hotkeys.
+   *
+   * Bound on the window but ignored while a field has focus — otherwise typing
+   * "0.5" into the size box would flip the side to Sell on the "s". That guard
+   * is the whole reason terminal hotkeys are usually more annoying than useful.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "b") { setSide("buy"); e.preventDefault(); }
+      else if (k === "s") { setSide("sell"); e.preventDefault(); }
+      else if (k === "m") { setType("market"); e.preventDefault(); }
+      else if (k === "l") { setType("limit"); e.preventDefault(); }
+      else if (k === "enter" && !busy && sizeNum > 0) { submit(); e.preventDefault(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, sizeNum, submit]);
 
   return (
-    <DeskCard padding="md">
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        {(["buy", "sell"] as const).map((s) => (
+    <Panel
+      title="Order ticket"
+      accent
+      actions={
+        <span style={{ display: "flex", gap: 4, alignItems: "center", opacity: 0.7 }} title="Hotkeys work when no field has focus">
+          <Kbd>B</Kbd><Kbd>S</Kbd><Kbd>M</Kbd><Kbd>L</Kbd><Kbd>⏎</Kbd>
+        </span>
+      }
+    >
+      <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>
+        {(["buy", "sell"] as const).map((sd) => (
           <button
-            key={s}
+            key={sd}
             type="button"
-            onClick={() => setSide(s)}
-            style={{
-              flex: 1,
-              minHeight: 42,
-              borderRadius: "var(--desk-radius-button)",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: "0.875rem",
-              background:
-                side === s ? (s === "buy" ? "var(--desk-success-container)" : "var(--desk-error-container)") : "var(--desk-surface-container)",
-              color: side === s ? (s === "buy" ? "var(--desk-success)" : "var(--desk-error)") : "var(--desk-on-surface-variant)",
-            }}
+            className="tk-side-btn"
+            data-side={sd}
+            data-active={side === sd}
+            onClick={() => setSide(sd)}
           >
-            {s === "buy" ? "Buy / Long" : "Sell / Short"}
+            {sd === "buy" ? "Buy / Long" : "Sell / Short"}
           </button>
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 4, marginBottom: 12, flexWrap: "wrap" }}>
-        {[
-          { k: "market", l: "Market" },
-          { k: "limit", l: "Limit" },
-          { k: "stop_market", l: "Stop" },
-          { k: "stop_limit", l: "Stop-Limit" },
-        ].map((t) => (
-          <button
-            key={t.k}
-            type="button"
-            onClick={() => setType(t.k)}
-            style={{
-              padding: "4px 10px",
-              minHeight: 30,
-              borderRadius: "var(--desk-radius-chip)",
-              border: `1px solid ${t.k === type ? "transparent" : "var(--desk-outline)"}`,
-              background: t.k === type ? "var(--desk-primary-container)" : "transparent",
-              color: t.k === type ? "var(--desk-on-primary-container)" : "var(--desk-on-surface-variant)",
-              fontSize: "0.75rem",
-              fontWeight: t.k === type ? 700 : 500,
-              cursor: "pointer",
-            }}
-          >
-            {t.l}
-          </button>
-        ))}
+      <div style={{ marginBottom: 12 }}>
+        <Segmented
+          size="sm"
+          options={[
+            { key: "market", label: "Market" },
+            { key: "limit", label: "Limit" },
+            { key: "stop_market", label: "Stop" },
+            { key: "stop_limit", label: "Stop-Limit" },
+          ]}
+          value={type}
+          onChange={setType}
+        />
       </div>
 
-      <Input label={`Size (${inst.sizeUnit})`} value={size} onChange={setSize} hint={`min ${inst.minSize}, step ${inst.sizeStep}`} />
+      {/* Risk-based sizing. Off by default, because a trader who types a size
+          means that size — the toggle is opt-in rather than a mode the ticket
+          silently starts in. */}
+      <div style={{ marginBottom: 10 }}>
+        <div className="desk-label-md" style={{ fontWeight: 400, opacity: 0.7, fontSize: "0.66rem", marginBottom: 4 }}>
+          Size by risk {riskPct !== null && derivedSize === null ? <span style={{ color: "var(--desk-warning)" }}>· needs a stop loss</span> : null}
+        </div>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <button type="button" className="tk-seg-btn" aria-pressed={riskPct === null} onClick={() => setRiskPct(null)} style={{ minHeight: 28, fontSize: "0.68rem", border: "1px solid var(--desk-outline)" }}>
+            manual
+          </button>
+          {[0.5, 1, 2, 5].map((r) => (
+            <button
+              key={r}
+              type="button"
+              className="tk-seg-btn"
+              aria-pressed={riskPct === r}
+              onClick={() => setRiskPct(r)}
+              title={`Risk ${r}% of ${usd(equity)} equity to the stop — the size follows from the stop distance`}
+              style={{ minHeight: 28, fontSize: "0.68rem", border: "1px solid var(--desk-outline)" }}
+            >
+              {r}%
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {riskPct !== null && derivedSize !== null ? (
+        <div style={{ marginBottom: 8, padding: "7px 10px", borderRadius: 8, background: "var(--desk-surface-container)", fontSize: "0.72rem" }}>
+          Risking <strong className="tk-num">{usd((equity * riskPct) / 100)}</strong> → size{" "}
+          <strong className="tk-num">{derivedSize}</strong> {inst.sizeUnit}
+        </div>
+      ) : (
+        <Input label={`Size (${inst.sizeUnit})`} value={size} onChange={setSize} hint={`min ${inst.minSize}, step ${inst.sizeStep}`} />
+      )}
+
       {(type === "limit" || type === "stop_limit") && (
-        <Input label="Limit price" value={limitPrice} onChange={setLimitPrice} hint={`tick ${inst.tickSize}`} />
+        <Input label="Limit price" value={limitPrice} onChange={setLimitPrice} hint="click the ladder to fill" />
       )}
       {(type === "stop_market" || type === "stop_limit") && (
         <Input label="Stop price" value={stopPrice} onChange={setStopPrice} hint="triggers on touch" />
       )}
 
       <div style={{ margin: "10px 0" }}>
-        <div className="desk-label-md" style={{ fontWeight: 400, opacity: 0.7, marginBottom: 4 }}>
+        <div className="desk-label-md" style={{ fontWeight: 400, opacity: 0.7, marginBottom: 4, fontSize: "0.66rem" }}>
           Leverage — max {inst.maxLeverage}x here
         </div>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -909,18 +1247,10 @@ function OrderTicket({
               <button
                 key={l}
                 type="button"
+                className="tk-seg-btn"
+                aria-pressed={l === lev}
                 onClick={() => setLeverage(l)}
-                style={{
-                  padding: "3px 9px",
-                  minHeight: 28,
-                  borderRadius: "var(--desk-radius-chip)",
-                  border: `1px solid ${l === lev ? "transparent" : "var(--desk-outline)"}`,
-                  background: l === lev ? "var(--desk-primary-container)" : "transparent",
-                  color: l === lev ? "var(--desk-on-primary-container)" : "var(--desk-on-surface-variant)",
-                  fontSize: "0.6875rem",
-                  fontWeight: l === lev ? 700 : 500,
-                  cursor: "pointer",
-                }}
+                style={{ minHeight: 27, fontSize: "0.66rem", padding: "2px 9px", border: "1px solid var(--desk-outline)" }}
               >
                 {l}x
               </button>
@@ -934,7 +1264,7 @@ function OrderTicket({
       </div>
 
       {venue.id === "delta" ? (
-        <div style={{ display: "flex", gap: 14, margin: "10px 0", fontSize: "0.75rem" }}>
+        <div style={{ display: "flex", gap: 14, margin: "8px 0", fontSize: "0.72rem" }}>
           <label style={{ display: "flex", gap: 5, alignItems: "center", cursor: "pointer" }}>
             <input type="checkbox" checked={reduceOnly} onChange={(e) => setReduceOnly(e.target.checked)} />
             Reduce only
@@ -952,15 +1282,38 @@ function OrderTicket({
           borderRadius: "var(--desk-radius-chip)",
           padding: "10px 12px",
           margin: "12px 0",
-          fontSize: "0.75rem",
+          fontSize: "0.73rem",
           display: "flex",
           flexDirection: "column",
           gap: 4,
         }}
       >
+        {estFill ? (
+          <Est
+            label="Est. fill"
+            value={`${px(estFill.avg, inst.pricePrecision)}`}
+            warn={estFill.short}
+            title={
+              estFill.short
+                ? "The visible book cannot cover this size — the order would be refused rather than filled beyond published depth."
+                : `Walked through the book on screen: ${estFill.slipPts.toFixed(1)} ticks of slippage against the touch.`
+            }
+          />
+        ) : null}
         <Est label="Notional" value={usd(notional)} />
         <Est label="Margin required" value={usd(margin)} warn={!affordable} />
         <Est label={inst.commissionPerLotUsd > 0 ? "Fee + commission" : "Fee"} value={usd(fee, 4)} />
+        {riskUsd !== null ? (
+          <Est label="Risk to stop" value={usd(riskUsd)} title="What this position loses if the stop fills exactly." />
+        ) : null}
+        {rr !== null ? (
+          <Est
+            label="Reward : risk"
+            value={`${rr.toFixed(2)} : 1`}
+            warn={rr < 1}
+            title="Gross of costs — the fee and any carry come out of the reward side."
+          />
+        ) : null}
         <Est
           label="Liquidation"
           value={liq === null ? "n/a on this venue" : px(liq, inst.pricePrecision)}
@@ -973,43 +1326,20 @@ function OrderTicket({
       </div>
 
       {!affordable ? (
-        <p className="desk-label-md" style={{ fontWeight: 400, color: "var(--desk-error)", marginBottom: 8 }}>
+        <p className="desk-label-md" style={{ fontWeight: 400, color: "var(--desk-error)", marginBottom: 8, fontSize: "0.7rem" }}>
           Free margin is {usd(freeMargin)}; this needs {usd(margin)}.
         </p>
       ) : null}
 
-      <DeskButton
-        variant="filled"
-        disabled={busy || !(sizeNum > 0)}
-        style={{
-          width: "100%",
-          background: side === "buy" ? "var(--desk-success)" : "var(--desk-error)",
-          color: "#fff",
-        }}
-        onClick={() =>
-          onPlace({
-            symbol: inst.symbol,
-            side,
-            type,
-            size: sizeNum,
-            limitPrice: numOrNull(limitPrice),
-            stopPrice: numOrNull(stopPrice),
-            leverage: lev,
-            takeProfit: numOrNull(tp),
-            stopLoss: numOrNull(sl),
-            reduceOnly,
-            postOnly,
-          })
-        }
-      >
-        {busy ? "Placing…" : `${side === "buy" ? "Buy" : "Sell"} ${size} ${inst.sizeUnit}`}
-      </DeskButton>
+      <button type="button" className="tk-submit" data-side={side} disabled={busy || !(sizeNum > 0)} onClick={submit}>
+        {busy ? "Placing…" : `${side === "buy" ? "Buy" : "Sell"} ${sizeNum || 0} ${inst.sizeUnit}`}
+      </button>
 
-      <p className="desk-label-md" style={{ fontWeight: 400, opacity: 0.6, marginTop: 8, fontSize: "0.6875rem", lineHeight: 1.5 }}>
-        Paper money. A market order is walked through the book shown above and receives the
+      <p className="desk-label-md" style={{ fontWeight: 400, opacity: 0.6, marginTop: 8, fontSize: "0.66rem", lineHeight: 1.5 }}>
+        Paper money. A market order is walked through the book shown alongside and receives the
         size-weighted price it would actually have paid.
       </p>
-    </DeskCard>
+    </Panel>
   );
 }
 
@@ -1062,7 +1392,7 @@ function PositionsTable({
   rows: Row[];
   venue: VenueMeta;
   busy: boolean;
-  onClose: (id: string) => void;
+  onClose: (id: string, size?: number) => void;
   onModify: (id: string, patch: { takeProfit?: number | null; stopLoss?: number | null }) => void;
 }) {
   const cols: DeskColumn<Row>[] = [
@@ -1152,12 +1482,41 @@ function PositionsTable({
     },
     {
       id: "act",
-      header: "",
-      cell: (r) => (
-        <DeskButton variant="danger-tonal" disabled={busy} onClick={() => onClose(String(r.positionId))} style={{ minHeight: 32, padding: "0 12px", fontSize: "0.75rem" }}>
-          Close
-        </DeskButton>
-      ),
+      header: "Close",
+      cell: (r) => {
+        const full = Number(r.size);
+        // Partial closes in quarters. A trader scaling out does not want to
+        // compute 37.5% of a lot size in their head, and a free-text box for it
+        // is a keystroke away from closing the wrong amount.
+        return (
+          <div style={{ display: "flex", gap: 3 }}>
+            {[25, 50, 75].map((pctOf) => {
+              const part = Math.max(0, Math.round((full * pctOf) / 100 * 1e8) / 1e8);
+              return (
+                <button
+                  key={pctOf}
+                  type="button"
+                  className="tk-seg-btn"
+                  disabled={busy || !(part > 0)}
+                  onClick={() => onClose(String(r.positionId), part)}
+                  title={`Close ${pctOf}% — ${part} of ${full}`}
+                  style={{ minHeight: 28, padding: "0 7px", fontSize: "0.65rem", border: "1px solid var(--desk-outline)" }}
+                >
+                  {pctOf}%
+                </button>
+              );
+            })}
+            <DeskButton
+              variant="danger-tonal"
+              disabled={busy}
+              onClick={() => onClose(String(r.positionId))}
+              style={{ minHeight: 28, padding: "0 10px", fontSize: "0.7rem" }}
+            >
+              All
+            </DeskButton>
+          </div>
+        );
+      },
       sortable: false,
     },
   ];

@@ -260,3 +260,57 @@ export const deltaVenue: VenueAdapter = {
     }));
   },
 };
+
+function str(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+
+/** One executed trade off the venue's public tape. */
+export type PublicTrade = {
+  price: number;
+  size: number;
+  /** Which side crossed the spread. Inferred from who was the taker. */
+  side: "buy" | "sell";
+  at: number;
+};
+
+/**
+ * The recent trade tape.
+ *
+ * AGGRESSOR SIDE IS INFERRED FROM THE ROLES, not from the price direction.
+ * Delta reports `buyer_role` and `seller_role`; whichever is `taker` is the
+ * side that crossed the spread and therefore the side that moved. Guessing
+ * aggression from whether the print is above or below the previous one is the
+ * usual shortcut and it mislabels every trade inside the spread — which on a
+ * quiet contract is most of them.
+ */
+export async function fetchTrades(symbol: string, limit = 40): Promise<PublicTrade[]> {
+  const base = process.env.DELTA_API_BASE_URL?.trim() || "https://api.india.delta.exchange";
+  try {
+    const res = await fetch(`${base.replace(/\/+$/, "")}/v2/trades/${encodeURIComponent(symbol)}`, {
+      cache: "no-store",
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) return [];
+    const body = (await res.json()) as { result?: Array<Record<string, unknown>> };
+    const out: PublicTrade[] = [];
+    for (const t of body.result ?? []) {
+      const price = num(t.price);
+      const size = num(t.size);
+      if (price === null || size === null || price <= 0) continue;
+      out.push({
+        price,
+        size,
+        side: str(t.seller_role) === "taker" ? "sell" : "buy",
+        // Delta stamps the tape in MICROseconds. Reading it as milliseconds
+        // puts every print about fifty thousand years in the future, which
+        // renders as an empty tape rather than an obvious error.
+        at: Math.floor((num(t.timestamp) ?? 0) / 1000),
+      });
+    }
+    return out.slice(0, limit);
+  } catch {
+    return [];
+  }
+}

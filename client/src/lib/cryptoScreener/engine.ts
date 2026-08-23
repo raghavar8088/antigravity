@@ -362,6 +362,12 @@ export async function momentumBoard(opts: MomentumOpts = {}) {
 
     return {
       ...publicRow(r),
+      // A downsampled close series for the row's sparkline.
+      //
+      // Downsampled rather than sent whole: 181 closes x 220 rows is a payload
+      // several times the size of everything else on the board, to draw a line
+      // 74 pixels wide. Forty points is more than that line can resolve.
+      spark: sparkFrom(r._closes, 40),
       returnPct: ret,
       rankPct: H.round(H.percentileRank(ret, population)),
       rsBenchmark: H.round(rsBench),
@@ -404,6 +410,21 @@ export async function momentumBoard(opts: MomentumOpts = {}) {
  * so the board has a sensible default sort; the columns behind it are what a
  * decision should actually use.
  */
+/**
+ * Evenly sample a series down to at most `points`.
+ *
+ * Samples rather than truncates, so the sparkline still spans the whole window
+ * — taking the last 40 closes would silently turn a 6-month trace into a
+ * 40-day one while still being labelled 6 months.
+ */
+function sparkFrom(closes: number[], points: number): number[] {
+  if (closes.length <= points) return closes;
+  const step = (closes.length - 1) / (points - 1);
+  const out: number[] = [];
+  for (let i = 0; i < points; i++) out.push(closes[Math.round(i * step)]!);
+  return out;
+}
+
 function score(r: ScreenerRow, ret: number | null, rs: number | null): number | null {
   if (ret === null) return null;
   let s = 30;

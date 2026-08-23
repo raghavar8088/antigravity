@@ -1,0 +1,480 @@
+/*
+ * Terminal Kit — the visual layer for the trading terminals and the screener.
+ *
+ * THE CONSTRAINT THAT SHAPES ALL OF IT: this app has a real light/dark toggle
+ * (`[data-theme]`), and roughly everything below is a glow, a glass surface or
+ * a gradient — the three effects that look designed in one theme and broken in
+ * the other. So every effect is defined ONCE against the existing `--desk-*`
+ * tokens and then re-tuned under `[data-theme="dark"]`, rather than being
+ * hardcoded to a palette. Nothing here introduces a colour of its own; it
+ * introduces DEPTH, MOTION and EMPHASIS on top of the colours the app already
+ * owns.
+ *
+ * MOTION IS INFORMATION, NOT DECORATION. Every animation in this file is
+ * attached to a fact: a price flashes because it changed and in which
+ * direction, a panel pulses because the feed is live, a bar fills because a
+ * ratio moved. Nothing loops for atmosphere — on a screen people read numbers
+ * off, idle movement is noise that trains the eye to ignore the movement that
+ * matters.
+ *
+ * `prefers-reduced-motion` disables all of it at the bottom of the file.
+ */
+
+/* ── tokens ──────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Accent glows, expressed as colour-mix over existing tokens so they follow
+     the theme rather than fighting it. */
+  --tk-glow-primary: color-mix(in srgb, var(--desk-primary) 26%, transparent);
+  --tk-glow-success: color-mix(in srgb, var(--desk-success) 30%, transparent);
+  --tk-glow-error: color-mix(in srgb, var(--desk-error) 30%, transparent);
+  --tk-glow-warning: color-mix(in srgb, var(--desk-warning) 30%, transparent);
+
+  --tk-glass-bg: color-mix(in srgb, var(--desk-surface) 82%, transparent);
+  --tk-glass-border: color-mix(in srgb, var(--desk-primary) 16%, var(--desk-outline));
+  --tk-grid-line: color-mix(in srgb, var(--desk-on-surface) 5%, transparent);
+  --tk-scan: color-mix(in srgb, var(--desk-primary) 7%, transparent);
+
+  --tk-flash-up: color-mix(in srgb, var(--desk-success) 24%, transparent);
+  --tk-flash-down: color-mix(in srgb, var(--desk-error) 24%, transparent);
+}
+
+[data-theme="dark"] {
+  /* Dark carries glow far better, so it gets more of it — and the glass gets
+     darker rather than lighter, which is the mistake that makes a "glass" panel
+     read as a smudge on a dark ground. */
+  --tk-glow-primary: color-mix(in srgb, var(--desk-primary) 42%, transparent);
+  --tk-glow-success: color-mix(in srgb, var(--desk-success) 46%, transparent);
+  --tk-glow-error: color-mix(in srgb, var(--desk-error) 46%, transparent);
+  --tk-glow-warning: color-mix(in srgb, var(--desk-warning) 46%, transparent);
+
+  --tk-glass-bg: color-mix(in srgb, var(--desk-surface) 66%, transparent);
+  --tk-glass-border: color-mix(in srgb, var(--desk-primary) 28%, var(--desk-outline));
+  --tk-grid-line: color-mix(in srgb, var(--desk-on-surface) 8%, transparent);
+  --tk-scan: color-mix(in srgb, var(--desk-primary) 12%, transparent);
+
+  --tk-flash-up: color-mix(in srgb, var(--desk-success) 34%, transparent);
+  --tk-flash-down: color-mix(in srgb, var(--desk-error) 34%, transparent);
+}
+
+/* ── numerics ────────────────────────────────────────────────────────────── */
+
+/*
+ * Tabular figures on every number that updates in place.
+ *
+ * Without this, a price ticking from 76,111 to 76,999 changes WIDTH as the
+ * glyphs change, and a column of them shivers on every update. It is the
+ * single cheapest thing that separates a terminal from a web page.
+ */
+.tk-num {
+  font-family: var(--desk-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  letter-spacing: -0.01em;
+}
+
+.tk-num-lg {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+/* ── price flash ─────────────────────────────────────────────────────────── */
+
+.tk-flash {
+  border-radius: 5px;
+  padding: 0 3px;
+  margin: 0 -3px;
+  transition: background-color 120ms ease-out;
+}
+.tk-flash-up {
+  animation: tk-flash-up 620ms ease-out;
+}
+.tk-flash-down {
+  animation: tk-flash-down 620ms ease-out;
+}
+@keyframes tk-flash-up {
+  0% { background-color: var(--tk-flash-up); }
+  100% { background-color: transparent; }
+}
+@keyframes tk-flash-down {
+  0% { background-color: var(--tk-flash-down); }
+  100% { background-color: transparent; }
+}
+
+/* ── panels ──────────────────────────────────────────────────────────────── */
+
+.tk-panel {
+  position: relative;
+  background: var(--tk-glass-bg);
+  border: 1px solid var(--tk-glass-border);
+  border-radius: var(--desk-radius-card);
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  box-shadow: var(--desk-elevation-1);
+  overflow: hidden;
+}
+
+/* A one-pixel light along the top edge — the cue that reads as "screen". */
+.tk-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--desk-primary) 55%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.tk-panel-accent {
+  box-shadow: var(--desk-elevation-1), 0 0 0 1px var(--tk-glow-primary), 0 6px 26px -14px var(--tk-glow-primary);
+}
+
+/* Faint engineering grid, for the hero strip only. Kept very low contrast: it
+   is texture, and texture behind numbers is a legibility cost. */
+.tk-grid {
+  background-image:
+    linear-gradient(var(--tk-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--tk-grid-line) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+/* ── live indicator ──────────────────────────────────────────────────────── */
+
+.tk-live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--desk-success);
+  box-shadow: 0 0 0 0 var(--tk-glow-success);
+  animation: tk-pulse 2s ease-out infinite;
+}
+.tk-live-dot[data-state="stale"] {
+  background: var(--desk-warning);
+  box-shadow: 0 0 0 0 var(--tk-glow-warning);
+}
+.tk-live-dot[data-state="down"] {
+  background: var(--desk-error);
+  animation: none;
+}
+@keyframes tk-pulse {
+  0% { box-shadow: 0 0 0 0 var(--tk-glow-success); }
+  70% { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ── meters ──────────────────────────────────────────────────────────────── */
+
+.tk-meter {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--desk-surface-container);
+  overflow: hidden;
+}
+.tk-meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1), left 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A two-sided meter: the centre is parity and the fill runs out from it. Used
+   for book imbalance, where "how far from balanced, and which way" is the whole
+   reading and a left-anchored bar cannot show it. */
+.tk-meter-split .tk-meter-mid {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--desk-outline);
+  opacity: 0.8;
+}
+
+/* ── book ladder ─────────────────────────────────────────────────────────── */
+
+.tk-book-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background-color 110ms ease;
+}
+.tk-book-row:hover {
+  background: color-mix(in srgb, var(--desk-primary) 9%, transparent);
+}
+.tk-book-depth {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 3px;
+  pointer-events: none;
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── trades tape ─────────────────────────────────────────────────────────── */
+
+.tk-tape-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  padding: 1.5px 9px;
+  font-size: 0.7rem;
+  animation: tk-tape-in 260ms ease-out;
+}
+@keyframes tk-tape-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── sparkline ───────────────────────────────────────────────────────────── */
+
+.tk-spark {
+  display: block;
+  overflow: visible;
+}
+.tk-spark-line {
+  fill: none;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* ── segmented control ───────────────────────────────────────────────────── */
+
+.tk-seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--desk-radius-chip);
+  background: var(--desk-surface-container);
+  border: 1px solid var(--desk-outline-variant);
+}
+.tk-seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--desk-on-surface-variant);
+  padding: 5px 12px;
+  min-height: 32px;
+  border-radius: calc(var(--desk-radius-chip) - 3px);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+  white-space: nowrap;
+}
+.tk-seg-btn:hover:not([aria-pressed="true"]) {
+  color: var(--desk-on-surface);
+  background: color-mix(in srgb, var(--desk-on-surface) 6%, transparent);
+}
+.tk-seg-btn[aria-pressed="true"] {
+  background: var(--desk-surface);
+  color: var(--desk-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14), 0 0 0 1px var(--tk-glow-primary);
+}
+
+/* ── side buttons ────────────────────────────────────────────────────────── */
+
+.tk-side-btn {
+  position: relative;
+  flex: 1;
+  min-height: 46px;
+  border: 1px solid transparent;
+  border-radius: var(--desk-radius-button);
+  font-weight: 800;
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 120ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.tk-side-btn:active { transform: translateY(1px); }
+.tk-side-btn[data-active="true"][data-side="buy"] {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--desk-success) 22%, transparent), color-mix(in srgb, var(--desk-success) 12%, transparent));
+  color: var(--desk-success);
+  border-color: color-mix(in srgb, var(--desk-success) 45%, transparent);
+  box-shadow: 0 0 22px -8px var(--tk-glow-success), inset 0 1px 0 color-mix(in srgb, var(--desk-success) 30%, transparent);
+}
+.tk-side-btn[data-active="true"][data-side="sell"] {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--desk-error) 22%, transparent), color-mix(in srgb, var(--desk-error) 12%, transparent));
+  color: var(--desk-error);
+  border-color: color-mix(in srgb, var(--desk-error) 45%, transparent);
+  box-shadow: 0 0 22px -8px var(--tk-glow-error), inset 0 1px 0 color-mix(in srgb, var(--desk-error) 30%, transparent);
+}
+.tk-side-btn[data-active="false"] {
+  background: var(--desk-surface-container);
+  color: var(--desk-on-surface-variant);
+}
+
+.tk-submit {
+  width: 100%;
+  min-height: 48px;
+  border: none;
+  border-radius: var(--desk-radius-button);
+  font-weight: 800;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  color: #fff;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: filter 140ms ease, transform 120ms ease, box-shadow 160ms ease;
+}
+.tk-submit[data-side="buy"] {
+  background: linear-gradient(135deg, var(--desk-success), color-mix(in srgb, var(--desk-success) 72%, #000));
+  box-shadow: 0 8px 26px -12px var(--tk-glow-success);
+}
+.tk-submit[data-side="sell"] {
+  background: linear-gradient(135deg, var(--desk-error), color-mix(in srgb, var(--desk-error) 72%, #000));
+  box-shadow: 0 8px 26px -12px var(--tk-glow-error);
+}
+.tk-submit:hover:not(:disabled) { filter: brightness(1.07); }
+.tk-submit:active:not(:disabled) { transform: translateY(1px); }
+.tk-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* A sweep across the button on hover — the one purely decorative motion here,
+   and it only runs on a deliberate pointer gesture rather than on its own. */
+.tk-submit::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.26) 50%, transparent 62%);
+  transform: translateX(-110%);
+  transition: transform 620ms ease;
+}
+.tk-submit:hover:not(:disabled)::after { transform: translateX(110%); }
+
+/* ── instrument chips ────────────────────────────────────────────────────── */
+
+.tk-chip {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 7px 12px;
+  min-height: 46px;
+  border-radius: var(--desk-radius-chip);
+  border: 1px solid var(--desk-outline);
+  background: var(--desk-surface);
+  cursor: pointer;
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms ease, border-color 160ms ease;
+}
+.tk-chip:hover { transform: translateY(-1px); border-color: var(--tk-glass-border); }
+.tk-chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--desk-primary-container);
+  color: var(--desk-on-primary-container);
+  box-shadow: 0 0 0 1px var(--tk-glow-primary), 0 6px 20px -12px var(--tk-glow-primary);
+}
+
+/* ── drawer ──────────────────────────────────────────────────────────────── */
+
+.tk-drawer-scrim {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, #000 46%, transparent);
+  backdrop-filter: blur(2px);
+  z-index: 60;
+  animation: tk-fade 180ms ease-out;
+}
+.tk-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(660px, 96vw);
+  background: var(--desk-surface);
+  border-left: 1px solid var(--tk-glass-border);
+  box-shadow: -24px 0 60px -30px rgba(0, 0, 0, 0.6);
+  z-index: 61;
+  overflow-y: auto;
+  animation: tk-slide-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes tk-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tk-slide-in { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ── heatmap ─────────────────────────────────────────────────────────────── */
+
+.tk-heat-cell {
+  position: relative;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms ease;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.tk-heat-cell:hover {
+  transform: scale(1.035);
+  box-shadow: 0 8px 26px -12px rgba(0, 0, 0, 0.4);
+  z-index: 2;
+}
+
+/* ── row entrance ────────────────────────────────────────────────────────── */
+
+.tk-rise {
+  animation: tk-rise 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes tk-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── keyboard hint ───────────────────────────────────────────────────────── */
+
+.tk-kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--desk-outline);
+  border-bottom-width: 2px;
+  background: var(--desk-surface-container);
+  font-family: var(--desk-font-mono);
+  font-size: 0.64rem;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--desk-on-surface-variant);
+}
+
+/* ── reduced motion ──────────────────────────────────────────────────────── */
+
+/*
+ * Everything above is either an entrance or a state change, so removing the
+ * animation leaves the final state intact — nothing here depends on motion to
+ * become visible or readable.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .tk-flash-up,
+  .tk-flash-down,
+  .tk-live-dot,
+  .tk-tape-row,
+  .tk-rise,
+  .tk-drawer,
+  .tk-drawer-scrim {
+    animation: none !important;
+  }
+  .tk-meter-fill,
+  .tk-book-depth,
+  .tk-chip,
+  .tk-heat-cell,
+  .tk-submit::after {
+    transition: none !important;
+  }
+}

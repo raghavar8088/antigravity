@@ -412,3 +412,38 @@ export const forexVenue: VenueAdapter = {
 };
 
 export { SPECS as FOREX_SPECS };
+
+/**
+ * A trade tape DERIVED FROM 1-MINUTE BARS, because there is no public one.
+ *
+ * No free forex feed publishes a print-by-print tape, so this reconstructs one
+ * bar at a time: each closed minute becomes a single synthetic print at its
+ * close, with the side taken from whether the bar closed up or down and the
+ * size from its volume. That is enough to show the market breathing and to
+ * give the terminal a recent-price column — and it is NOT a real tape, so it
+ * is returned with `derived: true` and the UI labels it.
+ *
+ * The alternative was to leave the panel empty on this venue, which would have
+ * been honest but less useful; inventing prints and calling them trades would
+ * have been useful and dishonest. Labelling is the third option.
+ */
+export async function fetchDerivedTape(symbol: string, limit = 40): Promise<
+  { price: number; size: number; side: "buy" | "sell"; at: number }[]
+> {
+  const spec = SPECS.find((s) => s.symbol === symbol);
+  if (!spec) return [];
+  const q = await yahoo(spec.yahoo, "1d", "1m");
+  if (!q) return [];
+  const bars = q.candles.slice(-limit);
+  return bars
+    .map((c) => ({
+      price: c.close,
+      // Volume is absent on most FX series — Yahoo reports it only for futures
+      // and crypto — so it falls back to a nominal size rather than rendering
+      // every print as a zero.
+      size: c.volume > 0 ? c.volume : 1,
+      side: (c.close >= c.open ? "buy" : "sell") as "buy" | "sell",
+      at: c.time,
+    }))
+    .reverse();
+}

@@ -39,6 +39,8 @@ import {
   type PlaceParams,
 } from "@/lib/paperTrading/engine";
 import type { OrderSide, OrderType, TimeInForce } from "@/lib/paperTrading/types";
+import { fetchTrades } from "@/lib/paperTrading/venues/delta";
+import { fetchDerivedTape } from "@/lib/paperTrading/venues/forex";
 
 /**
  * A cold snapshot lists every instrument on the venue — one request for Delta,
@@ -132,12 +134,26 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
         });
       }
 
+      case "trades": {
+        const symbol = qp(req, "symbol");
+        if (!symbol) return NextResponse.json({ ok: false, error: "trades needs ?symbol=" }, { status: 400 });
+        const limit = Math.max(5, Math.min(qn(req, "limit", 40), 100));
+        // Delta publishes a real print-by-print tape. The forex venue does not,
+        // and no free feed does, so its tape is reconstructed from 1-minute
+        // bars and flagged `derived` — the UI renders the two differently
+        // rather than passing a reconstruction off as prints.
+        if (venueId === "delta") {
+          return ok({ symbol: symbol.toUpperCase(), derived: false, trades: await fetchTrades(symbol.toUpperCase(), limit) });
+        }
+        return ok({ symbol: symbol.toUpperCase(), derived: true, trades: await fetchDerivedTape(symbol.toUpperCase(), limit) });
+      }
+
       default:
         return NextResponse.json(
           {
             ok: false,
             error: `unknown read: ${action}`,
-            available: ["snapshot", "instruments", "book", "candles"],
+            available: ["snapshot", "instruments", "book", "candles", "trades"],
           },
           { status: 404 },
         );

@@ -27,7 +27,7 @@
  * approximated.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   DeskBanner,
   DeskButton,
@@ -43,6 +43,16 @@ import {
   type DeskTabItem,
 } from "@/components/desk/ui";
 import { fmtISTClock } from "@/lib/istTime";
+import {
+  Drawer,
+  heatColor,
+  LiveDot,
+  Panel,
+  Segmented,
+  Sparkline,
+  Stat,
+  Ticking,
+} from "@/components/terminalkit";
 
 // ── formatting ──────────────────────────────────────────────────────────────
 
@@ -252,7 +262,9 @@ function Basis({ children }: { children: React.ReactNode }) {
 function SymbolCell({ row }: { row: Row }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span style={{ fontWeight: 700 }}>{String(row.symbol)}</span>
+      <SymbolLink symbol={String(row.symbol)}>
+        <span style={{ fontWeight: 700 }}>{String(row.symbol)}</span>
+      </SymbolLink>
       <span className="desk-label-md" style={{ fontWeight: 400, opacity: 0.7, fontSize: "0.6875rem" }}>
         {String(row.sectorLabel ?? row.name ?? "")}
       </span>
@@ -268,6 +280,186 @@ const BUILDUP_TONE: Record<string, "success" | "error" | "warning" | "default"> 
   flat: "default",
   unclassified: "default",
 };
+
+// ── symbol detail ───────────────────────────────────────────────────────────
+
+/**
+ * Opening the per-contract drawer from anywhere on the page.
+ *
+ * The `/momentum/{symbol}` endpoint has existed since this module shipped and
+ * nothing could reach it — every horizon's reasons, the full pattern list, all
+ * three trade plans and the gate results were computed on every request and
+ * thrown away. A context rather than prop-drilling because ten different tables
+ * on ten different tabs all want the same affordance.
+ */
+const SymbolDrawerContext = createContext<(symbol: string) => void>(() => {});
+
+function SymbolLink({ symbol, children }: { symbol: string; children: React.ReactNode }) {
+  const open = useContext(SymbolDrawerContext);
+  return (
+    <button
+      type="button"
+      onClick={() => open(symbol)}
+      title={`Open ${symbol} — every horizon, why it is moving, its patterns and all three trade plans`}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: 0,
+        margin: 0,
+        font: "inherit",
+        color: "inherit",
+        cursor: "pointer",
+        textAlign: "left",
+        textDecoration: "underline",
+        textDecorationStyle: "dotted",
+        textUnderlineOffset: 3,
+        textDecorationColor: "var(--desk-outline)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+type Detail = {
+  symbol: string;
+  name: string;
+  sectorLabel: string;
+  price: number | null;
+  tags: string[];
+  bars: number;
+  atrPct: number | null;
+  realisedVol30d: number | null;
+  btcCorrelation30d: number | null;
+  btcBeta30d: number | null;
+  turnoverUsd24h: number | null;
+  funding: { ratePct8h: number | null; annualisedPct: number | null; text: string };
+  oi: { buildupLabel: string; buildup: string; text: string; oiValueUsd: number | null };
+  basis: { basisBps: number | null; state: string; text: string };
+  micro: { spreadBps: number | null; stopTicks: number | null; stopExpressible: boolean; gridNote: string; breakEvenMovePct: number | null };
+  horizons: Record<string, { label: string; returnPct: number | null; benchmarkPct: number | null; rsBenchmark: number | null; summary: string; character: string; reasons: { code: string; tier: number; text: string }[] }>;
+  patterns: Row[];
+  tradePlans: Row[];
+  gates: { kind: string; label: string; passes: boolean; whyNot: string | null }[];
+};
+
+function SymbolDetail({ symbol }: { symbol: string }) {
+  const { data, error, loading } = useBoard<Detail>(`momentum/${encodeURIComponent(symbol)}`);
+  if (loading) return <DeskLinearProgress />;
+  if (error) {
+    return (
+      <DeskBanner variant="error" title="Could not load this contract">
+        {error}
+      </DeskBanner>
+    );
+  }
+  if (!data) return null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))", gap: 12 }}>
+        <Stat label="Price" value={fmtPx(data.price)} />
+        <Stat label="24h Turnover" value={fmtCompactUsd(data.turnoverUsd24h)} />
+        <Stat label="ATR" value={data.atrPct === null ? "—" : `${data.atrPct}%`} sub="daily range" />
+        <Stat label="Realised vol" value={data.realisedVol30d === null ? "—" : `${data.realisedVol30d}%`} sub="30d annualised" />
+        <Stat
+          label="BTC corr"
+          value={data.btcCorrelation30d === null ? "—" : data.btcCorrelation30d.toFixed(2)}
+          sub={data.btcBeta30d === null ? undefined : `${data.btcBeta30d.toFixed(2)}x beta`}
+        />
+        <Stat
+          label="Stop grid"
+          value={data.micro.stopTicks === null ? "—" : `${data.micro.stopTicks}`}
+          sub="ticks"
+          tone={data.micro.stopExpressible ? "success" : "error"}
+          title={data.micro.gridNote}
+        />
+      </div>
+
+      <Panel title="Across every horizon">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {HORIZONS.map((h) => {
+            const d = data.horizons?.[h.key];
+            if (!d) return null;
+            return (
+              <div key={h.key} style={{ borderLeft: "2px solid var(--desk-outline)", paddingLeft: 12 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <span className="desk-label-md" style={{ fontWeight: 700 }}>{d.label}</span>
+                  <span className={pnlClass(d.returnPct)} style={{ fontWeight: 700 }}>{fmtPct(d.returnPct)}</span>
+                  <span style={{ opacity: 0.6, fontSize: "0.72rem" }}>
+                    vs BTC {fmtPct(d.rsBenchmark, 1)} · {d.character}
+                  </span>
+                </div>
+                <p className="desk-body-md" style={{ fontSize: "0.8rem", lineHeight: 1.5, marginTop: 4, opacity: 0.9 }}>
+                  {d.summary}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+
+      <Panel title="Positioning right now">
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: "0.8rem", lineHeight: 1.5 }}>
+          <div><strong>Open interest.</strong> {data.oi.text}</div>
+          <div><strong>Funding.</strong> {data.funding.text}</div>
+          <div><strong>Basis.</strong> {data.basis.text}</div>
+          <div><strong>Book.</strong> {data.micro.gridNote}</div>
+        </div>
+      </Panel>
+
+      <Panel title={`Trade plans — net of real Delta costs`}>
+        {data.tradePlans.length === 0 ? (
+          <span style={{ opacity: 0.6, fontSize: "0.8rem" }}>No plan could be built from this contract&apos;s levels.</span>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {data.tradePlans.map((pl, i) => {
+              const gate = data.gates?.find((g) => g.kind === pl.kind);
+              return (
+                <div key={i} style={{ padding: 10, borderRadius: 8, background: "var(--desk-surface-container)" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 5 }}>
+                    <strong style={{ fontSize: "0.82rem" }}>{String(pl.label)}</strong>
+                    <DeskChip tone={pl.worthTaking ? "success" : "warning"}>
+                      {pl.worthTaking ? "worth taking" : pl.tradable ? "does not clear costs" : "not tradable"}
+                    </DeskChip>
+                    {gate && !gate.passes ? (
+                      <span style={{ fontSize: "0.68rem", color: "var(--desk-warning)" }} title={gate.whyNot ?? ""}>
+                        gate: {gate.whyNot}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="tk-num" style={{ fontSize: "0.76rem", display: "flex", gap: 14, flexWrap: "wrap" }}>
+                    <span>entry {fmtPx(pl.entry as number)}</span>
+                    <span style={{ color: "var(--desk-error)" }}>stop {fmtPx(pl.stop as number)}</span>
+                    <span style={{ color: "var(--desk-success)" }}>target {fmtPx(pl.target as number)}</span>
+                    <span>net R:R <strong>{fmtNum(pl.netRr as number, 2)}</strong></span>
+                    <span style={{ opacity: 0.7 }}>{String(pl.stopTicks)} ticks</span>
+                  </div>
+                  <p style={{ fontSize: "0.7rem", opacity: 0.72, marginTop: 5, lineHeight: 1.45 }}>{String(pl.basis)}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
+
+      {data.patterns.length > 0 ? (
+        <Panel title={`Chart patterns (${data.patterns.length})`}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            {data.patterns.slice(0, 8).map((h, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "0.76rem", flexWrap: "wrap" }}>
+                <DeskChip tone={h.state === "TRIGGERED" ? "success" : "warning"}>{String(h.state)}</DeskChip>
+                <strong>{String(h.pattern)}</strong>
+                <span style={{ opacity: 0.65 }}>{String(h.timeframeLabel)} · {String(h.direction)}</span>
+                <span className="tk-num" style={{ opacity: 0.8 }}>R:R {fmtNum(h.rewardRisk as number, 2)}</span>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
+    </div>
+  );
+}
 
 // ── page ────────────────────────────────────────────────────────────────────
 
@@ -307,8 +499,11 @@ export default function CryptoScreenerPage() {
   }, [loadSummary]);
 
   const [reloadToken, setReloadToken] = useState(0);
+  const [drawerSymbol, setDrawerSymbol] = useState<string | null>(null);
+  const openSymbol = useCallback((sym: string) => setDrawerSymbol(sym), []);
 
   return (
+    <SymbolDrawerContext.Provider value={openSymbol}>
     <main style={{ padding: "var(--desk-space-5)", maxWidth: 1720, margin: "0 auto" }}>
       <nav className="desk-label-md" style={{ marginBottom: 10, opacity: 0.7 }}>
         Home <span aria-hidden>›</span> Crypto Screener
@@ -351,7 +546,17 @@ export default function CryptoScreenerPage() {
       <div style={{ marginTop: "var(--desk-space-4)" }}>
         <TabBody tab={tab} reloadToken={reloadToken} />
       </div>
+
+      <Drawer
+        open={drawerSymbol !== null}
+        onClose={() => setDrawerSymbol(null)}
+        title={drawerSymbol ?? ""}
+        subtitle="Every horizon, why it is moving, how it is positioned, and all three trade plans priced net of real costs."
+      >
+        {drawerSymbol ? <SymbolDetail symbol={drawerSymbol} /> : null}
+      </Drawer>
     </main>
+    </SymbolDrawerContext.Provider>
   );
 }
 
@@ -416,7 +621,16 @@ function Breadth({ s, updatedAt }: { s: Summary; updatedAt: string }) {
         <DeskMetricTile
           label={`${s.benchmark.symbol} 24h`}
           value={<Pct v={s.benchmark.returns["1d"]} />}
-          detail={s.benchmark.price !== null ? fmtUsd(s.benchmark.price, 1) : "no benchmark bars"}
+          // The benchmark price flashes on change: it is the one number on this
+          // header that moves between refreshes, and seeing it move is how a
+          // reader knows the snapshot behind everything else is live.
+          detail={
+            s.benchmark.price !== null ? (
+              <Ticking value={s.benchmark.price} format={(v) => fmtUsd(v, 1)} />
+            ) : (
+              "no benchmark bars"
+            )
+          }
         />
       </div>
 
@@ -464,7 +678,8 @@ function Breadth({ s, updatedAt }: { s: Summary; updatedAt: string }) {
         />
       </div>
 
-      <p className="desk-label-md" style={{ fontWeight: 400, marginTop: 10, opacity: 0.7 }}>
+      <p className="desk-label-md" style={{ fontWeight: 400, marginTop: 10, opacity: 0.7, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+        <LiveDot asOfMs={s.builtAt} staleAfterMs={6 * 60_000} downAfterMs={20 * 60_000} />
         Snapshot built in {(s.buildMs / 1000).toFixed(1)}s from Delta public market data
         {updatedAt ? ` · read at ${updatedAt} IST` : ""} · {s.listed} perpetuals listed, {s.universe} with
         enough history to rank. Horizons are calendar days on 00:00 UTC bar boundaries — this market has no
@@ -608,6 +823,18 @@ function MomentumTab() {
     { id: "rank", header: "#", width: "52px", cell: (r) => String(r.rank), sortValue: (r) => Number(r.rank) },
     { id: "symbol", header: "Contract", cell: (r) => <SymbolCell row={r} />, sortValue: (r) => String(r.symbol) },
     { id: "price", header: "Price", align: "right", cell: (r) => fmtPx(r.price as number) },
+    {
+      id: "trend",
+      header: "6M trend",
+      width: "86px",
+      cell: (r) => <Sparkline values={(r.spark as number[]) ?? []} width={74} height={20} />,
+      // Sorted by the net move the trace shows, so the column orders by what it
+      // depicts rather than by an unrelated field.
+      sortValue: (r) => {
+        const sp = (r.spark as number[]) ?? [];
+        return sp.length > 1 ? sp[sp.length - 1]! / sp[0]! - 1 : null;
+      },
+    },
     {
       id: "ret",
       header: "Return",
@@ -788,6 +1015,7 @@ const ROTATION_TONE: Record<string, "success" | "warning" | "error" | "default">
 };
 
 function SectorsTab() {
+  const [heatHorizon, setHeatHorizon] = useState("1d");
   const { data, error, loading } = useBoard<{
     count: number;
     sectors: Row[];
@@ -892,6 +1120,51 @@ function SectorsTab() {
 
   return (
     <DeskCard padding="lg">
+      {data && data.sectors.length > 0 ? (
+        <div style={{ marginBottom: "var(--desk-space-4)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+            <span className="desk-label-md" style={{ fontWeight: 700 }}>Rotation map</span>
+            <Segmented
+              size="sm"
+              options={HORIZONS.map((h) => ({ key: h.key, label: h.label }))}
+              value={heatHorizon}
+              onChange={setHeatHorizon}
+            />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 8 }}>
+            {[...data.sectors]
+              .sort(
+                (a, b) =>
+                  ((b.returns as Record<string, number>)[heatHorizon] ?? -999) -
+                  ((a.returns as Record<string, number>)[heatHorizon] ?? -999),
+              )
+              .map((sc) => {
+                const v = (sc.returns as Record<string, number>)[heatHorizon] ?? null;
+                const breadth = (sc.breadth as Record<string, number>)[heatHorizon] ?? null;
+                return (
+                  <div
+                    key={String(sc.sector)}
+                    className="tk-heat-cell"
+                    style={{ background: heatColor(v, heatHorizon === "1d" ? 4 : heatHorizon === "1w" ? 10 : 20) }}
+                    title={`${sc.label} · ${sc.count} contracts · ${breadth ?? "?"}% of them up · rotation ${sc.rotation}`}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: "0.74rem", lineHeight: 1.2 }}>{String(sc.label)}</div>
+                    <div className="tk-num" style={{ fontWeight: 800, fontSize: "1rem", marginTop: 2 }}>{fmtPct(v, 1)}</div>
+                    <div style={{ fontSize: "0.6rem", opacity: 0.72, marginTop: 1 }}>
+                      {String(sc.count)} · {breadth === null ? "—" : `${breadth.toFixed(0)}% up`}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+          <p className="desk-label-md" style={{ fontWeight: 400, opacity: 0.62, marginTop: 8, fontSize: "0.66rem" }}>
+            Cell colour is the equal-weighted return on the selected horizon; the scale widens with the
+            horizon, so a 4% day and a 20% month read at the same intensity rather than making every
+            long-horizon cell saturate.
+          </p>
+        </div>
+      ) : null}
+
       <Basis>
         {data?.basis ?? ""} The tags overlap — <code>smart_contracts</code> co-occurs with{" "}
         <code>layer_1</code> on 24 contracts — so each contract is placed in exactly one theme by a fixed
