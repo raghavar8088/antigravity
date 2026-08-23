@@ -395,7 +395,12 @@ export default function TradingTerminal({ venue }: { venue: "delta" | "forex" })
           {tab === "orders" ? (
             <OrdersTable rows={snap!.orders ?? []} busy={busy} onCancel={(orderId) => act("cancel", { orderId }, "Order cancelled.")} />
           ) : null}
-          {tab === "history" ? <HistoryTable rows={snap!.trades ?? []} /> : null}
+          {tab === "history" ? (
+            <>
+              <ArchivePanel venue={venue} busy={busy} onRestored={refresh} />
+              <HistoryTable rows={snap!.trades ?? []} />
+            </>
+          ) : null}
           {tab === "account" ? (
             <AccountPanel
               venue={v}
@@ -1773,12 +1778,121 @@ function AccountPanel({
         </span>
       </div>
       {confirming ? (
-        <p className="desk-label-md" style={{ fontWeight: 400, color: "var(--desk-error)" }}>
-          This deletes every order, position and closed trade on this desk and returns the balance to its
-          opening figure. The trade log is the only record of what the account did, and it is not
-          recoverable.
+        <p className="desk-label-md" style={{ fontWeight: 400, opacity: 0.85 }}>
+          This returns the balance to its opening figure and clears the desk. <strong>Nothing is
+          deleted</strong> — the current orders, positions and trades are archived as a numbered
+          generation and can be restored from the History tab.
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Past lives of this desk.
+ *
+ * Exists because a reset used to delete the trade log outright, and one did —
+ * an operator clearing what they thought were their own test rows took a real
+ * account's history with it, and there was no way to get it back. A reset now
+ * archives instead, and this is where the archived generations are read and
+ * restored from.
+ */
+function ArchivePanel({ venue, busy, onRestored }: { venue: string; busy: boolean; onRestored: () => void }) {
+  const [gens, setGens] = useState<
+    { generation: number; archivedAt: number | null; trades: number; orders: number; positions: number; netPnlUsd: number }[]
+  >([]);
+  const [note, setNote] = useState("");
+  const [working, setWorking] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/paper-trading/${venue}/archive`, { cache: "no-store" });
+      const b = (await r.json()) as { generations?: typeof gens };
+      setGens(b.generations ?? []);
+    } catch {
+      setGens([]);
+    }
+  }, [venue]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const restore = useCallback(
+    async (generation: number) => {
+      setWorking(true);
+      setNote("");
+      try {
+        const r = await fetch(`/api/paper-trading/${venue}/restore`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ generation }),
+        });
+        const b = (await r.json()) as { ok?: boolean; error?: string; restored?: { trades: number } };
+        if (!r.ok) throw new Error(b.error ?? `HTTP ${r.status}`);
+        setNote(`Restored generation ${generation} — ${b.restored?.trades ?? 0} trades back on the desk.`);
+        await load();
+        onRestored();
+      } catch (e) {
+        setNote(e instanceof Error ? e.message : "restore failed");
+      } finally {
+        setWorking(false);
+      }
+    },
+    [venue, load, onRestored],
+  );
+
+  if (gens.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: "var(--desk-space-4)" }}>
+      <Panel title={`Archived accounts (${gens.length})`}>
+        <p className="desk-label-md" style={{ fontWeight: 400, opacity: 0.72, marginBottom: 10, lineHeight: 1.5 }}>
+          Every reset archives the desk rather than deleting it. Restoring puts a generation&apos;s
+          trades, orders and balance back — only onto an empty desk, because merging two accounts
+          started from different balances would make every statistic over the combined book meaningless.
+        </p>
+        {note ? (
+          <div style={{ marginBottom: 10 }}>
+            <DeskBanner variant={note.startsWith("Restored") ? "success" : "warning"}>{note}</DeskBanner>
+          </div>
+        ) : null}
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          {gens.map((g) => (
+            <div
+              key={g.generation}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+                padding: "9px 12px",
+                borderRadius: 8,
+                background: "var(--desk-surface-container)",
+              }}
+            >
+              <strong style={{ fontSize: "0.8rem" }}>Generation {g.generation}</strong>
+              <span className="tk-num" style={{ fontSize: "0.75rem", opacity: 0.8 }}>
+                {g.trades} trades · {g.orders} orders · {g.positions} positions
+              </span>
+              <span className={`tk-num ${pnlClass(g.netPnlUsd)}`} style={{ fontSize: "0.78rem", fontWeight: 700 }}>
+                {usd(g.netPnlUsd)}
+              </span>
+              <span style={{ fontSize: "0.7rem", opacity: 0.6 }}>
+                {g.archivedAt ? `archived ${fmtISTClock(g.archivedAt)} IST` : "archived"}
+              </span>
+              <DeskButton
+                variant="outlined"
+                disabled={busy || working}
+                onClick={() => void restore(g.generation)}
+                style={{ minHeight: 30, padding: "0 12px", fontSize: "0.72rem", marginLeft: "auto" }}
+              >
+                Restore
+              </DeskButton>
+            </div>
+          ))}
+        </div>
+      </Panel>
     </div>
   );
 }

@@ -24,6 +24,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  archive,
   cancelOrder,
   closePosition,
   DISPLAY_DEPTH,
@@ -33,6 +34,7 @@ import {
   PaperTradingUnavailable,
   placeOrder,
   resetAccount,
+  restoreGeneration,
   runCycle,
   setAccountSettings,
   snapshot,
@@ -134,6 +136,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
         });
       }
 
+      case "archive": {
+        // Past lives of this desk. Without a generation it lists them; with one
+        // it returns that generation's closed trades for reading.
+        const gen = qp(req, "generation");
+        return ok(await archive(venueId, gen === null ? null : Number(gen)));
+      }
+
       case "trades": {
         const symbol = qp(req, "symbol");
         if (!symbol) return NextResponse.json({ ok: false, error: "trades needs ?symbol=" }, { status: 400 });
@@ -153,7 +162,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
           {
             ok: false,
             error: `unknown read: ${action}`,
-            available: ["snapshot", "instruments", "book", "candles", "trades"],
+            available: ["snapshot", "instruments", "book", "candles", "trades", "archive"],
           },
           { status: 404 },
         );
@@ -236,20 +245,24 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
       case "tick":
         return ok({ cycle: await runCycle(venueId, true) });
 
+      case "restore":
+        return ok(await restoreGeneration(venueId, Number(body.generation ?? -1)));
+
       case "reset": {
         if (qp(req, "confirm") !== "true") {
           return NextResponse.json(
             {
               ok: false,
               error:
-                "Refusing to reset without ?confirm=true. This deletes every order, position and " +
-                "closed trade on this desk and returns the balance to its opening figure — the " +
-                "trade log is the only record of what the account did, and it is not recoverable.",
+                "Refusing to reset without ?confirm=true. This returns the balance to its opening " +
+                "figure and clears the desk. Nothing is deleted — the current orders, positions and " +
+                "trades are ARCHIVED as a numbered generation and can be restored from the History " +
+                "tab.",
             },
             { status: 400 },
           );
         }
-        return ok({ cleared: await resetAccount(venueId) });
+        return ok({ archived: await resetAccount(venueId) });
       }
 
       default:
@@ -257,7 +270,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
           {
             ok: false,
             error: `unknown action: ${action}`,
-            available: ["order", "cancel", "close", "modify", "settings", "tick", "reset"],
+            available: ["order", "cancel", "close", "modify", "settings", "tick", "reset", "restore"],
           },
           { status: 404 },
         );

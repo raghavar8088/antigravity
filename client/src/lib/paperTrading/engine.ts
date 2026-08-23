@@ -51,6 +51,10 @@ import {
   accountIdFor,
   accounts,
   acquireLease,
+  LIVE,
+  listArchive,
+  readArchive,
+  restoreArchive,
   creditAccount,
   ensureAccount,
   orders as ordersCol,
@@ -155,9 +159,9 @@ export async function snapshot(venueId: string, tick = true) {
   const { instruments, bySymbol, quotes } = await marketState(venue);
 
   const [pos, ords, trades] = await Promise.all([
-    (await positionsCol()).find({ accountId: account.accountId }).toArray(),
-    (await ordersCol()).find({ accountId: account.accountId, status: "open" }).sort({ createdAt: -1 }).toArray(),
-    (await tradesCol()).find({ accountId: account.accountId }).sort({ closedAt: -1 }).limit(300).toArray(),
+    (await positionsCol()).find({ accountId: account.accountId, ...LIVE }).toArray(),
+    (await ordersCol()).find({ accountId: account.accountId, status: "open", ...LIVE }).sort({ createdAt: -1 }).toArray(),
+    (await tradesCol()).find({ accountId: account.accountId, ...LIVE }).sort({ closedAt: -1 }).limit(300).toArray(),
   ]);
 
   const marked = pos.map((p) => markPosition(p, bySymbol.get(p.symbol), quotes));
@@ -441,7 +445,7 @@ async function executeFill(
   const notional = notionalUsd(inst, order.size, price, conv);
   const fee = notional * feeRate + inst.commissionPerLotUsd * order.size;
 
-  const existing = await pcol.find({ accountId: account.accountId, symbol: inst.symbol }).toArray();
+  const existing = await pcol.find({ accountId: account.accountId, symbol: inst.symbol, ...LIVE }).toArray();
 
   if (venue.positionMode === "netting" && existing.length > 0) {
     const p = existing[0]!;
@@ -562,7 +566,7 @@ async function chargeFee(accountId: string, fee: number): Promise<void> {
 
 async function equityOf(account: Account): Promise<{ equity: number; used: number }> {
   const pcol = await positionsCol();
-  const pos = await pcol.find({ accountId: account.accountId }).toArray();
+  const pos = await pcol.find({ accountId: account.accountId, ...LIVE }).toArray();
   const used = pos.reduce((s, p) => s + p.marginUsd, 0);
   const acc = await (await accounts()).findOne({ accountId: account.accountId });
   const balance = acc?.balance ?? account.balance;
@@ -754,6 +758,25 @@ export async function resetAccount(venueId: string) {
   return resetVenue(venue.id, venue.defaultStartingBalance);
 }
 
+/** Past lives of this desk, and the trades inside one of them. */
+export async function archive(venueId: string, generation: number | null) {
+  const venue = getVenue(venueId);
+  if (generation === null) return { generations: await listArchive(venue.id) };
+  return {
+    generation,
+    trades: (await readArchive(venue.id, generation)).map((t) => ({ ...t, _id: undefined })),
+  };
+}
+
+export async function restoreGeneration(venueId: string, generation: number) {
+  const venue = getVenue(venueId);
+  try {
+    return { restored: await restoreArchive(venue.id, generation) };
+  } catch (e) {
+    throw new OrderRejected(e instanceof Error ? e.message : "restore failed");
+  }
+}
+
 // ── the tick ────────────────────────────────────────────────────────────────
 
 export type Cycle = {
@@ -811,8 +834,8 @@ export async function runCycle(venueId: string, force: boolean): Promise<Cycle> 
 
     const pcol = await positionsCol();
     const ocol = await ordersCol();
-    const open = await pcol.find({ accountId: account.accountId }).toArray();
-    const resting = await ocol.find({ accountId: account.accountId, status: "open" }).toArray();
+    const open = await pcol.find({ accountId: account.accountId, ...LIVE }).toArray();
+    const resting = await ocol.find({ accountId: account.accountId, status: "open", ...LIVE }).toArray();
 
     // One bar series per symbol, shared by every order and position on it.
     const symbols = [...new Set([...open.map((p) => p.symbol), ...resting.map((o) => o.symbol)])];
@@ -953,7 +976,7 @@ export async function runCycle(venueId: string, force: boolean): Promise<Cycle> 
     // would be a margin call, not a stop out, and would overstate the damage.
     if (venue.stopOutLevelPct > 0) {
       for (let guard = 0; guard < 20; guard++) {
-        const cur = await pcol.find({ accountId: account.accountId }).toArray();
+        const cur = await pcol.find({ accountId: account.accountId, ...LIVE }).toArray();
         if (cur.length === 0) break;
         const used = cur.reduce((s, x) => s + x.marginUsd, 0);
         if (used <= 0) break;
