@@ -3,11 +3,12 @@
 /**
  * Forex Paper Trading — a retail FX/CFD terminal, with paper money.
  *
- * Sits under Delta Paper Trading because it is the same terminal pointed at a
- * different market: lots instead of contracts, pips instead of ticks, swap
- * instead of funding, hedged tickets instead of a netted position, and an
- * account managed on margin level with a margin call and a stop out rather
- * than per-position liquidation.
+ * A PEER of Delta Paper Trading rather than a section inside it: the same
+ * engine pointed at a different market, with lots instead of contracts, pips
+ * instead of ticks, swap instead of funding, hedged tickets instead of a netted
+ * position, and an account managed on margin level with a margin call and a
+ * stop out rather than per-position liquidation. Neither desk depends on the
+ * other; the cross-links between them are convenience, not hierarchy.
  *
  * WHAT IS REAL AND WHAT IS MODELLED is stated on the page rather than buried.
  * Mid prices and candles for FX majors and crosses, metals, energies, indices
@@ -27,11 +28,7 @@ export default function ForexPaperTradingPage() {
   return (
     <main style={{ padding: "var(--desk-space-5)", maxWidth: 1720, margin: "0 auto" }}>
       <nav className="desk-label-md" style={{ marginBottom: 10, opacity: 0.7 }}>
-        Home <span aria-hidden>›</span>{" "}
-        <Link href="/delta-paper-trading" style={{ color: "inherit" }}>
-          Delta Paper Trading
-        </Link>{" "}
-        <span aria-hidden>›</span> Forex Paper Trading
+        Home <span aria-hidden>›</span> Forex Paper Trading
       </nav>
 
       <DeskSectionHeader
