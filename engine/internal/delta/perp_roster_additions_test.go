@@ -24,9 +24,17 @@ import (
 // the account cannot fund — the populated-but-unfillable roster this file has
 // warned about through four rewrites.
 func TestDefaultScalpLiveStreams_HoldsOnlyMTFStreams(t *testing.T) {
-	if len(defaultScalpLiveStreams) != 5 {
-		t.Errorf("roster has %d streams, want the 5 AVAXUSD streams; 15 were selected from Top "+
-			"Crypto and 10 cannot be funded at $10 equity", len(defaultScalpLiveStreams))
+	// NOT an exact count. This assertion read `!= 5` and failed the moment the
+	// owner rerostered, which is a routine act — an exact-count assert on a
+	// list whose whole purpose is to be edited turns every edit into a build
+	// break. This repo has been bitten by that shape before.
+	//
+	// The property the count was standing in for is that every routed stream
+	// can actually be FUNDED at desk equity, and that is asserted directly by
+	// TestRoster_EverySymbolCanBeSizedByRisk. What belongs here is only that
+	// the roster is non-empty and well-formed.
+	if len(defaultScalpLiveStreams) == 0 {
+		t.Fatal("live roster is empty — the desk would route nothing at all")
 	}
 	// Every retired pack name must stay off it. The Scalp100/Delta20/Curated
 	// strategies no longer exist on the desk, so a roster entry naming one

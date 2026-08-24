@@ -50,53 +50,60 @@ import (
 // NOT qualified. The gate asks for 200 trades per stream and these have 19-61,
 // selected from the right tail of 2,416 streams on in-sample data. Being on
 // this list is permission, not evidence.
-// Replaced 2026-08-21 at the owner's direction: the live roster is the five
-// AVAXUSD streams from the Top Crypto board, and nothing else.
+// Replaced 2026-08-24 at the owner's direction: the live roster is the eight
+// AVAXUSD streams at the top of the Top Crypto board's AVAX leaderboard, and
+// nothing else. The five streams routed on 2026-08-21 are retired.
 //
-// Fifteen streams were selected across five books. Five are routed. The other
-// ten are not blocked by the tick grid — every symbol clears it easily (SOL
-// 3952 ticks, BTC 646, ETH 255, ZEC 173, AVAX 286) — they simply cannot be
-// FUNDED at $10 equity:
+// Their records at selection, from the AVAX book's own leaderboard:
 //
-//	risk/trade = equity x 0.6%                       = $0.06
-//	notional   = risk / stop fraction
-//	notional   = min(notional, equity x maxLeverage) = min(notional, $30)
-//	contracts  = int(notional / per contract)          <- rounds DOWN
+//	MTF_4h_CMFConfirm_Long          28 trades  39.3% WR  gross +22.57  fees 9.93  net +12.64  44% drag
+//	MTF_1d_OpeningRangeBreak_Long   28 trades  39.3% WR  gross +21.88  fees 9.92  net +11.96  45% drag
+//	MTF_4h_KAMATrend_Long           33 trades  36.4% WR  gross +21.46  fees 11.69 net  +9.77  54% drag
+//	MTF_1d_EMARibbon_Long           30 trades  36.7% WR  gross +19.74  fees 10.63 net  +9.11  54% drag
+//	MTF_1h_CMFConfirm_Long          17 trades  35.3% WR  gross +17.21  fees 6.03  net +11.18  35% drag
+//	MTF_10m_PriorSessionBreak_Long  10 trades  50.0% WR  gross +15.66  fees 3.55  net +12.11  23% drag
+//	MTF_10m_OpeningRangeBreak_Long  13 trades  46.2% WR  gross +15.12  fees 4.61  net +10.51  30% drag
+//	MTF_1d_TRIXCross_Long           16 trades  37.5% WR  gross +13.17  fees 5.67  net  +7.50  43% drag
 //
-//	symbol   1 ctr    stop%   notional  ctr  result
-//	SOLUSD   $87.07   0.454%   $13.22    0   refused
-//	BTCUSD   $72.44   0.446%   $13.45    0   refused
-//	ZECUSD   $56.45   0.307%   $19.54    0   refused
-//	ETHUSD   $23.08   0.553%   $10.85    0   refused
-//	AVAXUSD   $7.08   0.404%   $14.85    2   TRADES
+// PERMISSION, NOT EVIDENCE — and by a wider margin than the roster this
+// replaces.
 //
-// ETHUSD was briefly routed on 2026-08-20 and is removed again. It is the one
-// symbol of the four whose refusal is volatility-dependent rather than
-// arithmetic — its contract fits under the $30 ceiling, so a stop tighter than
-// 0.260% would fund it — but it has been refusing continuously, and a stream
-// that logs the same refusal on every signal is noise rather than evidence.
-// That is the LABUSD precedent, applied consistently.
+// The gate asks for 200 trades per stream. These have 10 to 33. The board's own
+// "Worth Real Money?" column, which applies that gate, reads TOO FEW TRADES on
+// six of the eight; only KAMATrend 4h and EMARibbon 1d read positive, and those
+// two carry the worst fee drag on the list at 54%.
 //
-// The distinction is still worth keeping in view: BTC, SOL and ZEC each cost
-// more per contract than the entire book, so no market condition can fund them
-// at this equity. ETH can, and will, when it quietens.
+// They were chosen as the top rows of 1,674 streams. The right tail of 1,674
+// in-sample records contains profitable-looking rows whether or not any edge
+// exists, which is what a leaderboard is: a sort, not a test.
 //
-// ONE POSITION AT A TIME. All five share AVAXUSD and MaxPositionsPerSymbol is
-// 1, so they compete for a single slot and the one that fills is whichever
-// signals first — a frequency property, not a quality one. The 10m stream will
-// win most of them.
+// And the book they lead is LOSING. AVAX sits at -$1,306.44 on $10,000, down
+// 13.06%, over 3,059 trades at a 24.9% win rate, with -$1,082.90 of taker fees
+// against a GROSS of -$223.37. So the book lost money before fees and was then
+// buried by them. These eight are the winners inside that, which is a fact
+// about dispersion rather than about them.
 //
-// EVIDENCE. From Top Crypto, a PAPER-ONLY module where no stream is on the
-// venue allow-list, so none had placed a real order before this. Records run
-// 12-24 trades against a gate asking for 200, and the AVAX book is net NEGATIVE
-// at -$32.47 — these are the winners inside a losing book, which is what the
-// top of a leaderboard is by construction. Permission, not evidence.
+// ONE SLOT, EIGHT CLAIMANTS. MaxPositionsPerSymbol is 1 and all eight are
+// AVAXUSD, so they do not run side by side — they queue for a single position
+// and whichever signals first takes it. That is a FREQUENCY property, not a
+// quality one, so the two 10m streams will win most fills and the 1d and 4h
+// streams may seldom trade at all. The consequence is worth stating plainly:
+// this roster will in practice be traded mostly by its two THINNEST records
+// (10 and 13 trades), not by the 28-33 trade rows that justify it. Dropping the
+// 10m pair is what would give the higher timeframes the slot.
+//
+// Funding is not a constraint here as it was for the previous roster: AVAXUSD
+// is the one symbol of the five books that sizes above zero at $10 equity, at
+// roughly $7 per contract, and it clears the tick grid comfortably (286 ticks).
 var defaultScalpLiveStreams = []PerpStream{
-	{Strategy: "MTF_4h_DoubleTopBottom_Long", Symbol: "AVAXUSD"},
-	{Strategy: "MTF_4h_TripleTopBottom_Long", Symbol: "AVAXUSD"},
-	{Strategy: "MTF_1h_PriorSessionBreak_Long", Symbol: "AVAXUSD"},
-	{Strategy: "MTF_1h_Keltner_Long", Symbol: "AVAXUSD"},
-	{Strategy: "MTF_10m_HeikinAshiFlip_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_4h_CMFConfirm_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_1d_OpeningRangeBreak_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_4h_KAMATrend_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_1d_EMARibbon_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_1h_CMFConfirm_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_10m_PriorSessionBreak_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_10m_OpeningRangeBreak_Long", Symbol: "AVAXUSD"},
+	{Strategy: "MTF_1d_TRIXCross_Long", Symbol: "AVAXUSD"},
 }
 
 // defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
