@@ -70,17 +70,92 @@ func scalpLiveEquityUSD() float64 {
 // the ones that fill are the ones that signal FASTEST, not the ones that are
 // best, and 21 of 31 had no fills at all after 37 trades. One slot per symbol
 // is the useful ceiling, since the per-symbol cap allows no more.
+// The default is now DERIVED FROM THE ROSTER rather than fixed at 3. A roster
+// of N streams that can only hold 3 positions is a roster whose slowest N-3
+// streams collect no record, and the choice of which ones lose is made by
+// signal frequency rather than by anything the operator decided.
 func scalpLiveMaxConcurrent() int {
 	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_MAX_CONCURRENT"))
-	if raw == "" {
-		return 0 // keep the built-in default
+	if raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			log.Printf("[PERP LIVE] SCALP_LIVE_MAX_CONCURRENT=%q is not a positive integer — deriving from the roster", raw)
+		} else {
+			return n
+		}
 	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n <= 0 {
-		log.Printf("[PERP LIVE] SCALP_LIVE_MAX_CONCURRENT=%q is not a positive integer — keeping the default", raw)
-		return 0
+	// One slot per rostered stream, never fewer than the historical default.
+	if n := len(delta.ScalpLiveStreams()); n > 3 {
+		return n
 	}
-	return n
+	return 0 // keep the built-in default
+}
+
+// scalpLiveMaxPerSymbol caps how many live positions may share one instrument.
+//
+// WHY THIS IS DERIVED AND NOT JUST 1
+//
+// The bridge defaults to 1, which is right for a roster that spreads one stream
+// per symbol: it stops several strategies quietly stacking the same bet. It is
+// WRONG for a roster deliberately concentrated on one instrument, because then
+// it does not moderate concentration, it silently disables every stream but the
+// first to fire. The current roster is eight AVAXUSD streams; under a cap of 1,
+// seven of them can never open a position and would sit in the UI looking live.
+//
+// So the cap follows the roster: however many streams the operator has placed
+// on the busiest symbol, that many positions may share it. A conventional
+// one-per-symbol roster still resolves to 1 and behaves exactly as before.
+//
+// The risk this cap used to carry now sits on the aggregate notional ceiling,
+// which is the honest place for it — see scalpLiveMaxAggregateLeverage.
+func scalpLiveMaxPerSymbol() int {
+	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_MAX_PER_SYMBOL"))
+	if raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			log.Printf("[PERP LIVE] SCALP_LIVE_MAX_PER_SYMBOL=%q is not a positive integer — deriving from the roster", raw)
+		} else {
+			return n
+		}
+	}
+	perSymbol := map[string]int{}
+	most := 0
+	for _, st := range delta.ScalpLiveStreams() {
+		sym := strings.ToUpper(strings.TrimSpace(st.Symbol))
+		if sym == "" {
+			continue
+		}
+		perSymbol[sym]++
+		if perSymbol[sym] > most {
+			most = perSymbol[sym]
+		}
+	}
+	return most
+}
+
+// scalpLiveMaxAggregateLeverage caps notional across all open positions.
+//
+// This is the control that actually bounds the book once the count caps follow
+// the roster, so it has to be large enough that the slots are fundable and
+// small enough that the account is not fully committed. Default: enough for
+// every slot to hold a position, capped so margin stays near 60% of equity at
+// the desk's 10x per-order leverage — the options engine shares this wallet.
+func scalpLiveMaxAggregateLeverage() float64 {
+	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_MAX_AGGREGATE_LEVERAGE"))
+	if raw != "" {
+		if f, err := strconv.ParseFloat(raw, 64); err == nil && f > 0 {
+			return f
+		}
+		log.Printf("[PERP LIVE] SCALP_LIVE_MAX_AGGREGATE_LEVERAGE=%q is not a positive number — deriving from the roster", raw)
+	}
+	slots := scalpLiveMaxConcurrent()
+	if slots <= 3 {
+		return 0 // built-in 3.0x already covers a three-slot book
+	}
+	if x := float64(slots); x < 6.0 {
+		return x
+	}
+	return 6.0
 }
 
 // scalpLiveTargetNotionalUSD sizes each order to roughly this position value.
@@ -246,6 +321,16 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	}
 	if n := scalpLiveMaxConcurrent(); n > 0 {
 		b.SetMaxConcurrentPositions(n)
+	}
+	// The per-symbol cap, BEFORE the aggregate ceiling that now carries the risk
+	// this one used to. A roster concentrated on a single instrument is refused
+	// entirely under the built-in cap of 1 — every stream but the fastest — so
+	// the cap follows the roster and the notional ceiling does the bounding.
+	if n := scalpLiveMaxPerSymbol(); n > 0 {
+		b.SetMaxPositionsPerSymbol(n)
+	}
+	if x := scalpLiveMaxAggregateLeverage(); x > 0 {
+		b.SetMaxAggregateLeverage(x)
 	}
 	// LAST, so its log line reports the concurrency actually in force. Called
 	// before the cap was applied it read the default and reported a book
