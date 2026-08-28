@@ -53,7 +53,13 @@ import { formatExpiry } from "@/lib/cryptoPositions/types";
 
 type Tab = "chain" | "perps" | "movers" | "positions" | "orders" | "specs" | "history";
 
-type BasketItem = { symbol: string; displayName: string; side: TransactionType; lots: number };
+type BasketItem = {
+  symbol: string;
+  displayName: string;
+  side: TransactionType;
+  lots: number;
+  leverage: number | null;
+};
 
 const API = "/api/crypto-positions";
 
@@ -107,6 +113,14 @@ export default function CryptoPositionsPage() {
 
   /** Order-ticket lots. Applies to every Buy/Sell button on the page. */
   const [lots, setLots] = useState(1);
+  /**
+   * Order-ticket leverage, as Delta sets it per position.
+   *
+   * Null means "the venue's default for this contract". It is clamped
+   * server-side to what the venue actually allows at the chosen size, so a
+   * number typed here can never buy more leverage than Delta would give.
+   */
+  const [leverage, setLeverage] = useState<number | null>(null);
 
   const [perps, setPerps] = useState<Instrument[]>([]);
   const [movers, setMovers] = useState<{ topCalls: TopMover[]; topPuts: TopMover[] } | null>(null);
@@ -275,10 +289,10 @@ export default function CryptoPositionsPage() {
           next[i] = { ...next[i], lots: next[i].lots + lots };
           return next;
         }
-        return [...b, { symbol, displayName, side, lots }];
+        return [...b, { symbol, displayName, side, lots, leverage }];
       });
     },
-    [lots],
+    [lots, leverage],
   );
 
   useEffect(() => {
@@ -289,7 +303,7 @@ export default function CryptoPositionsPage() {
     let live = true;
     post<{ preview: BasketPreview }>("basket/preview", {
       account_id: accountId,
-      legs: basket.map((b) => ({ symbol: b.symbol, transactionType: b.side, lots: b.lots })),
+      legs: basket.map((b) => ({ symbol: b.symbol, transactionType: b.side, lots: b.lots, leverage: b.leverage ?? undefined })),
     })
       .then((d) => live && setPreview(d.preview))
       .catch((e) => {
@@ -309,7 +323,7 @@ export default function CryptoPositionsPage() {
         "basket/execute",
         {
           account_id: accountId,
-          legs: basket.map((b) => ({ symbol: b.symbol, transactionType: b.side, lots: b.lots })),
+          legs: basket.map((b) => ({ symbol: b.symbol, transactionType: b.side, lots: b.lots, leverage: b.leverage ?? undefined })),
         },
       );
       say(
@@ -510,6 +524,47 @@ export default function CryptoPositionsPage() {
       cell: (p) => compact(Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue)),
     },
     { id: "margin", header: "Margin", align: "right", cell: (p) => compact(p.standaloneMarginUsd) },
+    {
+      id: "lev",
+      header: "Lev",
+      align: "right",
+      sortValue: (p) => p.liquidation?.leverage ?? p.leverage,
+      cell: (p) =>
+        p.liquidation ? (
+          <span title={`initial margin ${usd(p.liquidation.initialMarginUsd)}`}>
+            {p.liquidation.leverage.toFixed(p.liquidation.leverage < 10 ? 1 : 0)}x
+          </span>
+        ) : (
+          <span title="A bought option is paid for in full — nothing is borrowed" style={{ opacity: 0.5 }}>1x</span>
+        ),
+    },
+    {
+      id: "liq",
+      header: "Liquidation",
+      align: "right",
+      sortValue: (p) => (p.liquidation ? Math.abs(p.liquidation.distancePct) : Number.POSITIVE_INFINITY),
+      cell: (p) => {
+        if (p.status !== "OPEN") return "—";
+        if (!p.liquidation) {
+          // Not a missing number. Buying pays the premium in full, so there is
+          // no price at which the venue takes the position away.
+          return <span style={{ opacity: 0.55 }} title="Premium paid in full — no borrow, no liquidation">none</span>;
+        }
+        const d = Math.abs(p.liquidation.distancePct);
+        // Under 10% away is close enough that it should read as a warning
+        // rather than as another number in the row.
+        const danger = d < 10;
+        return (
+          <span
+            style={{ color: danger ? "var(--desk-loss)" : undefined, fontWeight: danger ? 700 : 500 }}
+            title={`bankruptcy ${usd(p.liquidation.bankruptcyPrice, 4)} · maintenance margin ${usd(p.liquidation.maintenanceMarginUsd)} · liquidation penalty ${(p.liquidation.penaltyFactor * 100).toFixed(0)}%`}
+          >
+            {usd(p.liquidation.price, 4)}
+            <span style={{ display: "block", fontSize: 11, opacity: 0.75 }}>{pct(p.liquidation.distancePct, 1)} away</span>
+          </span>
+        );
+      },
+    },
     {
       id: "pnl",
       header: "Unrealised",
@@ -722,8 +777,29 @@ export default function CryptoPositionsPage() {
           <DeskMetricTile label="Unrealised" value={usd(summary.unrealizedPnl)} subColor={summary.unrealizedPnl >= 0 ? "profit" : "loss"} sub={`${summary.openPositions} open`} />
           <DeskMetricTile label="Realised" value={usd(summary.realizedPnl)} subColor={summary.realizedPnl >= 0 ? "profit" : "loss"} sub={`${summary.closedPositions} closed`} />
           <DeskMetricTile label="Win %" value={summary.winPct === null ? "—" : `${summary.winPct.toFixed(1)}%`} sub={summary.closedPositions === 0 ? "nothing closed yet" : undefined} />
+          <DeskMetricTile
+            label="Margin level"
+            value={summary.marginLevelPct === null ? "—" : `${summary.marginLevelPct.toFixed(0)}%`}
+            sub={summary.marginLevelPct === null ? "nothing posted" : `maintenance ${usd(summary.maintenanceMarginUsd)}`}
+            subColor={summary.marginLevelPct !== null && summary.marginLevelPct < 150 ? "loss" : "default"}
+          />
+          <DeskMetricTile
+            label="Account leverage"
+            value={summary.accountLeverage === null ? "—" : `${summary.accountLeverage.toFixed(2)}x`}
+            sub={`${summary.liquidatablePositions} liquidatable`}
+          />
           {summary.marginBenefit > 0 && <DeskMetricTile label="Hedge benefit" value={`−${usd(summary.marginBenefit)}`} subColor="profit" sub="saved by offsets" />}
           <DeskMetricTile label="Underlyings" value={summary.underlyingsOpen} sub={`${specs.length} tradable`} />
+        </div>
+      )}
+
+      {summary && summary.marginLevelPct !== null && summary.marginLevelPct < 150 && (
+        <div style={{ marginTop: 12 }}>
+          <DeskBanner variant="warning" title="Margin level is low">
+            Equity is {summary.marginLevelPct.toFixed(0)}% of the {usd(summary.maintenanceMarginUsd)} maintenance
+            requirement. At 100% the venue starts closing positions, and it charges a liquidation penalty on top of the
+            loss — closing or hedging voluntarily is cheaper than being closed.
+          </DeskBanner>
         </div>
       )}
 
@@ -755,6 +831,23 @@ export default function CryptoPositionsPage() {
             />
           </label>
           <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>
+              Leverage{spec ? ` (max ${spec.maxLeverage}x)` : ""}
+            </span>
+            <select
+              value={leverage === null ? "" : String(leverage)}
+              onChange={(e) => setLeverage(e.target.value === "" ? null : Number(e.target.value))}
+              style={sel}
+            >
+              <option value="">Venue default{spec ? ` (${spec.defaultLeverage}x)` : ""}</option>
+              {[1, 2, 3, 5, 10, 20, 25, 50, 75, 100, 150, 200]
+                .filter((x) => !spec || x <= spec.maxLeverage)
+                .map((x) => (
+                  <option key={x} value={x}>{x}x</option>
+                ))}
+            </select>
+          </label>
+          <label style={{ display: "grid", gap: 4 }}>
             <span style={{ fontSize: 12, opacity: 0.7 }}>Expiry</span>
             <select value={expiry} onChange={(e) => setExpiry(e.target.value)} style={sel}>
               {expiries.map((e) => (
@@ -772,6 +865,13 @@ export default function CryptoPositionsPage() {
               <div style={{ opacity: 0.7 }}>
                 {lots} lot{lots === 1 ? "" : "s"} controls {(lots * spec.contractValue).toLocaleString("en-US", { maximumFractionDigits: 6 })} {spec.underlying}
                 {spec.contractValueUsd !== null ? ` — about ${usd(lots * spec.contractValueUsd)}` : ""}
+              </div>
+              <div style={{ opacity: 0.7 }}>
+                venue margin {spec.initialMarginPct}% initial / {spec.maintenanceMarginPct}% maintenance — the
+                initial rate is what caps leverage at {spec.maxLeverage}x, and Delta raises both as a position grows
+              </div>
+              <div style={{ opacity: 0.7 }}>
+                A BOUGHT option ignores this: the premium is paid in full, so it is always 1x with no liquidation.
               </div>
             </div>
           )}
@@ -809,6 +909,18 @@ export default function CryptoPositionsPage() {
               </div>
             ))}
           </div>
+          {preview && preview.legs.some((l) => l.liquidation) && (
+            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85, display: "grid", gap: 4 }}>
+              {preview.legs.map((l) => (
+                <div key={`${l.symbol}-${l.side}`}>
+                  <b>{l.displayName}</b> — {l.leverage.toFixed(l.leverage < 10 ? 1 : 0)}x of max {l.maxLeverage}x
+                  {l.liquidation
+                    ? ` · liquidation ${usd(l.liquidation.price, 4)} (${pct(l.liquidation.distancePct, 1)} away) · initial margin ${usd(l.liquidation.initialMarginUsd)}`
+                    : " · bought outright, no liquidation"}
+                </div>
+              ))}
+            </div>
+          )}
           {preview && (
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", marginTop: 12 }}>
               <DeskMetricTile label="Margin required" value={usd(preview.marginRequired)} />

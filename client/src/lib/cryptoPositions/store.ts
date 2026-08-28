@@ -47,6 +47,7 @@ export type PositionDoc = {
   entry_price: number;
   exit_price: number | null;
   premium_usd: number;
+  leverage: number;
   status: Position["status"];
   standalone_margin_usd: number;
   realized_pnl: number;
@@ -146,6 +147,9 @@ export function toPosition(d: PositionDoc): Position {
     entryPrice: d.entry_price,
     exitPrice: d.exit_price,
     premiumUsd: d.premium_usd,
+    // Rows written before leverage existed have none; 1x is the honest reading
+    // of a position that was margined without it.
+    leverage: d.leverage ?? 1,
     status: d.status,
     standaloneMarginUsd: d.standalone_margin_usd,
     realizedPnl: d.realized_pnl,

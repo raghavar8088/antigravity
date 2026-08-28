@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { legPremium, marginFor, scanGrid, SCAN_RANGE_PCT, type MarginLeg } from "./margin";
+import {
+  initialMarginUsd,
+  legPremium,
+  liquidationFor,
+  marginFor,
+  maxLeverageFor,
+  scanGrid,
+  SCAN_RANGE_PCT,
+  type MarginLeg,
+} from "./margin";
 import { displayNameOf, feeFor, formatExpiry, type Instrument } from "./types";
 
 /**
@@ -38,10 +47,33 @@ function option(
     ivPct: 50,
     greeks: { delta: greeks.delta, gamma: greeks.gamma, theta: -1, vega: 1, rho: 0 },
     fundingRatePct8h: null,
+    // Delta's real published parameters for BTC contracts.
+    initialMarginPct: 0.5,
+    maintenanceMarginPct: 0.25,
+    imScalingFactor: 0.000002,
+    mmScalingFactor: 0.000001,
+    defaultLeverage: 200,
+    maxLeverage: 200,
+    penaltyFactor: 0.5,
   };
 }
 
-function leg(i: Instrument, side: "BUY" | "SELL", lots = 1): MarginLeg {
+function perp(mark: number): Instrument {
+  return {
+    ...option("CALL", 0, mark, { delta: 1, gamma: 0 }),
+    symbol: "BTCUSD",
+    kind: "PERPETUAL",
+    expiry: null,
+    strike: null,
+    optionType: null,
+    greeks: null,
+    ivPct: null,
+    fundingRatePct8h: 0.01,
+    spot: mark,
+  };
+}
+
+function leg(i: Instrument, side: "BUY" | "SELL", lots = 1, leverage = 1): MarginLeg {
   return {
     symbol: i.symbol,
     underlying: i.underlying,
@@ -50,6 +82,7 @@ function leg(i: Instrument, side: "BUY" | "SELL", lots = 1): MarginLeg {
     contractValue: i.contractValue,
     price: i.markPrice,
     instrument: i,
+    leverage,
   };
 }
 
@@ -187,6 +220,85 @@ describe("rolling to the money", () => {
       marginFor([leg(call, "SELL")]).marginRequired + marginFor([leg(put, "SELL")]).marginRequired;
     expect(both.marginRequired).toBeLessThan(apart);
     expect(both.marginBenefit).toBeGreaterThan(0);
+  });
+});
+
+describe("leverage", () => {
+  it("takes its ceiling from the venue's own initial margin, not from us", () => {
+    // 0.5% initial margin is 200x AT ZERO SIZE, and Delta scales the rate up
+    // with notional, so the real ceiling at $1,000 is 100 / (0.5 + 2e-6*1000)
+    // = 199x. The scaling is the point: a ceiling of a flat 200 would let the
+    // desk offer leverage Delta would refuse on anything but a dust position.
+    const p = perp(80_000);
+    expect(maxLeverageFor(p, 0)).toBe(200);
+    expect(maxLeverageFor(p, 1_000)).toBe(199);
+  });
+
+  it("lowers the ceiling as the position grows, the way Delta scales it", () => {
+    const p = perp(80_000);
+    const small = maxLeverageFor(p, 1_000);
+    const huge = maxLeverageFor(p, 50_000_000);
+    expect(huge).toBeLessThan(small);
+  });
+
+  it("never posts less than the venue's floor however much leverage is asked for", () => {
+    // Asking 500x on a contract margined at 0.5% must not silently succeed —
+    // it would understate margin and move the liquidation price.
+    const p = perp(80_000);
+    const notional = 8_000;
+    // The floor is the SCALED rate, not the headline 0.5%: at $8,000 that is
+    // 0.5 + 2e-6*8000 = 0.516%.
+    const floor = (notional * (0.5 + 0.000002 * notional)) / 100;
+    expect(initialMarginUsd(p, notional, 500)).toBeCloseTo(floor, 6);
+    expect(floor).toBeGreaterThan((notional * 0.5) / 100);
+    // Below the ceiling the asked-for leverage is simply honoured.
+    expect(initialMarginUsd(p, notional, 10)).toBeCloseTo(notional / 10, 6);
+  });
+
+  it("charges a perpetual by leverage, so the setting actually does something", () => {
+    const p = perp(80_000);
+    const at2 = marginFor([leg(p, "BUY", 100, 2)]).marginRequired;
+    const at20 = marginFor([leg(p, "BUY", 100, 20)]).marginRequired;
+    expect(at20).toBeLessThan(at2);
+    expect(at2 / at20).toBeCloseTo(10, 1);
+  });
+});
+
+describe("liquidation", () => {
+  it("returns nothing for a bought option, because there is nothing to liquidate", () => {
+    // The premium is paid in full: no borrow, no margin call, no price at which
+    // the venue takes it away. A number here would invent a risk.
+    const call = option("CALL", 80_000, 2_000, { delta: 0.5, gamma: 0.00002 });
+    expect(liquidationFor(call, "BUY", 1, 2_000, 10, 2_000)).toBeNull();
+  });
+
+  it("puts a long perp's liquidation below entry and a short's above", () => {
+    const p = perp(80_000);
+    const long = liquidationFor(p, "BUY", 10, 80_000, 10, 80_000);
+    const short = liquidationFor(p, "SELL", 10, 80_000, 10, 80_000);
+    expect(long!.price).toBeLessThan(80_000);
+    expect(short!.price).toBeGreaterThan(80_000);
+  });
+
+  it("moves liquidation closer as leverage rises", () => {
+    const p = perp(80_000);
+    const at2 = liquidationFor(p, "BUY", 10, 80_000, 2, 80_000)!;
+    const at50 = liquidationFor(p, "BUY", 10, 80_000, 50, 80_000)!;
+    expect(Math.abs(at50.distancePct)).toBeLessThan(Math.abs(at2.distancePct));
+    // 10x is roughly a 10% adverse move, less the maintenance floor.
+    const at10 = liquidationFor(p, "BUY", 10, 80_000, 10, 80_000)!;
+    expect(Math.abs(at10.distancePct)).toBeGreaterThan(9);
+    expect(Math.abs(at10.distancePct)).toBeLessThan(10);
+  });
+
+  it("puts bankruptcy beyond liquidation, never before it", () => {
+    // Liquidation is where the maintenance floor is breached; bankruptcy is
+    // where the margin is gone entirely. A long must reach liquidation first.
+    const p = perp(80_000);
+    const long = liquidationFor(p, "BUY", 10, 80_000, 10, 80_000)!;
+    expect(long.bankruptcyPrice).toBeLessThan(long.price);
+    const short = liquidationFor(p, "SELL", 10, 80_000, 10, 80_000)!;
+    expect(short.bankruptcyPrice).toBeGreaterThan(short.price);
   });
 });
 

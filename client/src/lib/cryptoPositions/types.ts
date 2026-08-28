@@ -81,6 +81,31 @@ export type Instrument = {
   greeks: Greeks | null;
   /** Percent per 8h settlement, signed: positive means longs pay. Perps only. */
   fundingRatePct8h: number | null;
+
+  /**
+   * The venue's own margin parameters, verbatim from the product feed.
+   *
+   * Not invented and not rounded: `initialMarginPct` is what decides the
+   * maximum leverage the venue will allow (200x on BTCUSD, from 0.5%), and
+   * `maintenanceMarginPct` is what decides where a position gets liquidated.
+   * Guessing either would put the liquidation price somewhere the venue does
+   * not agree with, which is the one number on this page that must not be
+   * approximated.
+   */
+  initialMarginPct: number;
+  maintenanceMarginPct: number;
+  /**
+   * Delta raises the requirement as a position grows, so a large book is not
+   * margined at the headline rate. Percent added per USD of notional.
+   */
+  imScalingFactor: number;
+  mmScalingFactor: number;
+  /** What the venue defaults a new position to. */
+  defaultLeverage: number;
+  /** 100 / initialMarginPct — the venue's own ceiling, never a number of ours. */
+  maxLeverage: number;
+  /** Extra charged by the venue when it liquidates, not when you close. */
+  penaltyFactor: number;
 };
 
 export type Greeks = {
@@ -143,6 +168,15 @@ export type Position = {
   realizedPnl: number;
   feesUsd: number;
 
+  /**
+   * Leverage the position was opened at, as Delta records it per position.
+   *
+   * Meaningful on a perpetual and on a SHORT option, both of which post margin.
+   * A BOUGHT option is always 1x: the premium is paid in full, there is nothing
+   * borrowed, and no leverage setting changes that.
+   */
+  leverage: number;
+
   openedAt: number;
   closedAt: number | null;
 };
@@ -153,6 +187,31 @@ export type LivePosition = Position & {
   unrealizedPnl: number;
   /** Present value of the holding in USD, signed by side. */
   valueUsd: number;
+  /** Liquidation detail, or null where the position cannot be liquidated. */
+  liquidation: Liquidation | null;
+};
+
+/**
+ * Where a position gets closed out by the venue, and how far away that is.
+ *
+ * NULL FOR A BOUGHT OPTION, and that is not a gap in the data. Buying an option
+ * pays the premium in full: there is no borrow, no margin call and no price at
+ * which the venue takes the position away. The worst case is the premium, which
+ * is already paid. Printing a liquidation price there would invent a risk that
+ * does not exist.
+ */
+export type Liquidation = {
+  /** Price at which maintenance margin is exhausted. */
+  price: number;
+  /** Price at which the whole posted margin is gone — past liquidation. */
+  bankruptcyPrice: number;
+  /** How far spot must move to get there, as a percent of the mark. */
+  distancePct: number;
+  maintenanceMarginUsd: number;
+  initialMarginUsd: number;
+  leverage: number;
+  /** Charged by the venue on a liquidation, from liquidation_penalty_factor. */
+  penaltyFactor: number;
 };
 
 export type Order = {
@@ -208,6 +267,21 @@ export type PositionsSummary = {
   contractExposureUsd: number;
   /** Distinct underlyings with an open position. */
   underlyingsOpen: number;
+
+  /** Total maintenance margin across the book — the account-level floor. */
+  maintenanceMarginUsd: number;
+  /**
+   * equity / maintenance margin, as a percent. Null when nothing is posted.
+   *
+   * Null rather than zero or infinity: an account holding nothing has no margin
+   * level, and rendering that as 0% would read as "about to be liquidated"
+   * exactly when the account is safest.
+   */
+  marginLevelPct: number | null;
+  /** Effective leverage of the whole book: exposure / equity. */
+  accountLeverage: number | null;
+  /** How many open positions could be liquidated at all. */
+  liquidatablePositions: number;
 };
 
 /** What one contract of an underlying actually controls. */
@@ -224,6 +298,11 @@ export type ContractSpec = {
   tickSize: number | null;
   /** Value of one contract at the current spot. */
   contractValueUsd: number | null;
+  /** The venue's ceiling, from its published initial-margin rate. */
+  maxLeverage: number;
+  defaultLeverage: number;
+  initialMarginPct: number;
+  maintenanceMarginPct: number;
 };
 
 /** One leg's outcome inside a roll. */
@@ -251,6 +330,8 @@ export type BasketLeg = {
   symbol: string;
   transactionType: TransactionType;
   lots: number;
+  /** Omit to take the venue's default for the contract. */
+  leverage?: number;
 };
 
 /** A basket priced against the account, without placing anything. */
@@ -265,6 +346,11 @@ export type BasketPreview = {
     price: number;
     /** Signed USD: negative paid, positive received. */
     premiumUsd: number;
+    /** Effective leverage after the venue's own floor is applied. */
+    leverage: number;
+    maxLeverage: number;
+    /** Null on a bought option, which cannot be liquidated. */
+    liquidation: Liquidation | null;
   }[];
   /** Combined requirement, netted against what the account already holds. */
   marginRequired: number;

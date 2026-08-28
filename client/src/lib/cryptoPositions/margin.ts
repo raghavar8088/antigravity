@@ -32,7 +32,102 @@
  * hedge benefit figure on the page mean anything.
  */
 
-import type { Instrument, TransactionType } from "./types";
+import type { Instrument, Liquidation, TransactionType } from "./types";
+
+/* ── leverage and liquidation, the venue's way ───────────────────────────── */
+
+/**
+ * Delta raises the margin rate as a position grows, so a big position is not
+ * charged the headline rate. Both rates come back as PERCENTS.
+ */
+export function marginRatesFor(i: Instrument, notionalUsd: number): { imPct: number; mmPct: number } {
+  return {
+    imPct: i.initialMarginPct + i.imScalingFactor * Math.abs(notionalUsd),
+    mmPct: i.maintenanceMarginPct + i.mmScalingFactor * Math.abs(notionalUsd),
+  };
+}
+
+/** The most leverage the venue permits on this contract at this size. */
+export function maxLeverageFor(i: Instrument, notionalUsd: number): number {
+  const { imPct } = marginRatesFor(i, notionalUsd);
+  return Math.max(1, Math.floor(100 / Math.max(imPct, 0.0001)));
+}
+
+/**
+ * Initial margin actually posted, in USD.
+ *
+ * Leverage divides the notional, but never below the venue's own floor: asking
+ * for 200x on a contract the venue margins at 1% does not get 200x, it gets
+ * 100x, and silently granting the request would understate the requirement and
+ * put the liquidation price somewhere the venue does not agree with.
+ */
+export function initialMarginUsd(i: Instrument, notionalUsd: number, leverage: number): number {
+  const { imPct } = marginRatesFor(i, notionalUsd);
+  const floor = (Math.abs(notionalUsd) * imPct) / 100;
+  const asked = Math.abs(notionalUsd) / Math.max(1, leverage);
+  return Math.max(floor, asked);
+}
+
+export function maintenanceMarginUsd(i: Instrument, notionalUsd: number): number {
+  const { mmPct } = marginRatesFor(i, notionalUsd);
+  return (Math.abs(notionalUsd) * mmPct) / 100;
+}
+
+/**
+ * Where the venue closes the position, and how far that is from here.
+ *
+ * Returns NULL for a bought option. That is the correct answer, not a missing
+ * one: buying pays the premium in full, so there is no borrow, no margin call
+ * and no price at which the position is taken away. Delta's own Live Engine
+ * copy says the same thing. Printing a number there would invent a risk.
+ *
+ * For everything that DOES post margin, liquidation is where the loss has eaten
+ * the posted margin down to the maintenance floor:
+ *
+ *     long   liq = entry * (1 - 1/leverage + mm)
+ *     short  liq = entry * (1 + 1/leverage - mm)
+ *
+ * and the bankruptcy price is the same with the maintenance term dropped —
+ * where the margin is gone entirely rather than merely insufficient.
+ */
+export function liquidationFor(
+  i: Instrument,
+  side: TransactionType,
+  lots: number,
+  entryPrice: number,
+  leverage: number,
+  markPrice: number | null,
+): Liquidation | null {
+  // A long option cannot be liquidated. Nothing is borrowed against it.
+  if (i.kind === "OPTION" && side === "BUY") return null;
+
+  const qty = lots * i.contractValue;
+  const notional = Math.abs(qty * entryPrice);
+  if (notional <= 0) return null;
+
+  const im = initialMarginUsd(i, notional, leverage);
+  const mm = maintenanceMarginUsd(i, notional);
+  // The leverage the position is ACTUALLY carrying after the venue's floor.
+  const effLev = notional / Math.max(im, 1e-9);
+  const mmFrac = mm / notional;
+
+  const long = side === "BUY";
+  const price = long
+    ? entryPrice * (1 - 1 / effLev + mmFrac)
+    : entryPrice * (1 + 1 / effLev - mmFrac);
+  const bankruptcyPrice = long ? entryPrice * (1 - 1 / effLev) : entryPrice * (1 + 1 / effLev);
+
+  const ref = markPrice ?? entryPrice;
+  return {
+    price: Math.max(0, price),
+    bankruptcyPrice: Math.max(0, bankruptcyPrice),
+    distancePct: ref > 0 ? ((price - ref) / ref) * 100 : 0,
+    maintenanceMarginUsd: mm,
+    initialMarginUsd: im,
+    leverage: effLev,
+    penaltyFactor: i.penaltyFactor,
+  };
+}
 
 /**
  * How far spot is shocked, and in how many steps.
@@ -55,6 +150,8 @@ export type MarginLeg = {
   /** Entry price for an existing position, or the live mark for a new leg. */
   price: number;
   instrument: Instrument;
+  /** Chosen leverage. Ignored on a bought option, which is always 1x. */
+  leverage: number;
 };
 
 /** The shocks applied, as fractions of spot. */
@@ -157,18 +254,37 @@ export type MarginResult = {
  * simple bought option would look twice as expensive as it is.
  */
 export function marginFor(legs: MarginLeg[]): MarginResult {
-  const netPremium = legs.reduce((s, l) => s + legPremium(l), 0);
-  const debitPaid = Math.max(0, -netPremium);
-  const worst = worstCaseLoss(legs);
-  const marginRequired = Math.max(0, worst - debitPaid);
+  // PERPETUALS ARE MARGINED BY LEVERAGE, OPTIONS BY SCENARIO.
+  //
+  // This is what Delta actually does, and it is why the leverage control means
+  // anything: a perpetual's requirement is its notional divided by the chosen
+  // leverage, floored at the venue's own rate. Running perps through the option
+  // scan instead would make the leverage setting decorative.
+  //
+  // The cost is that a perpetual hedging an option earns no offset here. That
+  // matches Delta's default isolated margin, where the two are margined apart;
+  // Delta's own portfolio-margin mode would net them, and this desk does not
+  // model that mode.
+  const perps = legs.filter((l) => l.instrument.kind === "PERPETUAL");
+  const options = legs.filter((l) => l.instrument.kind === "OPTION");
 
-  let standalone = 0;
-  for (const leg of legs) {
+  const perpMargin = perps.reduce(
+    (s, l) => s + initialMarginUsd(l.instrument, l.lots * l.contractValue * l.price, l.leverage),
+    0,
+  );
+
+  const netPremium = options.reduce((s, l) => s + legPremium(l), 0);
+  const debitPaid = Math.max(0, -netPremium);
+  const worst = worstCaseLoss(options);
+  const optionMargin = Math.max(0, worst - debitPaid);
+
+  let standalone = perpMargin;
+  for (const leg of options) {
     const p = legPremium(leg);
-    const legDebit = Math.max(0, -p);
-    standalone += Math.max(0, worstCaseLoss([leg]) - legDebit);
+    standalone += Math.max(0, worstCaseLoss([leg]) - Math.max(0, -p));
   }
 
+  const marginRequired = perpMargin + optionMargin;
   return {
     marginRequired,
     standaloneMargin: standalone,
@@ -176,4 +292,13 @@ export function marginFor(legs: MarginLeg[]): MarginResult {
     netPremium,
     worstCaseLossUsd: worst,
   };
+}
+
+/** Total maintenance margin across a book — the floor the account must hold. */
+export function bookMaintenanceMargin(legs: MarginLeg[]): number {
+  return legs.reduce((s, l) => {
+    // A bought option posts nothing and so has no maintenance floor.
+    if (l.instrument.kind === "OPTION" && l.side === "BUY") return s;
+    return s + maintenanceMarginUsd(l.instrument, l.lots * l.contractValue * l.price);
+  }, 0);
 }

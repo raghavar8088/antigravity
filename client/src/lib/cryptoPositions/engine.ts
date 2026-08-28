@@ -29,7 +29,13 @@ import {
   listUnderlyings,
   marksFor,
 } from "./delta";
-import { marginFor, type MarginLeg } from "./margin";
+import {
+  bookMaintenanceMargin,
+  liquidationFor,
+  marginFor,
+  maxLeverageFor,
+  type MarginLeg,
+} from "./margin";
 import {
   closePositionDoc,
   getAccount,
@@ -72,7 +78,13 @@ export function fillPriceFor(i: Instrument, side: TransactionType): { price: num
   return { price: i.markPrice, quoted: false };
 }
 
-function legFrom(i: Instrument, side: TransactionType, lots: number, price: number): MarginLeg {
+function legFrom(
+  i: Instrument,
+  side: TransactionType,
+  lots: number,
+  price: number,
+  leverage?: number,
+): MarginLeg {
   return {
     symbol: i.symbol,
     underlying: i.underlying,
@@ -81,7 +93,19 @@ function legFrom(i: Instrument, side: TransactionType, lots: number, price: numb
     contractValue: i.contractValue,
     price,
     instrument: i,
+    // The venue's own default when the caller did not choose, clamped to what
+    // the venue permits at this size. Asking for more than the contract allows
+    // must not quietly succeed — it would understate margin and move the
+    // liquidation price away from where Delta would put it.
+    leverage: clampLeverage(i, lots * i.contractValue * price, leverage),
   };
+}
+
+/** A requested leverage, held inside 1x and what the venue allows at this size. */
+export function clampLeverage(i: Instrument, notionalUsd: number, want?: number): number {
+  const max = maxLeverageFor(i, notionalUsd);
+  const asked = want && Number.isFinite(want) && want > 0 ? want : i.defaultLeverage;
+  return Math.min(Math.max(1, asked), max);
 }
 
 /**
@@ -104,7 +128,7 @@ async function openLegs(accountId: string): Promise<(MarginLeg & { positionId: s
     // from the scan rather than assumed flat, and `summary` reports it as
     // unpriced so the omission is visible instead of silently lowering margin.
     if (!i) continue;
-    legs.push({ ...legFrom(i, p.side, p.lots, p.entryPrice), positionId: p.positionId });
+    legs.push({ ...legFrom(i, p.side, p.lots, p.entryPrice, p.leverage), positionId: p.positionId });
   }
   return legs;
 }
@@ -119,7 +143,7 @@ export async function livePositions(
     const i = marks.get(p.symbol);
     const qty = p.lots * p.contractValue;
     if (p.status === "CLOSED" || !i) {
-      return { ...p, markPrice: i?.markPrice ?? null, unrealizedPnl: 0, valueUsd: 0 };
+      return { ...p, markPrice: i?.markPrice ?? null, unrealizedPnl: 0, valueUsd: 0, liquidation: null };
     }
     const move = (i.markPrice - p.entryPrice) * qty;
     const unrealized = p.side === "BUY" ? move : -move;
@@ -128,6 +152,7 @@ export async function livePositions(
       markPrice: i.markPrice,
       unrealizedPnl: unrealized,
       valueUsd: i.markPrice * qty * (p.side === "BUY" ? 1 : -1),
+      liquidation: liquidationFor(i, p.side, p.lots, p.entryPrice, p.leverage, i.markPrice),
     };
   });
 }
@@ -145,8 +170,13 @@ export async function summary(accountId: string): Promise<PositionsSummary> {
   const fees = all.reduce((s, p) => s + p.feesUsd, 0);
 
   const m = marginFor(legs);
+  const maint = bookMaintenanceMargin(legs);
   const balance = account.initialCapital + realized;
   const wins = closed.filter((p) => p.realizedPnl > 0).length;
+  const exposure = open.reduce(
+    (s, p) => s + Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue),
+    0,
+  );
 
   return {
     accountId,
@@ -167,11 +197,15 @@ export async function summary(accountId: string): Promise<PositionsSummary> {
     // Notional at the mark, not at entry: exposure is what the book is holding
     // now, and a position that has doubled is carrying twice the risk it opened
     // with even though its entry price has not changed.
-    contractExposureUsd: open.reduce(
-      (s, p) => s + Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue),
-      0,
-    ),
+    contractExposureUsd: exposure,
     underlyingsOpen: new Set(open.map((p) => p.underlying)).size,
+    maintenanceMarginUsd: maint,
+    // Null when nothing is posted — see the field's own note. An account with
+    // no maintenance floor is the SAFEST state, and 0% would read as the most
+    // dangerous one.
+    marginLevelPct: maint > 0 ? ((balance + unrealized) / maint) * 100 : null,
+    accountLeverage: balance + unrealized > 0 ? exposure / (balance + unrealized) : null,
+    liquidatablePositions: open.filter((p) => p.liquidation !== null).length,
   };
 }
 
@@ -191,6 +225,9 @@ export async function contractSpecs(): Promise<ContractSpec[]> {
     const opts = s.options.filter((o) => o.underlying === u.symbol);
     const perps = s.perpetuals.filter((p) => p.underlying === u.symbol);
     const cv = opts[0]?.contractValue ?? perps[0]?.contractValue ?? 1;
+    // Margin parameters are per contract; a perpetual is the reference where
+    // one exists, since that is what the leverage control mostly applies to.
+    const ref = perps[0] ?? opts[0];
     out.push({
       underlying: u.symbol,
       contractValue: cv,
@@ -201,6 +238,10 @@ export async function contractSpecs(): Promise<ContractSpec[]> {
       spot: u.spot,
       tickSize: opts[0]?.tickSize ?? perps[0]?.tickSize ?? null,
       contractValueUsd: u.spot !== null ? u.spot * cv : null,
+      maxLeverage: ref?.maxLeverage ?? 1,
+      defaultLeverage: ref?.defaultLeverage ?? 1,
+      initialMarginPct: ref?.initialMarginPct ?? 0,
+      maintenanceMarginPct: ref?.maintenanceMarginPct ?? 0,
     });
   }
   return out;
@@ -353,6 +394,7 @@ export async function rollToAtm(accountId: string, positionIds?: string[]): Prom
         contractValue: x.to.contractValue,
         price: fillPriceFor(x.to, x.from.side).price,
         instrument: x.to,
+        leverage: x.from.leverage,
       }));
       const after = marginFor([...survivors, ...incoming]);
       const s = await summary(accountId);
@@ -370,7 +412,9 @@ export async function rollToAtm(accountId: string, positionIds?: string[]): Prom
         const exit = await exitPosition(accountId, from.positionId);
         realized += exit.realizedPnl;
         const opened = await executeBasket(accountId, [
-          { symbol: to.symbol, transactionType: from.side, lots: from.lots },
+          // The replacement inherits the leverage the original was opened at —
+          // a roll moves the strike, not the risk setting.
+          { symbol: to.symbol, transactionType: from.side, lots: from.lots, leverage: from.leverage },
         ]);
         const newPos = opened.positions[0];
         feesTotal += opened.feesUsd;
@@ -412,7 +456,9 @@ export async function rollToAtm(accountId: string, positionIds?: string[]): Prom
 
 async function resolveLegs(
   legs: BasketLeg[],
-): Promise<{ instrument: Instrument; side: TransactionType; lots: number; price: number; quoted: boolean }[]> {
+): Promise<
+  { instrument: Instrument; side: TransactionType; lots: number; price: number; quoted: boolean; leverage: number }[]
+> {
   if (legs.length === 0) throw new Rejected("A basket needs at least one leg.");
   const out = [];
   for (const l of legs) {
@@ -420,7 +466,15 @@ async function resolveLegs(
     const i = await getInstrument(l.symbol);
     if (!i) throw new Rejected(`${l.symbol} is not listed on Delta.`);
     const { price, quoted } = fillPriceFor(i, l.transactionType);
-    out.push({ instrument: i, side: l.transactionType, lots: Math.floor(l.lots), price, quoted });
+    const lotsN = Math.floor(l.lots);
+    out.push({
+      instrument: i,
+      side: l.transactionType,
+      lots: lotsN,
+      price,
+      quoted,
+      leverage: clampLeverage(i, lotsN * i.contractValue * price, l.leverage),
+    });
   }
   return out;
 }
@@ -428,7 +482,7 @@ async function resolveLegs(
 export async function previewBasket(accountId: string, legs: BasketLeg[]): Promise<BasketPreview> {
   const resolved = await resolveLegs(legs);
   const existing = await openLegs(accountId);
-  const newLegs = resolved.map((r) => legFrom(r.instrument, r.side, r.lots, r.price));
+  const newLegs = resolved.map((r) => legFrom(r.instrument, r.side, r.lots, r.price, r.leverage));
 
   const before = marginFor(existing);
   const after = marginFor([...existing, ...newLegs]);
@@ -456,6 +510,9 @@ export async function previewBasket(accountId: string, legs: BasketLeg[]): Promi
       quantity: r.lots * r.instrument.contractValue,
       price: r.price,
       premiumUsd: (r.side === "BUY" ? -1 : 1) * r.price * r.lots * r.instrument.contractValue,
+      leverage: r.leverage,
+      maxLeverage: maxLeverageFor(r.instrument, r.lots * r.instrument.contractValue * r.price),
+      liquidation: liquidationFor(r.instrument, r.side, r.lots, r.price, r.leverage, r.instrument.markPrice),
     })),
     marginRequired,
     standaloneMargin: standalone.standaloneMargin,
@@ -510,7 +567,7 @@ export async function executeBasket(
     const qty = r.lots * r.instrument.contractValue;
     const fee = feeFor(r.instrument.kind, qty, r.price, r.instrument.spot);
     const premium = (r.side === "BUY" ? -1 : 1) * r.price * qty;
-    const standalone = marginFor([legFrom(r.instrument, r.side, r.lots, r.price)]).marginRequired;
+    const standalone = marginFor([legFrom(r.instrument, r.side, r.lots, r.price, r.leverage)]).marginRequired;
 
     const doc: Omit<PositionDoc, "_id"> = {
       account_id: accountId,
@@ -527,6 +584,7 @@ export async function executeBasket(
       entry_price: r.price,
       exit_price: null,
       premium_usd: premium,
+      leverage: r.leverage,
       status: "OPEN",
       standalone_margin_usd: standalone,
       // The entry fee is realised immediately. Carrying it only at exit is what
@@ -569,6 +627,7 @@ export async function executeBasket(
       entryPrice: doc.entry_price,
       exitPrice: null,
       premiumUsd: doc.premium_usd,
+      leverage: doc.leverage,
       status: "OPEN",
       standaloneMarginUsd: doc.standalone_margin_usd,
       realizedPnl: doc.realized_pnl,

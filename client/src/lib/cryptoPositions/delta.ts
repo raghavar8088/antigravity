@@ -75,6 +75,12 @@ type RawProduct = {
   contract_value?: string | number | null;
   tick_size?: string | number | null;
   underlying_asset?: { symbol?: string } | null;
+  initial_margin?: string | number | null;
+  maintenance_margin?: string | number | null;
+  initial_margin_scaling_factor?: string | number | null;
+  maintenance_margin_scaling_factor?: string | number | null;
+  default_leverage?: string | number | null;
+  liquidation_penalty_factor?: string | number | null;
 };
 
 /**
@@ -194,6 +200,19 @@ async function build(): Promise<Snapshot> {
       ivPct: isOption ? (num(t?.mark_vol) !== null ? (num(t?.mark_vol) as number) * 100 : null) : null,
       greeks: isOption ? greeksOf(t?.greeks) : null,
       fundingRatePct8h: isPerp ? num(t?.funding_rate) : null,
+      // The venue's own margin parameters. The fallbacks are the most
+      // CONSERVATIVE reading (2% initial, 1% maintenance = 50x), not a typical
+      // one: if the feed ever stops publishing these, the desk should offer
+      // less leverage than the venue would, never more.
+      initialMarginPct: num(p.initial_margin) ?? 2,
+      maintenanceMarginPct: num(p.maintenance_margin) ?? 1,
+      imScalingFactor: num(p.initial_margin_scaling_factor) ?? 0,
+      mmScalingFactor: num(p.maintenance_margin_scaling_factor) ?? 0,
+      defaultLeverage: num(p.default_leverage) ?? 10,
+      // Never a number of ours: the venue's floor on initial margin IS the
+      // ceiling on leverage, so 0.5% initial margin means exactly 200x.
+      maxLeverage: Math.max(1, Math.floor(100 / (num(p.initial_margin) ?? 2))),
+      penaltyFactor: num(p.liquidation_penalty_factor) ?? 0,
     };
 
     if (isOption) options.push(inst);
