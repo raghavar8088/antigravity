@@ -517,11 +517,44 @@ export default function CryptoPositionsPage() {
       cell: (p) => (p.status === "OPEN" ? usd(p.markPrice, 4) : usd(p.exitPrice, 4)),
     },
     {
+      id: "worth",
+      header: "Position worth",
+      align: "right",
+      sortValue: (p) => p.notionalUsd,
+      cell: (p) => {
+        if (p.status !== "OPEN") return "—";
+        return (
+          <span title={`${(p.lots * p.contractValue).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${p.underlying} at spot`}>
+            <strong>{compact(p.notionalUsd)}</strong>
+            {p.accountMultiple !== null && (
+              <span
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  // Past 5x the whole account in one position, this stops being
+                  // a statistic and becomes the main fact about the row.
+                  color: p.accountMultiple >= 5 ? "var(--desk-loss)" : undefined,
+                  fontWeight: p.accountMultiple >= 5 ? 700 : 400,
+                  opacity: p.accountMultiple >= 5 ? 1 : 0.75,
+                }}
+              >
+                {p.accountMultiple.toFixed(p.accountMultiple < 10 ? 2 : 1)}x account
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
+    {
       id: "value",
-      header: "Contract value",
+      header: "Market value",
       align: "right",
       sortValue: (p) => Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue),
-      cell: (p) => compact(Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue)),
+      cell: (p) => (
+        <span title="What the contracts themselves are worth — the premium on an option, not what it controls">
+          {compact(Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue))}
+        </span>
+      ),
     },
     { id: "margin", header: "Margin", align: "right", cell: (p) => compact(p.standaloneMarginUsd) },
     {
@@ -791,7 +824,16 @@ export default function CryptoPositionsPage() {
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", marginTop: 12 }}>
           <DeskMetricTile label="Equity" value={usd(summary.equity)} sub={`started at ${usd(summary.initialCapital, 0)}`} />
           <DeskMetricTile label="Available cash" value={usd(summary.availableCash)} sub={`${usd(summary.deployedMargin)} margin blocked`} />
-          <DeskMetricTile label="Contract exposure" value={compact(summary.contractExposureUsd)} sub="full notional of the open book" />
+          <DeskMetricTile
+            label="Position worth"
+            value={compact(summary.contractExposureUsd)}
+            sub={
+              summary.accountLeverage === null
+                ? "underlying controlled"
+                : `${summary.accountLeverage.toFixed(2)}x the account · ${compact(summary.premiumValueUsd)} of premium`
+            }
+            subColor={summary.accountLeverage !== null && summary.accountLeverage >= 5 ? "loss" : "default"}
+          />
           <DeskMetricTile label="Unrealised" value={usd(summary.unrealizedPnl)} subColor={summary.unrealizedPnl >= 0 ? "profit" : "loss"} sub={`${summary.openPositions} open`} />
           <DeskMetricTile label="Realised" value={usd(summary.realizedPnl)} subColor={summary.realizedPnl >= 0 ? "profit" : "loss"} sub={`${summary.closedPositions} closed`} />
           <DeskMetricTile label="Win %" value={summary.winPct === null ? "—" : `${summary.winPct.toFixed(1)}%`} sub={summary.closedPositions === 0 ? "nothing closed yet" : undefined} />
@@ -804,7 +846,8 @@ export default function CryptoPositionsPage() {
           <DeskMetricTile
             label="Account leverage"
             value={summary.accountLeverage === null ? "—" : `${summary.accountLeverage.toFixed(2)}x`}
-            sub={`${summary.liquidatablePositions} liquidatable`}
+            sub={`${compact(summary.contractExposureUsd)} on ${compact(summary.equity)} · ${summary.liquidatablePositions} liquidatable`}
+            subColor={summary.accountLeverage !== null && summary.accountLeverage >= 5 ? "loss" : "default"}
           />
           {summary.marginBenefit > 0 && <DeskMetricTile label="Hedge benefit" value={`−${usd(summary.marginBenefit)}`} subColor="profit" sub="saved by offsets" />}
           <DeskMetricTile label="Underlyings" value={summary.underlyingsOpen} sub={`${specs.length} tradable`} />
@@ -1189,7 +1232,10 @@ export default function CryptoPositionsPage() {
       <p style={{ marginTop: 16, fontSize: 12, opacity: 0.65, lineHeight: 1.6 }}>
         Paper money, real prices. This desk holds no API key, signs no request and has no order-routing path — nothing
         here can reach a broker. Fills cross the spread: a buy pays the ask and a sell hits the bid, from Delta&apos;s
-        published quotes, and where a contract has no quote the fill says it used the mark. Margin is scenario-based —
+        published quotes, and where a contract has no quote the fill says it used the mark. Position worth is what the
+        contracts CONTROL — quantity times the underlying&apos;s spot — which on an option is far larger than the premium
+        they cost: 0.125 BTC of puts is about $51 of premium and $9,700 of Bitcoin. Market value is the premium.
+        Margin is scenario-based —
         the whole book is revalued across a ±20% shock in spot and the worst loss is what gets blocked, so a bought
         option that caps a sold one genuinely lowers the requirement. That model is ours, not the venue&apos;s; a real
         Delta account would be charged something different.

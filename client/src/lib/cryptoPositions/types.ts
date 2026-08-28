@@ -185,8 +185,27 @@ export type Position = {
 export type LivePosition = Position & {
   markPrice: number | null;
   unrealizedPnl: number;
-  /** Present value of the holding in USD, signed by side. */
+  /**
+   * Market value of the CONTRACTS — mark x quantity, signed by side.
+   *
+   * On an option this is the premium, which is a small number: 0.125 BTC of
+   * 77,600 puts is about $51 of premium. It is what the position is worth to
+   * close, and it is NOT what the position controls.
+   */
   valueUsd: number;
+  /**
+   * What the position actually controls, in USD: quantity x UNDERLYING spot.
+   *
+   * The number that answers "how big is this bet". The same 0.125 BTC of puts
+   * above controls $9,700 of Bitcoin — nearly 200 times its own premium — and
+   * reporting only the premium made a book running at ten times the account
+   * look like it was risking a hundred dollars.
+   *
+   * On a perpetual the contract IS the underlying, so the two coincide.
+   */
+  notionalUsd: number;
+  /** notionalUsd / account equity. How many times the account this position is. */
+  accountMultiple: number | null;
   /** Liquidation detail, or null where the position cannot be liquidated. */
   liquidation: Liquidation | null;
 };
@@ -266,15 +285,21 @@ export type PositionsSummary = {
   availableCash: number;
   totalFeesUsd: number;
   /**
-   * Full notional of the open book at the mark.
+   * Full notional of the open book: quantity x UNDERLYING spot, summed.
+   *
+   * Deliberately the underlying, not the contracts' own market value. Those
+   * differ by orders of magnitude on options — a two-leg straddle worth $111 of
+   * premium controls $19,400 of Bitcoin — and summing the premium made a book
+   * running at 9.7x the account report 0.06x, which is the opposite of a
+   * warning.
    *
    * Shown next to margin because the two answer different questions and are
-   * routinely confused: margin is what the account has posted, exposure is what
-   * it is actually holding. A $116 straddle controls tens of thousands of
-   * dollars of BTC, and a desk that only reports the margin lets that go
-   * unnoticed until the position moves.
+   * routinely confused: margin is what the account has POSTED, exposure is what
+   * it is HOLDING.
    */
   contractExposureUsd: number;
+  /** Market value of the contracts themselves — premium, on an option book. */
+  premiumValueUsd: number;
   /** Distinct underlyings with an open position. */
   underlyingsOpen: number;
 

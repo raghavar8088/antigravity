@@ -115,7 +115,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
         const statusRaw = qp(req, "status");
         const status = statusRaw === "OPEN" || statusRaw === "CLOSED" ? statusRaw : undefined;
         const [positions, s] = await Promise.all([livePositions(accountId, status), summary(accountId)]);
-        return ok({ positions, summary: s });
+        // Filled here rather than inside livePositions, which does not know the
+        // account: how many times the whole account a single position is.
+        const withMultiple = positions.map((p) => ({
+          ...p,
+          accountMultiple: s.equity > 0 ? p.notionalUsd / s.equity : null,
+        }));
+        return ok({ positions: withMultiple, summary: s });
       }
 
       case "orders":

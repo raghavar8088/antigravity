@@ -366,6 +366,44 @@ describe("short option liquidation is quoted on the underlying", () => {
   });
 });
 
+describe("what a position is worth", () => {
+  // The gap this pins: the desk reported a book controlling $19,400 of BTC as
+  // $110.96 of "contract exposure" and 0.06x account leverage, because it was
+  // summing the option PREMIUM rather than the underlying. On an option those
+  // differ by orders of magnitude, and the small number is the reassuring one.
+  const SPOT = 77_600;
+
+  it("separates what an option costs from what it controls", () => {
+    const put = { ...option("PUT", 77_600, 409, { delta: -0.5, gamma: 0.0004 }), spot: SPOT };
+    const lots = 125;
+    const qty = lots * put.contractValue; // 0.125 BTC
+
+    const premiumValue = Math.abs(qty * put.markPrice);
+    const notional = Math.abs(qty * SPOT);
+
+    expect(premiumValue).toBeCloseTo(51.125, 2);
+    expect(notional).toBeCloseTo(9_700, 2);
+    // Nearly 190x apart — which is why reporting only the premium hid the size.
+    expect(notional / premiumValue).toBeGreaterThan(100);
+  });
+
+  it("makes the account multiple the honest one", () => {
+    const equity = 1_997.4;
+    const qty = 0.125;
+    const twoLegs = 2 * qty * SPOT;
+    expect(twoLegs / equity).toBeGreaterThan(9);
+    // The premium-based figure the page used to show.
+    const premiumBased = 2 * qty * 409;
+    expect(premiumBased / equity).toBeLessThan(0.1);
+  });
+
+  it("coincides on a perpetual, where the contract IS the underlying", () => {
+    const p = perp(80_000);
+    const qty = 10 * p.contractValue;
+    expect(Math.abs(qty * (p.spot ?? 0))).toBeCloseTo(Math.abs(qty * p.markPrice), 6);
+  });
+});
+
 describe("labels", () => {
   it("formats an expiry the way the venue writes it", () => {
     expect(formatExpiry("2026-09-26")).toBe("26SEP26");

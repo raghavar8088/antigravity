@@ -143,7 +143,15 @@ export async function livePositions(
     const i = marks.get(p.symbol);
     const qty = p.lots * p.contractValue;
     if (p.status === "CLOSED" || !i) {
-      return { ...p, markPrice: i?.markPrice ?? null, unrealizedPnl: 0, valueUsd: 0, liquidation: null };
+      return {
+        ...p,
+        markPrice: i?.markPrice ?? null,
+        unrealizedPnl: 0,
+        valueUsd: 0,
+        notionalUsd: 0,
+        accountMultiple: null,
+        liquidation: null,
+      };
     }
     const move = (i.markPrice - p.entryPrice) * qty;
     const unrealized = p.side === "BUY" ? move : -move;
@@ -152,6 +160,10 @@ export async function livePositions(
       markPrice: i.markPrice,
       unrealizedPnl: unrealized,
       valueUsd: i.markPrice * qty * (p.side === "BUY" ? 1 : -1),
+      // The UNDERLYING controlled, not the contracts' own value. On an option
+      // those differ by orders of magnitude — see the field's own note.
+      notionalUsd: Math.abs(qty * (i.spot ?? i.markPrice)),
+      accountMultiple: null,
       liquidation: liquidationFor(i, p.side, p.lots, p.entryPrice, p.leverage, i.markPrice),
     };
   });
@@ -173,7 +185,11 @@ export async function summary(accountId: string): Promise<PositionsSummary> {
   const maint = bookMaintenanceMargin(legs);
   const balance = account.initialCapital + realized;
   const wins = closed.filter((p) => p.realizedPnl > 0).length;
-  const exposure = open.reduce(
+  // Underlying notional, which is what "exposure" has to mean. Summing the
+  // contracts' market value instead reported a book at 9.7x the account as
+  // 0.06x — the opposite of a warning.
+  const exposure = open.reduce((s, p) => s + p.notionalUsd, 0);
+  const premiumValue = open.reduce(
     (s, p) => s + Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue),
     0,
   );
@@ -198,6 +214,7 @@ export async function summary(accountId: string): Promise<PositionsSummary> {
     // now, and a position that has doubled is carrying twice the risk it opened
     // with even though its entry price has not changed.
     contractExposureUsd: exposure,
+    premiumValueUsd: premiumValue,
     underlyingsOpen: new Set(open.map((p) => p.underlying)).size,
     maintenanceMarginUsd: maint,
     // Null when nothing is posted — see the field's own note. An account with
