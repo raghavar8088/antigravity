@@ -38,16 +38,20 @@ import {
   insertPosition,
   listOrders,
   listPositions,
+  reduceLots,
   type PositionDoc,
 } from "./store";
 import type {
   BasketLeg,
   BasketPreview,
+  ContractSpec,
   Instrument,
   LivePosition,
   Order,
   Position,
   PositionsSummary,
+  RollLeg,
+  RollResult,
   TransactionType,
 } from "./types";
 import { displayNameOf, feeFor } from "./types";
@@ -80,19 +84,27 @@ function legFrom(i: Instrument, side: TransactionType, lots: number, price: numb
   };
 }
 
-/** Open positions as margin legs, valued at their ENTRY price. */
-async function openLegs(accountId: string): Promise<MarginLeg[]> {
+/**
+ * Open positions as margin legs, valued at their ENTRY price.
+ *
+ * Each leg carries its `positionId`. That is not decoration: a roll has to
+ * price the book as it WOULD be once specific legs are replaced, and matching
+ * them back by (symbol, side, lots) collides the moment two positions share all
+ * three — which is the normal case for a book built up in several clips. The id
+ * is the only thing that identifies a leg uniquely.
+ */
+async function openLegs(accountId: string): Promise<(MarginLeg & { positionId: string })[]> {
   const open = await listPositions(accountId, "OPEN");
   if (open.length === 0) return [];
   const marks = await marksFor(open.map((p) => p.symbol));
-  const legs: MarginLeg[] = [];
+  const legs: (MarginLeg & { positionId: string })[] = [];
   for (const p of open) {
     const i = marks.get(p.symbol);
     // A delisted or expired contract has no instrument to shock. It is excluded
     // from the scan rather than assumed flat, and `summary` reports it as
     // unpriced so the omission is visible instead of silently lowering margin.
     if (!i) continue;
-    legs.push(legFrom(i, p.side, p.lots, p.entryPrice));
+    legs.push({ ...legFrom(i, p.side, p.lots, p.entryPrice), positionId: p.positionId });
   }
   return legs;
 }
@@ -152,6 +164,249 @@ export async function summary(accountId: string): Promise<PositionsSummary> {
     marginBenefit: m.marginBenefit,
     availableCash: balance - m.marginRequired,
     totalFeesUsd: fees,
+    // Notional at the mark, not at entry: exposure is what the book is holding
+    // now, and a position that has doubled is carrying twice the risk it opened
+    // with even though its entry price has not changed.
+    contractExposureUsd: open.reduce(
+      (s, p) => s + Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue),
+      0,
+    ),
+    underlyingsOpen: new Set(open.map((p) => p.underlying)).size,
+  };
+}
+
+/**
+ * What one contract of each underlying controls.
+ *
+ * Exists because "1 contract" means nothing on its own here: one BTC contract
+ * is 0.001 BTC and the quote is per whole BTC, so a $2,000 call costs $2. The
+ * commodity desk this borrows from learned the same lesson in rupees — a ZINC
+ * lot is 5 tonnes — and the fix was to state the multiplier on screen rather
+ * than let it be inferred from a position that came out the wrong size.
+ */
+export async function contractSpecs(): Promise<ContractSpec[]> {
+  const s = await getSnapshot();
+  const out: ContractSpec[] = [];
+  for (const u of s.underlyings) {
+    const opts = s.options.filter((o) => o.underlying === u.symbol);
+    const perps = s.perpetuals.filter((p) => p.underlying === u.symbol);
+    const cv = opts[0]?.contractValue ?? perps[0]?.contractValue ?? 1;
+    out.push({
+      underlying: u.symbol,
+      contractValue: cv,
+      priceUnit: `USD per 1 ${u.symbol}`,
+      optionCount: opts.length,
+      perpetualCount: perps.length,
+      expiryCount: new Set(opts.map((o) => o.expiry).filter(Boolean)).size,
+      spot: u.spot,
+      tickSize: opts[0]?.tickSize ?? perps[0]?.tickSize ?? null,
+      contractValueUsd: u.spot !== null ? u.spot * cv : null,
+    });
+  }
+  return out;
+}
+
+/** Close several positions. Returns what actually closed and what did not. */
+export async function closePositions(
+  accountId: string,
+  positionIds: string[],
+): Promise<{ closed: number; realizedPnl: number; failed: { positionId: string; reason: string }[] }> {
+  let closed = 0;
+  let realized = 0;
+  const failed: { positionId: string; reason: string }[] = [];
+  for (const id of positionIds) {
+    try {
+      const r = await exitPosition(accountId, id);
+      closed += 1;
+      realized += r.realizedPnl;
+    } catch (e) {
+      failed.push({ positionId: id, reason: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { closed, realizedPnl: realized, failed };
+}
+
+/**
+ * Reduce an open position by some of its contracts.
+ *
+ * A partial close is a real edit rather than a second position: it closes
+ * `lots` of the original at the live price and leaves the remainder open at the
+ * SAME entry price. Re-entering the remainder at the current mark instead would
+ * silently restate the position's cost basis and wipe out its unrealised P&L,
+ * which is the kind of quiet rewrite that makes a blotter untrustworthy.
+ */
+export async function reducePosition(
+  accountId: string,
+  positionId: string,
+  lots: number,
+): Promise<{ closedLots: number; remainingLots: number; realizedPnl: number; fillPrice: number }> {
+  const p = await getPosition(positionId);
+  if (!p || p.accountId !== accountId) throw new Rejected("No such position in this account.");
+  if (p.status !== "OPEN") throw new Rejected("That position is already closed.");
+  const want = Math.floor(lots);
+  if (!Number.isFinite(want) || want <= 0) throw new Rejected("Lots to close must be a positive whole number.");
+  if (want > p.lots) throw new Rejected(`That position holds ${p.lots} lot(s); cannot close ${want}.`);
+  if (want === p.lots) {
+    const r = await exitPosition(accountId, positionId);
+    return { closedLots: want, remainingLots: 0, realizedPnl: r.realizedPnl, fillPrice: r.fillPrice };
+  }
+
+  const i = await getInstrument(p.symbol);
+  if (!i) throw new Rejected(`${p.symbol} is no longer listed, so it cannot be priced to close.`);
+  const closingSide: TransactionType = p.side === "BUY" ? "SELL" : "BUY";
+  const { price } = fillPriceFor(i, closingSide);
+
+  const qty = want * p.contractValue;
+  const move = (price - p.entryPrice) * qty;
+  const gross = p.side === "BUY" ? move : -move;
+  const fee = feeFor(p.kind, qty, price, i.spot);
+  const net = gross - fee;
+
+  await reduceLots(positionId, want, net, fee);
+  await insertOrder({
+    account_id: accountId,
+    position_id: positionId,
+    kind: p.kind,
+    symbol: p.symbol,
+    display_name: p.displayName,
+    transaction_type: closingSide,
+    order_type: "MARKET",
+    lots: want,
+    fill_price: price,
+    limit_price: null,
+    status: "FILLED",
+    reject_reason: `partial close — ${p.lots - want} lot(s) left open at the original entry`,
+    intent: "EXIT",
+    created_at: Date.now(),
+  });
+
+  return { closedLots: want, remainingLots: p.lots - want, realizedPnl: net, fillPrice: price };
+}
+
+/**
+ * Roll option legs to the money.
+ *
+ * Each leg is closed at the live price and re-opened at the listed strike
+ * nearest its own spot — same side, same lots. Perpetuals have no strike and
+ * are left alone.
+ *
+ * WHY THIS IS ONE OPERATION PER EXPIRY GROUP, and not a loop over the rows.
+ * Rolling a straddle one leg at a time leaves a naked leg in between, and a
+ * naked leg costs MORE margin than the pair did. On a tight book that
+ * intermediate state can refuse the second roll and strand the position
+ * half-rolled — worse than either the old position or the new one. So a group
+ * is priced whole, checked against the account whole, and either moves whole or
+ * is left exactly where it was.
+ */
+export async function rollToAtm(accountId: string, positionIds?: string[]): Promise<RollResult> {
+  const open = await listPositions(accountId, "OPEN");
+  const wanted = positionIds && positionIds.length > 0 ? new Set(positionIds) : null;
+  const legs = open.filter(
+    (p) => p.kind === "OPTION" && p.optionType !== null && p.expiry !== null && (!wanted || wanted.has(p.positionId)),
+  );
+  if (legs.length === 0) {
+    return { rolled: [], realizedPnl: 0, marginDelta: 0, feesUsd: 0, failed: [], note: "No option legs to roll." };
+  }
+
+  const before = marginFor(await openLegs(accountId));
+  const groups = new Map<string, typeof legs>();
+  for (const l of legs) {
+    const k = `${l.underlying}|${l.expiry}`;
+    groups.set(k, [...(groups.get(k) ?? []), l]);
+  }
+
+  const rolled: RollLeg[] = [];
+  const failed: RollResult["failed"] = [];
+  let realized = 0;
+  let feesTotal = 0;
+
+  for (const [key, group] of groups) {
+    const [underlying, expiry] = key.split("|");
+    try {
+      const chain = await getOptionChain(underlying, expiry as string);
+      if (chain.atmStrike === null) {
+        failed.push({ underlying, expiry: expiry as string, reason: "no at-the-money strike is listed" });
+        continue;
+      }
+
+      // Resolve every replacement BEFORE touching anything.
+      const plan: { from: Position; to: Instrument }[] = [];
+      for (const leg of group) {
+        if (leg.strike === chain.atmStrike) continue; // already at the money
+        const row = chain.rows.find((r) => r.strike === chain.atmStrike);
+        const target = leg.optionType === "CALL" ? row?.call : row?.put;
+        if (!target) {
+          throw new Rejected(`no ${leg.optionType} listed at the ${chain.atmStrike} strike`);
+        }
+        plan.push({ from: leg, to: target });
+      }
+      if (plan.length === 0) continue; // whole group already at the money
+
+      // Price the book as it WOULD be, and refuse the group if it does not fit.
+      const rolledIds = new Set(plan.map((x) => x.from.positionId));
+      const survivors = (await openLegs(accountId)).filter((l) => !rolledIds.has(l.positionId));
+      const incoming: MarginLeg[] = plan.map((x) => ({
+        symbol: x.to.symbol,
+        underlying: x.to.underlying,
+        side: x.from.side,
+        lots: x.from.lots,
+        contractValue: x.to.contractValue,
+        price: fillPriceFor(x.to, x.from.side).price,
+        instrument: x.to,
+      }));
+      const after = marginFor([...survivors, ...incoming]);
+      const s = await summary(accountId);
+      if (after.marginRequired > s.balance) {
+        failed.push({
+          underlying,
+          expiry: expiry as string,
+          reason: `needs $${after.marginRequired.toFixed(2)} of margin against a $${s.balance.toFixed(2)} balance`,
+        });
+        continue;
+      }
+
+      // It fits. Close the old legs, then open the replacements.
+      for (const { from, to } of plan) {
+        const exit = await exitPosition(accountId, from.positionId);
+        realized += exit.realizedPnl;
+        const opened = await executeBasket(accountId, [
+          { symbol: to.symbol, transactionType: from.side, lots: from.lots },
+        ]);
+        const newPos = opened.positions[0];
+        feesTotal += opened.feesUsd;
+        rolled.push({
+          positionId: from.positionId,
+          from: from.displayName,
+          to: newPos?.displayName ?? to.symbol,
+          exitPrice: exit.fillPrice,
+          entryPrice: newPos?.entryPrice ?? 0,
+          realizedPnl: exit.realizedPnl,
+        });
+      }
+    } catch (e) {
+      failed.push({
+        underlying,
+        expiry: expiry as string,
+        reason: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  const afterAll = marginFor(await openLegs(accountId));
+  const note =
+    rolled.length === 0
+      ? failed.length > 0
+        ? "Nothing was rolled."
+        : "Every leg was already at the money."
+      : `Rolled ${rolled.length} leg${rolled.length === 1 ? "" : "s"} to the money.`;
+
+  return {
+    rolled,
+    realizedPnl: realized,
+    marginDelta: afterAll.marginRequired - before.marginRequired,
+    feesUsd: feesTotal,
+    failed,
+    note,
   };
 }
 

@@ -13,6 +13,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
+  closePositions,
+  contractSpecs,
   executeBasket,
   exitPosition,
   getOptionChain,
@@ -24,7 +26,9 @@ import {
   livePositions,
   placeOrder,
   previewBasket,
+  reducePosition,
   Rejected,
+  rollToAtm,
   summary,
 } from "@/lib/cryptoPositions/engine";
 import {
@@ -100,6 +104,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
       case "perpetuals":
         return ok({ perpetuals: await listPerpetuals() });
 
+      case "specs":
+        return ok({ specs: await contractSpecs() });
+
       case "top-movers":
         return ok(await getTopMovers(Math.max(1, Math.min(qn(req, "limit", 10), 50))));
 
@@ -146,6 +153,7 @@ type Body = {
   order_type?: "MARKET" | "LIMIT";
   limit_price?: number | null;
   position_id?: string;
+  position_ids?: string[];
   legs?: BasketLeg[];
 };
 
@@ -200,6 +208,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
         if (!body.position_id) throw new Rejected("position_id is required.");
         return ok(await exitPosition(accountOf(), body.position_id));
       }
+
+      case "positions/close-many": {
+        const ids = body.position_ids ?? [];
+        if (ids.length === 0) throw new Rejected("position_ids is required.");
+        return ok(await closePositions(accountOf(), ids));
+      }
+
+      case "positions/reduce": {
+        if (!body.position_id) throw new Rejected("position_id is required.");
+        return ok(await reducePosition(accountOf(), body.position_id, body.lots ?? 1));
+      }
+
+      // Omitting position_ids rolls every option leg — the "all legs" button.
+      case "positions/roll-atm":
+        return ok(await rollToAtm(accountOf(), body.position_ids));
 
       case "reset":
         return ok(await resetAccount(accountOf()));

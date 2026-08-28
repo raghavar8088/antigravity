@@ -1,16 +1,23 @@
 "use client";
 
 /**
- * Crypto Positions — the F&O Positions desk, rebuilt for Delta Exchange.
+ * Crypto Positions — the F&O / Commodity Positions desk, rebuilt for Delta.
  *
- * Live option chains and perpetuals, buy or sell with real quoted premiums and
+ * Live option chains and perpetuals, buy or sell at real quoted premiums with
  * hedge-aware portfolio margin, across paper accounts that each carry their own
  * editable balance. Paper money, real prices, no broker path.
  *
- * The tabs mirror the Indian desk one for one, with a single honest
- * substitution: its Futures tab becomes PERPETUALS, because Delta India lists
- * no dated futures at all. A perpetual has no expiry and pays funding, so that
- * column shows a funding rate where the original shows an expiry date.
+ * Two honest substitutions from the desks this clones:
+ *
+ *   FUTURES -> PERPETUALS. Delta India lists no dated futures, so that tab
+ *   shows a funding rate where the original shows an expiry. Inventing an
+ *   expiry column would be inventing a market.
+ *
+ *   LOTS ARE CONTRACTS, and one contract is 0.001 BTC while the quote is per
+ *   whole BTC. The order ticket states that multiplier on screen for the same
+ *   reason the commodity desk states that a ZINC lot is 5 tonnes: it is the
+ *   number that decides what a position is actually worth, and inferring it
+ *   from a fill that came out the wrong size is how it gets found too late.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -32,24 +39,21 @@ import {
 import type {
   Account,
   BasketPreview,
+  ContractSpec,
   Instrument,
   LivePosition,
   OptionChain,
   Order,
   PositionsSummary,
+  RollResult,
   TopMover,
   TransactionType,
 } from "@/lib/cryptoPositions/types";
 import { formatExpiry } from "@/lib/cryptoPositions/types";
 
-type Tab = "chain" | "perps" | "movers" | "positions" | "orders";
+type Tab = "chain" | "perps" | "movers" | "positions" | "orders" | "specs" | "history";
 
-type BasketItem = {
-  symbol: string;
-  displayName: string;
-  side: TransactionType;
-  lots: number;
-};
+type BasketItem = { symbol: string; displayName: string; side: TransactionType; lots: number };
 
 const API = "/api/crypto-positions";
 
@@ -76,6 +80,11 @@ const usd = (n: number | null | undefined, dp = 2) =>
     ? "—"
     : `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 
+const compact = (n: number | null | undefined) =>
+  n === null || n === undefined || !Number.isFinite(n)
+    ? "—"
+    : `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 2 })}`;
+
 const pct = (n: number | null | undefined, dp = 2) =>
   n === null || n === undefined || !Number.isFinite(n) ? "—" : `${n >= 0 ? "+" : ""}${n.toFixed(dp)}%`;
 
@@ -87,14 +96,17 @@ export default function CryptoPositionsPage() {
   const [tab, setTab] = useState<Tab>("chain");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const [underlyings, setUnderlyings] = useState<{ symbol: string; spot: number | null }[]>([]);
   const [underlying, setUnderlying] = useState<string>("");
   const [expiries, setExpiries] = useState<string[]>([]);
   const [expiry, setExpiry] = useState<string>("");
   const [chain, setChain] = useState<OptionChain | null>(null);
-  const [chainLoading, setChainLoading] = useState(false);
+  const [specs, setSpecs] = useState<ContractSpec[]>([]);
+
+  /** Order-ticket lots. Applies to every Buy/Sell button on the page. */
+  const [lots, setLots] = useState(1);
 
   const [perps, setPerps] = useState<Instrument[]>([]);
   const [movers, setMovers] = useState<{ topCalls: TopMover[]; topPuts: TopMover[] } | null>(null);
@@ -103,23 +115,40 @@ export default function CryptoPositionsPage() {
   const [summary, setSummary] = useState<PositionsSummary | null>(null);
   const [posFilter, setPosFilter] = useState<"OPEN" | "all">("OPEN");
   const [orders, setOrders] = useState<Order[]>([]);
+  const [closed, setClosed] = useState<LivePosition[]>([]);
+
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [reduceFor, setReduceFor] = useState<{ id: string; name: string; max: number; lots: string } | null>(null);
 
   const [basket, setBasket] = useState<BasketItem[]>([]);
   const [preview, setPreview] = useState<BasketPreview | null>(null);
-
   const [accountForm, setAccountForm] = useState<null | { mode: "create" | "edit"; name: string; capital: string }>(null);
 
-  const say = useCallback((msg: string) => {
-    setNotice(msg);
+  const say = useCallback((m: string) => {
+    setNotice(m);
     setError(null);
   }, []);
-
   const blame = useCallback((e: unknown) => {
     setError(e instanceof Error ? e.message : String(e));
     setNotice(null);
   }, []);
 
-  /* ── accounts ─────────────────────────────────────────────────────────── */
+  /** Run a mutation under a named busy flag, then refresh. */
+  const act = useCallback(
+    async (key: string, fn: () => Promise<void>) => {
+      setBusy(key);
+      try {
+        await fn();
+      } catch (e) {
+        blame(e);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [blame],
+  );
+
+  /* ── loaders ──────────────────────────────────────────────────────────── */
   const loadAccounts = useCallback(async () => {
     try {
       const d = await get<{ accounts: Account[] }>("accounts");
@@ -134,7 +163,6 @@ export default function CryptoPositionsPage() {
     loadAccounts();
   }, [loadAccounts]);
 
-  /* ── market reference data ────────────────────────────────────────────── */
   useEffect(() => {
     get<{ underlyings: { symbol: string; spot: number | null }[] }>("underlyings")
       .then((d) => {
@@ -142,6 +170,7 @@ export default function CryptoPositionsPage() {
         setUnderlying((cur) => cur || d.underlyings[0]?.symbol || "");
       })
       .catch(blame);
+    get<{ specs: ContractSpec[] }>("specs").then((d) => setSpecs(d.specs)).catch(() => {});
   }, [blame]);
 
   useEffect(() => {
@@ -156,7 +185,6 @@ export default function CryptoPositionsPage() {
 
   const loadChain = useCallback(async () => {
     if (!underlying || !expiry) return;
-    setChainLoading(true);
     try {
       const d = await get<{ chain: OptionChain }>(
         `options/chain?underlying=${encodeURIComponent(underlying)}&expiry=${encodeURIComponent(expiry)}`,
@@ -164,8 +192,6 @@ export default function CryptoPositionsPage() {
       setChain(d.chain);
     } catch (e) {
       blame(e);
-    } finally {
-      setChainLoading(false);
     }
   }, [underlying, expiry, blame]);
 
@@ -182,7 +208,6 @@ export default function CryptoPositionsPage() {
     }
   }, [tab, perps.length, movers, blame]);
 
-  /* ── book ─────────────────────────────────────────────────────────────── */
   const loadBook = useCallback(async () => {
     if (!accountId) return;
     try {
@@ -209,20 +234,52 @@ export default function CryptoPositionsPage() {
         .then((d) => setOrders(d.orders))
         .catch(blame);
     }
+    if (tab === "history" && accountId) {
+      get<{ positions: LivePosition[] }>(`positions?account_id=${encodeURIComponent(accountId)}&status=CLOSED`)
+        .then((d) => setClosed(d.positions))
+        .catch(blame);
+    }
   }, [tab, accountId, blame]);
 
-  /* ── basket ───────────────────────────────────────────────────────────── */
-  const addLeg = useCallback((symbol: string, displayName: string, side: TransactionType) => {
-    setBasket((b) => {
-      const i = b.findIndex((x) => x.symbol === symbol && x.side === side);
-      if (i >= 0) {
-        const next = [...b];
-        next[i] = { ...next[i], lots: next[i].lots + 1 };
-        return next;
-      }
-      return [...b, { symbol, displayName, side, lots: 1 }];
+  /* ── selection ────────────────────────────────────────────────────────── */
+  // Only options can be rolled: a perpetual has no strike to be at the money.
+  const rollable = useMemo(() => positions.filter((p) => p.status === "OPEN" && p.optionType !== null), [positions]);
+  const openRows = useMemo(() => positions.filter((p) => p.status === "OPEN"), [positions]);
+
+  // Read the selection back through the LIVE book. A roll replaces position ids
+  // and a row can be closed from another tab, so a stale tick would otherwise
+  // ask the server to act on legs that no longer exist.
+  const selected = useMemo(() => openRows.filter((p) => picked.has(p.positionId)), [openRows, picked]);
+  const selectedRollable = useMemo(() => selected.filter((p) => p.optionType !== null), [selected]);
+
+  const toggle = useCallback((id: string) => {
+    setPicked((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
     });
   }, []);
+
+  const toggleAll = useCallback(() => {
+    setPicked((s) => (s.size === openRows.length ? new Set() : new Set(openRows.map((p) => p.positionId))));
+  }, [openRows]);
+
+  /* ── actions ──────────────────────────────────────────────────────────── */
+  const addLeg = useCallback(
+    (symbol: string, displayName: string, side: TransactionType) => {
+      setBasket((b) => {
+        const i = b.findIndex((x) => x.symbol === symbol && x.side === side);
+        if (i >= 0) {
+          const next = [...b];
+          next[i] = { ...next[i], lots: next[i].lots + lots };
+          return next;
+        }
+        return [...b, { symbol, displayName, side, lots }];
+      });
+    },
+    [lots],
+  );
 
   useEffect(() => {
     if (!accountId || basket.length === 0) {
@@ -234,9 +291,7 @@ export default function CryptoPositionsPage() {
       account_id: accountId,
       legs: basket.map((b) => ({ symbol: b.symbol, transactionType: b.side, lots: b.lots })),
     })
-      .then((d) => {
-        if (live) setPreview(d.preview);
-      })
+      .then((d) => live && setPreview(d.preview))
       .catch((e) => {
         if (live) {
           setPreview(null);
@@ -248,10 +303,8 @@ export default function CryptoPositionsPage() {
     };
   }, [accountId, basket, blame]);
 
-  const execute = useCallback(async () => {
-    if (!accountId || basket.length === 0) return;
-    setBusy(true);
-    try {
+  const execute = () =>
+    act("basket", async () => {
       const r = await post<{ filled: number; marginAdded: number; netPremium: number; feesUsd: number }>(
         "basket/execute",
         {
@@ -266,105 +319,200 @@ export default function CryptoPositionsPage() {
       setBasket([]);
       setTab("positions");
       await loadBook();
-    } catch (e) {
-      blame(e);
-    } finally {
-      setBusy(false);
-    }
-  }, [accountId, basket, say, blame, loadBook]);
+    });
 
-  const exit = useCallback(
-    async (p: LivePosition) => {
-      if (!accountId) return;
-      setBusy(true);
-      try {
-        const r = await post<{ realizedPnl: number; fillPrice: number }>("positions/exit", {
-          account_id: accountId,
-          position_id: p.positionId,
-        });
-        say(`Exited ${p.displayName} at ${usd(r.fillPrice, 4)} — realized ${usd(r.realizedPnl)}`);
-        await loadBook();
-      } catch (e) {
-        blame(e);
-      } finally {
-        setBusy(false);
+  const exitOne = (p: LivePosition) =>
+    act(`exit-${p.positionId}`, async () => {
+      const r = await post<{ realizedPnl: number; fillPrice: number }>("positions/exit", {
+        account_id: accountId,
+        position_id: p.positionId,
+      });
+      say(`Exited ${p.displayName} at ${usd(r.fillPrice, 4)} — realized ${usd(r.realizedPnl)}`);
+      setPicked((s) => {
+        const n = new Set(s);
+        n.delete(p.positionId);
+        return n;
+      });
+      await loadBook();
+    });
+
+  const closeSelected = () => {
+    const n = selected.length;
+    if (!n) return;
+    if (!window.confirm(`Close ${n} selected position${n === 1 ? "" : "s"} at the live price?`)) return;
+    act("close-many", async () => {
+      const r = await post<{ closed: number; realizedPnl: number; failed: { reason: string }[] }>(
+        "positions/close-many",
+        { account_id: accountId, position_ids: selected.map((p) => p.positionId) },
+      );
+      say(`Closed ${r.closed} position${r.closed === 1 ? "" : "s"} — realized ${usd(r.realizedPnl)}`);
+      if (r.failed.length) setError(r.failed.map((f) => f.reason).join(" · "));
+      setPicked(new Set());
+      await loadBook();
+    });
+  };
+
+  const roll = (ids?: string[]) => {
+    const n = ids?.length ?? rollable.length;
+    if (!n) return;
+    if (
+      !window.confirm(
+        `Roll ${ids ? `the ${n} selected` : `all ${n}`} option leg${n === 1 ? "" : "s"} to the money?\n\n` +
+          "Each is closed at the live price, realising its P&L, and re-opened at the strike nearest its own " +
+          "spot — same side, same lots. Perpetuals are left alone.\n\n" +
+          (ids && ids.length < rollable.length
+            ? "Note: rolling only part of a pair leaves the other leg where it is, which can cost MORE margin " +
+              "than the pair did. It is checked against your margin first.\n\n"
+            : "") +
+          "Nothing in a group is closed unless the whole group fits.",
+      )
+    )
+      return;
+    act("roll", async () => {
+      const r = await post<RollResult>("positions/roll-atm", {
+        account_id: accountId,
+        position_ids: ids,
+      });
+      say(
+        `${r.note} Realized ${usd(r.realizedPnl)}, margin ${r.marginDelta >= 0 ? "+" : "−"}${usd(Math.abs(r.marginDelta))}, fees ${usd(r.feesUsd)}.`,
+      );
+      if (r.failed.length) {
+        setError(r.failed.map((f) => `${f.underlying} ${formatExpiry(f.expiry)}: ${f.reason}`).join(" · "));
       }
-    },
-    [accountId, say, blame, loadBook],
-  );
+      setPicked(new Set());
+      await loadBook();
+    });
+  };
 
-  const reset = useCallback(async () => {
-    if (!accountId) return;
-    setBusy(true);
-    try {
+  const submitReduce = () => {
+    if (!reduceFor) return;
+    const n = Number(reduceFor.lots);
+    if (!Number.isFinite(n) || n <= 0) return;
+    act("reduce", async () => {
+      const r = await post<{ closedLots: number; remainingLots: number; realizedPnl: number; fillPrice: number }>(
+        "positions/reduce",
+        { account_id: accountId, position_id: reduceFor.id, lots: n },
+      );
+      say(
+        `Closed ${r.closedLots} of ${reduceFor.max} lot(s) at ${usd(r.fillPrice, 4)} — realized ${usd(r.realizedPnl)}. ` +
+          `${r.remainingLots} left open at the original entry.`,
+      );
+      setReduceFor(null);
+      await loadBook();
+    });
+  };
+
+  const reset = () => {
+    if (!window.confirm("Clear this account's positions and orders?\n\nThey are archived with a balance snapshot first, so this can be answered for afterwards.")) return;
+    act("reset", async () => {
       const r = await post<{ positionsCleared: number; ordersCleared: number; archived: number }>("reset", {
         account_id: accountId,
       });
       say(
-        `Cleared ${r.positionsCleared} position(s) and ${r.ordersCleared} order(s). ` +
-          `${r.archived} record(s) archived — this reset is recoverable.`,
+        `Cleared ${r.positionsCleared} position(s) and ${r.ordersCleared} order(s). ${r.archived} record(s) archived — recoverable.`,
       );
+      setPicked(new Set());
       await loadBook();
-    } catch (e) {
-      blame(e);
-    } finally {
-      setBusy(false);
-    }
-  }, [accountId, say, blame, loadBook]);
+    });
+  };
 
-  const submitAccount = useCallback(async () => {
+  const del = () => {
+    const a = accounts.find((x) => x.accountId === accountId);
+    if (!window.confirm(`Delete "${a?.name ?? "this account"}" and its whole history?\n\nIt is archived first.`)) return;
+    act("delete", async () => {
+      await post("accounts/delete", { account_id: accountId });
+      say(`Deleted "${a?.name ?? "account"}".`);
+      setAccountId(null);
+      await loadAccounts();
+    });
+  };
+
+  const submitAccount = () => {
     if (!accountForm) return;
-    setBusy(true);
-    try {
+    act("account", async () => {
       const capital = Number(accountForm.capital);
+      const cap = Number.isFinite(capital) && capital > 0 ? capital : undefined;
       if (accountForm.mode === "create") {
-        const d = await post<{ account: Account }>("accounts", {
-          name: accountForm.name,
-          initial_capital: Number.isFinite(capital) && capital > 0 ? capital : undefined,
-        });
+        const d = await post<{ account: Account }>("accounts", { name: accountForm.name, initial_capital: cap });
         setAccountId(d.account.accountId);
         say(`Created ${d.account.name} with ${usd(d.account.initialCapital)}`);
       } else {
-        await post("accounts/edit", {
-          account_id: accountId,
-          name: accountForm.name,
-          initial_capital: Number.isFinite(capital) && capital > 0 ? capital : undefined,
-        });
+        await post("accounts/edit", { account_id: accountId, name: accountForm.name, initial_capital: cap });
         say("Account updated.");
       }
       setAccountForm(null);
       await loadAccounts();
       await loadBook();
-    } catch (e) {
-      blame(e);
-    } finally {
-      setBusy(false);
-    }
-  }, [accountForm, accountId, say, blame, loadAccounts, loadBook]);
+    });
+  };
 
   const active = useMemo(() => accounts.find((a) => a.accountId === accountId) ?? null, [accounts, accountId]);
+  const spec = useMemo(() => specs.find((s) => s.underlying === underlying) ?? null, [specs, underlying]);
 
   /* ── columns ──────────────────────────────────────────────────────────── */
   const positionCols: DeskColumn<LivePosition>[] = [
-    { id: "name", header: "Contract", cell: (p) => <strong>{p.displayName}</strong> },
     {
-      id: "side",
-      header: "Side",
+      id: "pick",
+      header: (
+        <input
+          type="checkbox"
+          aria-label="Select every open position"
+          checked={openRows.length > 0 && picked.size === openRows.length}
+          onChange={toggleAll}
+        />
+      ),
+      width: "36px",
+      cell: (p) =>
+        p.status === "OPEN" ? (
+          <input
+            type="checkbox"
+            aria-label={`Select ${p.displayName}`}
+            checked={picked.has(p.positionId)}
+            onChange={() => toggle(p.positionId)}
+          />
+        ) : null,
+    },
+    {
+      id: "name",
+      header: "Contract",
       cell: (p) => (
-        <DeskChip label={p.side} tone={p.side === "BUY" ? "success" : "danger"} />
+        <span style={{ display: "grid" }}>
+          <strong>{p.displayName}</strong>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>{p.kind === "OPTION" ? "OPTION" : "PERPETUAL"}</span>
+        </span>
       ),
     },
+    { id: "side", header: "Side", cell: (p) => <DeskChip label={p.side} tone={p.side === "BUY" ? "success" : "danger"} /> },
     { id: "lots", header: "Lots", align: "right", cell: (p) => p.lots },
+    {
+      id: "qty",
+      header: "Qty",
+      align: "right",
+      sortValue: (p) => p.lots * p.contractValue,
+      cell: (p) => (
+        <span title={`${p.lots} x ${p.contractValue} ${p.underlying}`}>
+          {(p.lots * p.contractValue).toLocaleString("en-US", { maximumFractionDigits: 6 })}
+        </span>
+      ),
+    },
     { id: "entry", header: "Entry", align: "right", cell: (p) => usd(p.entryPrice, 4) },
     {
-      id: "mark",
-      header: "Mark",
+      id: "ltp",
+      header: "LTP",
       align: "right",
       cell: (p) => (p.status === "OPEN" ? usd(p.markPrice, 4) : usd(p.exitPrice, 4)),
     },
     {
+      id: "value",
+      header: "Contract value",
+      align: "right",
+      sortValue: (p) => Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue),
+      cell: (p) => compact(Math.abs((p.markPrice ?? p.entryPrice) * p.lots * p.contractValue)),
+    },
+    { id: "margin", header: "Margin", align: "right", cell: (p) => compact(p.standaloneMarginUsd) },
+    {
       id: "pnl",
-      header: "P&L",
+      header: "Unrealised",
       align: "right",
       sortValue: (p) => (p.status === "OPEN" ? p.unrealizedPnl : p.realizedPnl),
       cell: (p) => {
@@ -372,48 +520,45 @@ export default function CryptoPositionsPage() {
         return <span style={{ color: tone(v), fontWeight: 600 }}>{usd(v)}</span>;
       },
     },
-    { id: "fees", header: "Fees", align: "right", cell: (p) => usd(p.feesUsd) },
     {
-      id: "status",
+      id: "act",
       header: "",
       align: "right",
       cell: (p) =>
-        p.status === "OPEN" ? (
-          <DeskButton variant="outlined" onClick={() => exit(p)} disabled={busy}>
-            Exit
-          </DeskButton>
-        ) : (
+        p.status !== "OPEN" ? (
           <DeskChip label="CLOSED" tone="default" />
+        ) : (
+          <span style={{ display: "inline-flex", gap: 6, whiteSpace: "nowrap" }}>
+            {p.optionType && (
+              <DeskButton variant="tonal" onClick={() => roll([p.positionId])} disabled={busy !== null}>
+                {busy === "roll" ? "Rolling…" : "Re-add ATM"}
+              </DeskButton>
+            )}
+            <DeskButton
+              variant="outlined"
+              disabled={busy !== null || p.lots < 2}
+              title={p.lots < 2 ? "Only one lot — use Close" : "Close part of this position"}
+              onClick={() => setReduceFor({ id: p.positionId, name: p.displayName, max: p.lots, lots: "1" })}
+            >
+              Edit
+            </DeskButton>
+            <DeskButton variant="danger-tonal" onClick={() => exitOne(p)} disabled={busy !== null}>
+              Close
+            </DeskButton>
+          </span>
         ),
     },
   ];
 
   const orderCols: DeskColumn<Order>[] = [
-    {
-      id: "time",
-      header: "Time",
-      sortValue: (o) => o.createdAt,
-      cell: (o) => new Date(o.createdAt).toLocaleString(),
-    },
+    { id: "time", header: "Time", sortValue: (o) => o.createdAt, cell: (o) => new Date(o.createdAt).toLocaleString() },
     { id: "name", header: "Contract", cell: (o) => o.displayName },
     { id: "intent", header: "Intent", cell: (o) => <DeskChip label={o.intent} tone="default" /> },
-    {
-      id: "side",
-      header: "Side",
-      cell: (o) => <DeskChip label={o.transactionType} tone={o.transactionType === "BUY" ? "success" : "danger"} />,
-    },
+    { id: "side", header: "Side", cell: (o) => <DeskChip label={o.transactionType} tone={o.transactionType === "BUY" ? "success" : "danger"} /> },
     { id: "lots", header: "Lots", align: "right", cell: (o) => o.lots },
     { id: "fill", header: "Fill", align: "right", cell: (o) => usd(o.fillPrice, 4) },
-    {
-      id: "status",
-      header: "Status",
-      cell: (o) => (
-        <span title={o.rejectReason ?? undefined}>
-          <DeskChip label={o.status} tone={o.status === "FILLED" ? "success" : "danger"} />
-        </span>
-      ),
-    },
-    { id: "why", header: "Note", cell: (o) => <span style={{ opacity: 0.7 }}>{o.rejectReason ?? "—"}</span> },
+    { id: "status", header: "Status", cell: (o) => <DeskChip label={o.status} tone={o.status === "FILLED" ? "success" : "danger"} /> },
+    { id: "why", header: "Note", cell: (o) => <span style={{ opacity: 0.7, fontSize: 12 }}>{o.rejectReason ?? "—"}</span> },
   ];
 
   const perpCols: DeskColumn<Instrument>[] = [
@@ -433,25 +578,15 @@ export default function CryptoPositionsPage() {
       sortValue: (i) => i.fundingRatePct8h ?? 0,
       cell: (i) => (i.fundingRatePct8h === null ? "—" : `${i.fundingRatePct8h.toFixed(4)}%`),
     },
-    {
-      id: "turnover",
-      header: "24h turnover",
-      align: "right",
-      sortValue: (i) => i.turnoverUsd ?? 0,
-      cell: (i) => usd(i.turnoverUsd, 0),
-    },
+    { id: "turnover", header: "24h turnover", align: "right", sortValue: (i) => i.turnoverUsd ?? 0, cell: (i) => compact(i.turnoverUsd) },
     {
       id: "act",
       header: "",
       align: "right",
       cell: (i) => (
         <span style={{ display: "inline-flex", gap: 6 }}>
-          <DeskButton variant="tonal" onClick={() => addLeg(i.symbol, `${i.symbol} PERP`, "BUY")}>
-            Buy
-          </DeskButton>
-          <DeskButton variant="outlined" onClick={() => addLeg(i.symbol, `${i.symbol} PERP`, "SELL")}>
-            Sell
-          </DeskButton>
+          <DeskButton variant="tonal" onClick={() => addLeg(i.symbol, `${i.symbol} PERP`, "BUY")}>Buy</DeskButton>
+          <DeskButton variant="outlined" onClick={() => addLeg(i.symbol, `${i.symbol} PERP`, "SELL")}>Sell</DeskButton>
         </span>
       ),
     },
@@ -468,35 +603,65 @@ export default function CryptoPositionsPage() {
       cell: (m) => <span style={{ color: tone(m.change24hPct ?? 0) }}>{pct(m.change24hPct)}</span>,
     },
     { id: "oi", header: "OI", align: "right", sortValue: (m) => m.openInterest ?? 0, cell: (m) => (m.openInterest ?? 0).toLocaleString() },
-    { id: "to", header: "Turnover", align: "right", sortValue: (m) => m.turnoverUsd ?? 0, cell: (m) => usd(m.turnoverUsd, 0) },
+    { id: "to", header: "Turnover", align: "right", sortValue: (m) => m.turnoverUsd ?? 0, cell: (m) => compact(m.turnoverUsd) },
     {
       id: "act",
       header: "",
       align: "right",
       cell: (m) => (
         <span style={{ display: "inline-flex", gap: 6 }}>
-          <DeskButton variant="tonal" onClick={() => addLeg(m.symbol, m.displayName, "BUY")}>
-            Buy
-          </DeskButton>
-          <DeskButton variant="outlined" onClick={() => addLeg(m.symbol, m.displayName, "SELL")}>
-            Sell
-          </DeskButton>
+          <DeskButton variant="tonal" onClick={() => addLeg(m.symbol, m.displayName, "BUY")}>Buy</DeskButton>
+          <DeskButton variant="outlined" onClick={() => addLeg(m.symbol, m.displayName, "SELL")}>Sell</DeskButton>
         </span>
       ),
     },
   ];
 
+  const specCols: DeskColumn<ContractSpec>[] = [
+    { id: "u", header: "Underlying", cell: (s) => <strong>{s.underlying}</strong> },
+    { id: "cv", header: "1 contract =", align: "right", cell: (s) => `${s.contractValue} ${s.underlying}` },
+    { id: "unit", header: "Quoted", cell: (s) => s.priceUnit },
+    { id: "spot", header: "Spot", align: "right", cell: (s) => usd(s.spot) },
+    {
+      id: "val",
+      header: "Value per contract",
+      align: "right",
+      sortValue: (s) => s.contractValueUsd ?? 0,
+      cell: (s) => usd(s.contractValueUsd),
+    },
+    { id: "tick", header: "Tick", align: "right", cell: (s) => (s.tickSize === null ? "—" : String(s.tickSize)) },
+    { id: "exp", header: "Expiries", align: "right", cell: (s) => s.expiryCount },
+    { id: "o", header: "Options", align: "right", cell: (s) => s.optionCount.toLocaleString() },
+    { id: "p", header: "Perps", align: "right", cell: (s) => s.perpetualCount },
+  ];
+
+  const historyCols: DeskColumn<LivePosition>[] = [
+    { id: "closed", header: "Closed", sortValue: (p) => p.closedAt ?? 0, cell: (p) => (p.closedAt ? new Date(p.closedAt).toLocaleString() : "—") },
+    { id: "name", header: "Contract", cell: (p) => p.displayName },
+    { id: "side", header: "Side", cell: (p) => <DeskChip label={p.side} tone={p.side === "BUY" ? "success" : "danger"} /> },
+    { id: "lots", header: "Lots", align: "right", cell: (p) => p.lots },
+    { id: "entry", header: "Entry", align: "right", cell: (p) => usd(p.entryPrice, 4) },
+    { id: "exit", header: "Exit", align: "right", cell: (p) => usd(p.exitPrice, 4) },
+    { id: "fees", header: "Fees", align: "right", cell: (p) => usd(p.feesUsd) },
+    {
+      id: "pnl",
+      header: "Realised",
+      align: "right",
+      sortValue: (p) => p.realizedPnl,
+      cell: (p) => <span style={{ color: tone(p.realizedPnl), fontWeight: 600 }}>{usd(p.realizedPnl)}</span>,
+    },
+  ];
+
+  const sel = { padding: "7px 10px", borderRadius: 10, border: "1px solid var(--desk-outline-variant)", background: "var(--desk-surface)", color: "inherit" } as const;
+
   return (
     <DeskShell
-      loading={busy || chainLoading}
+      loading={busy !== null}
       appBar={
         <DeskAppBar
           title="Crypto Positions"
-          // "live" describes the PRICES, which are Delta's own and current.
-          // The money is paper, which the footer and the balance label say
-          // plainly — a status badge is about the data feed, not the capital.
           status={chain || perps.length > 0 ? "live" : "syncing"}
-          subtitle="Live Delta option chains and perpetuals — buy or sell with real quoted premiums and hedge-aware portfolio margin, across paper accounts with their own editable balance. Not investment advice."
+          subtitle="Live Delta option chains and perpetuals — buy or sell at real quoted premiums with hedge-aware portfolio margin, across paper accounts with their own editable balance. Not investment advice."
           equity={summary?.equity}
           equityCurrency="USD"
           equityLabel="Paper equity"
@@ -504,126 +669,116 @@ export default function CryptoPositionsPage() {
         />
       }
     >
-      {/* accounts */}
+      {/* ── account bar ──────────────────────────────────────────────────── */}
       <DeskCard padding="md">
         <DeskSectionHeader
-          title="Accounts"
-          subtitle={`${accounts.length} book${accounts.length === 1 ? "" : "s"} · settles in USD`}
+          title="Paper account"
+          subtitle={`${accounts.length} book${accounts.length === 1 ? "" : "s"} · settles in USD · no broker path`}
           actions={
-            <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
-              <select
-                value={accountId ?? ""}
-                onChange={(e) => setAccountId(e.target.value)}
-                style={{ padding: "6px 10px", borderRadius: 8 }}
-              >
+            <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <select value={accountId ?? ""} onChange={(e) => setAccountId(e.target.value)} style={sel}>
                 {accounts.map((a) => (
                   <option key={a.accountId} value={a.accountId}>
-                    {a.name} · {usd(a.initialCapital, 0)}
+                    {a.name} — starting {usd(a.initialCapital, 0)}
                   </option>
                 ))}
               </select>
-              <DeskButton variant="outlined" onClick={loadBook} disabled={busy}>
-                Refresh
-              </DeskButton>
-              <DeskButton
-                variant="tonal"
-                onClick={() => setAccountForm({ mode: "create", name: "", capital: "100000" })}
-              >
-                + New Account
-              </DeskButton>
-              <DeskButton
-                variant="outlined"
-                disabled={!active}
-                onClick={() =>
-                  active &&
-                  setAccountForm({ mode: "edit", name: active.name, capital: String(active.initialCapital) })
-                }
-              >
-                Edit
-              </DeskButton>
-              <DeskButton variant="danger-tonal" onClick={reset} disabled={busy || !accountId}>
-                Reset
-              </DeskButton>
+              <DeskButton variant="outlined" onClick={loadBook} disabled={busy !== null}>Refresh</DeskButton>
+              <DeskButton variant="tonal" onClick={() => setAccountForm({ mode: "create", name: "", capital: "100000" })}>+ New account</DeskButton>
+              <DeskButton variant="outlined" disabled={!active} onClick={() => active && setAccountForm({ mode: "edit", name: active.name, capital: String(active.initialCapital) })}>Edit</DeskButton>
+              <DeskButton variant="outlined" onClick={reset} disabled={busy !== null || !accountId}>Reset</DeskButton>
+              <DeskButton variant="danger-tonal" onClick={del} disabled={busy !== null || !accountId}>Delete</DeskButton>
             </span>
           }
         />
-
         {accountForm && (
           <DeskCard variant="outlined" padding="md" style={{ marginTop: 12 }}>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
               <label style={{ display: "grid", gap: 4 }}>
                 <span style={{ fontSize: 12, opacity: 0.7 }}>Name</span>
-                <input
-                  value={accountForm.name}
-                  onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })}
-                  style={{ padding: "6px 10px", borderRadius: 8 }}
-                />
+                <input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} style={sel} />
               </label>
               <label style={{ display: "grid", gap: 4 }}>
                 <span style={{ fontSize: 12, opacity: 0.7 }}>Balance (USD)</span>
-                <input
-                  value={accountForm.capital}
-                  inputMode="decimal"
-                  onChange={(e) => setAccountForm({ ...accountForm, capital: e.target.value })}
-                  style={{ padding: "6px 10px", borderRadius: 8 }}
-                />
+                <input value={accountForm.capital} inputMode="decimal" onChange={(e) => setAccountForm({ ...accountForm, capital: e.target.value })} style={sel} />
               </label>
-              <DeskButton variant="filled" onClick={submitAccount} disabled={busy}>
-                {accountForm.mode === "create" ? "Create" : "Save"}
-              </DeskButton>
-              <DeskButton variant="text" onClick={() => setAccountForm(null)}>
-                Cancel
-              </DeskButton>
+              <DeskButton variant="filled" onClick={submitAccount} disabled={busy !== null}>{accountForm.mode === "create" ? "Create" : "Save"}</DeskButton>
+              <DeskButton variant="text" onClick={() => setAccountForm(null)}>Cancel</DeskButton>
             </div>
             <p style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-              Changing the balance moves the base capital only. Open positions and realized P&amp;L are untouched, so
-              ROI is restated against the new base rather than recalculated from it.
+              Changing the balance moves the base capital only. Open positions and realised P&amp;L are untouched, so ROI
+              is restated against the new base rather than recalculated from it.
             </p>
           </DeskCard>
         )}
       </DeskCard>
 
-      {/* summary tiles */}
+      {/* ── tiles ────────────────────────────────────────────────────────── */}
       {summary && (
-        <div
-          style={{
-            display: "grid",
-            gap: 12,
-            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-            marginTop: 12,
-          }}
-        >
-          <DeskMetricTile label="Equity" value={usd(summary.equity)} sub={pct(summary.roiPct)} subColor={summary.roiPct >= 0 ? "profit" : "loss"} />
-          <DeskMetricTile label="Realized" value={usd(summary.realizedPnl)} subColor={summary.realizedPnl >= 0 ? "profit" : "loss"} />
-          <DeskMetricTile label="Unrealized" value={usd(summary.unrealizedPnl)} subColor={summary.unrealizedPnl >= 0 ? "profit" : "loss"} />
-          <DeskMetricTile
-            label="Win %"
-            value={summary.winPct === null ? "—" : `${summary.winPct.toFixed(1)}%`}
-            sub={`${summary.closedPositions} closed`}
-          />
-          <DeskMetricTile label="Margin deployed" value={usd(summary.deployedMargin)} sub="netted across the book" />
-          {summary.marginBenefit > 0 && (
-            <DeskMetricTile label="Hedge benefit" value={`−${usd(summary.marginBenefit)}`} subColor="profit" sub="saved by offsets" />
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", marginTop: 12 }}>
+          <DeskMetricTile label="Equity" value={usd(summary.equity)} sub={`started at ${usd(summary.initialCapital, 0)}`} />
+          <DeskMetricTile label="Available cash" value={usd(summary.availableCash)} sub={`${usd(summary.deployedMargin)} margin blocked`} />
+          <DeskMetricTile label="Contract exposure" value={compact(summary.contractExposureUsd)} sub="full notional of the open book" />
+          <DeskMetricTile label="Unrealised" value={usd(summary.unrealizedPnl)} subColor={summary.unrealizedPnl >= 0 ? "profit" : "loss"} sub={`${summary.openPositions} open`} />
+          <DeskMetricTile label="Realised" value={usd(summary.realizedPnl)} subColor={summary.realizedPnl >= 0 ? "profit" : "loss"} sub={`${summary.closedPositions} closed`} />
+          <DeskMetricTile label="Win %" value={summary.winPct === null ? "—" : `${summary.winPct.toFixed(1)}%`} sub={summary.closedPositions === 0 ? "nothing closed yet" : undefined} />
+          {summary.marginBenefit > 0 && <DeskMetricTile label="Hedge benefit" value={`−${usd(summary.marginBenefit)}`} subColor="profit" sub="saved by offsets" />}
+          <DeskMetricTile label="Underlyings" value={summary.underlyingsOpen} sub={`${specs.length} tradable`} />
+        </div>
+      )}
+
+      {error && <div style={{ marginTop: 12 }}><DeskBanner variant="error" title="That did not go through">{error}</DeskBanner></div>}
+      {notice && <div style={{ marginTop: 12 }}><DeskBanner variant="success">{notice}</DeskBanner></div>}
+
+      {/* ── order ticket ─────────────────────────────────────────────────── */}
+      <DeskCard padding="md" style={{ marginTop: 12 }}>
+        <DeskSectionHeader title="Order ticket" subtitle="applies to every Buy / Sell button below" />
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>Underlying</span>
+            <select value={underlying} onChange={(e) => setUnderlying(e.target.value)} style={sel}>
+              {underlyings.map((u) => (
+                <option key={u.symbol} value={u.symbol}>{u.symbol}</option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>Lots</span>
+            <input
+              value={lots}
+              inputMode="numeric"
+              onChange={(e) => {
+                const n = Math.floor(Number(e.target.value));
+                setLots(Number.isFinite(n) && n > 0 ? n : 1);
+              }}
+              style={{ ...sel, width: 90 }}
+            />
+          </label>
+          <label style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>Expiry</span>
+            <select value={expiry} onChange={(e) => setExpiry(e.target.value)} style={sel}>
+              {expiries.map((e) => (
+                <option key={e} value={e}>{formatExpiry(e)}</option>
+              ))}
+            </select>
+          </label>
+          {spec && (
+            <div style={{ fontSize: 12, lineHeight: 1.6, opacity: 0.85, borderLeft: "2px solid var(--desk-outline-variant)", paddingLeft: 12 }}>
+              <div><b>1 contract = {spec.contractValue} {spec.underlying}</b> · quoted {spec.priceUnit}</div>
+              <div style={{ opacity: 0.7 }}>
+                one contract is worth {usd(spec.contractValueUsd)} at spot · {spec.optionCount.toLocaleString()} options
+                across {spec.expiryCount} expiries · {spec.perpetualCount} perpetual{spec.perpetualCount === 1 ? "" : "s"}
+              </div>
+              <div style={{ opacity: 0.7 }}>
+                {lots} lot{lots === 1 ? "" : "s"} controls {(lots * spec.contractValue).toLocaleString("en-US", { maximumFractionDigits: 6 })} {spec.underlying}
+                {spec.contractValueUsd !== null ? ` — about ${usd(lots * spec.contractValueUsd)}` : ""}
+              </div>
+            </div>
           )}
-          <DeskMetricTile label="Available cash" value={usd(summary.availableCash)} />
-          <DeskMetricTile label="Fees paid" value={usd(summary.totalFeesUsd)} />
         </div>
-      )}
+      </DeskCard>
 
-      {error && (
-        <div style={{ marginTop: 12 }}>
-          <DeskBanner variant="error" title="That did not go through">
-            {error}
-          </DeskBanner>
-        </div>
-      )}
-      {notice && (
-        <div style={{ marginTop: 12 }}>
-          <DeskBanner variant="success">{notice}</DeskBanner>
-        </div>
-      )}
-
-      {/* basket */}
+      {/* ── basket ───────────────────────────────────────────────────────── */}
       {basket.length > 0 && (
         <DeskCard padding="md" style={{ marginTop: 12 }}>
           <DeskSectionHeader
@@ -631,16 +786,8 @@ export default function CryptoPositionsPage() {
             subtitle={`${basket.length} leg${basket.length === 1 ? "" : "s"} · margin is charged on what this ADDS to the book, so a hedge can cost less than it would alone`}
             actions={
               <span style={{ display: "inline-flex", gap: 8 }}>
-                <DeskButton variant="text" onClick={() => setBasket([])}>
-                  Clear
-                </DeskButton>
-                <DeskButton
-                  variant="filled"
-                  onClick={execute}
-                  disabled={busy || !preview?.affordable}
-                >
-                  Execute
-                </DeskButton>
+                <DeskButton variant="text" onClick={() => setBasket([])}>Clear</DeskButton>
+                <DeskButton variant="filled" onClick={execute} disabled={busy !== null || !preview?.affordable}>Execute</DeskButton>
               </span>
             }
           />
@@ -653,36 +800,21 @@ export default function CryptoPositionsPage() {
                   value={b.lots}
                   inputMode="numeric"
                   onChange={(e) => {
-                    const n = Number(e.target.value);
+                    const n = Math.floor(Number(e.target.value));
                     setBasket((cur) => cur.map((x, i) => (i === idx ? { ...x, lots: Number.isFinite(n) && n > 0 ? n : 1 } : x)));
                   }}
-                  style={{ width: 70, padding: "4px 8px", borderRadius: 6 }}
+                  style={{ ...sel, width: 76 }}
                 />
-                <DeskButton variant="text" onClick={() => setBasket((cur) => cur.filter((_, i) => i !== idx))}>
-                  Remove
-                </DeskButton>
+                <DeskButton variant="text" onClick={() => setBasket((cur) => cur.filter((_, i) => i !== idx))}>Remove</DeskButton>
               </div>
             ))}
           </div>
           {preview && (
-            <div
-              style={{
-                display: "grid",
-                gap: 12,
-                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                marginTop: 12,
-              }}
-            >
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", marginTop: 12 }}>
               <DeskMetricTile label="Margin required" value={usd(preview.marginRequired)} />
-              <DeskMetricTile
-                label="Net premium"
-                value={`${usd(Math.abs(preview.netPremium))} ${preview.netPremium >= 0 ? "credit" : "debit"}`}
-                subColor={preview.netPremium >= 0 ? "profit" : "loss"}
-              />
-              <DeskMetricTile label="Worst case" value={usd(preview.worstCaseLossUsd)} sub={`over ±20% spot`} />
-              {preview.marginBenefit > 0 && (
-                <DeskMetricTile label="Hedge benefit" value={`−${usd(preview.marginBenefit)}`} subColor="profit" />
-              )}
+              <DeskMetricTile label="Net premium" value={`${usd(Math.abs(preview.netPremium))} ${preview.netPremium >= 0 ? "credit" : "debit"}`} subColor={preview.netPremium >= 0 ? "profit" : "loss"} />
+              <DeskMetricTile label="Worst case" value={usd(preview.worstCaseLossUsd)} sub="over ±20% spot" />
+              {preview.marginBenefit > 0 && <DeskMetricTile label="Hedge benefit" value={`−${usd(preview.marginBenefit)}`} subColor="profit" />}
               <DeskMetricTile label="Fees" value={usd(preview.feesUsd)} />
               <DeskMetricTile label="Available" value={usd(preview.availableCash)} />
             </div>
@@ -690,8 +822,8 @@ export default function CryptoPositionsPage() {
           {preview && !preview.affordable && (
             <div style={{ marginTop: 10 }}>
               <DeskBanner variant="warning" title="Not enough margin">
-                This basket needs {usd(preview.marginRequired)} but only {usd(preview.availableCash)} is available.
-                Reduce lots, add a hedge that offsets it, or raise the account balance.
+                This basket needs {usd(preview.marginRequired)} but only {usd(preview.availableCash)} is available. Reduce
+                lots, add a hedge that offsets it, or raise the account balance.
               </DeskBanner>
             </div>
           )}
@@ -706,107 +838,63 @@ export default function CryptoPositionsPage() {
             { key: "movers", label: "Top Movers" },
             { key: "positions", label: `Positions (${summary?.openPositions ?? 0})` },
             { key: "orders", label: "Orders" },
+            { key: "specs", label: "Contract Specs" },
+            { key: "history", label: "History" },
           ]}
           active={tab}
           onChange={(k) => setTab(k as Tab)}
         />
       </div>
 
-      {/* ── option chain ─────────────────────────────────────────────────── */}
+      {/* ── chain ────────────────────────────────────────────────────────── */}
       {tab === "chain" && (
         <DeskCard padding="md" style={{ marginTop: 12 }}>
           <DeskSectionHeader
             title="Option chain"
-            subtitle={
-              chain
-                ? `${chain.rows.length} strikes · spot ${usd(chain.spot)} · click BUY or SELL to build a basket`
-                : "Loading the live chain…"
-            }
-            actions={
-              <span style={{ display: "inline-flex", gap: 8 }}>
-                <select value={underlying} onChange={(e) => setUnderlying(e.target.value)} style={{ padding: "6px 10px", borderRadius: 8 }}>
-                  {underlyings.map((u) => (
-                    <option key={u.symbol} value={u.symbol}>
-                      {u.symbol}
-                    </option>
-                  ))}
-                </select>
-                <select value={expiry} onChange={(e) => setExpiry(e.target.value)} style={{ padding: "6px 10px", borderRadius: 8 }}>
-                  {expiries.map((e) => (
-                    <option key={e} value={e}>
-                      {formatExpiry(e)}
-                    </option>
-                  ))}
-                </select>
-              </span>
-            }
+            subtitle={chain ? `${chain.rows.length} strikes · spot ${usd(chain.spot)} · buying ${lots} lot${lots === 1 ? "" : "s"} per click` : "Loading the live chain…"}
+            actions={<DeskChip label={`${underlying} · ${expiry ? formatExpiry(expiry) : "—"}`} tone="primary" />}
           />
           {chain && chain.rows.length > 0 ? (
             <div style={{ overflowX: "auto", marginTop: 10 }}>
               <AutoSortTable>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 900 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 940 }}>
                   <thead>
                     <tr>
-                      <th colSpan={5} style={{ textAlign: "center", padding: 6, opacity: 0.7 }}>
-                        CALLS
-                      </th>
+                      <th colSpan={5} style={{ textAlign: "center", padding: 6, opacity: 0.65, letterSpacing: 1 }}>CALLS</th>
                       <th style={{ padding: 6 }}>Strike</th>
-                      <th colSpan={5} style={{ textAlign: "center", padding: 6, opacity: 0.7 }}>
-                        PUTS
-                      </th>
+                      <th colSpan={5} style={{ textAlign: "center", padding: 6, opacity: 0.65, letterSpacing: 1 }}>PUTS</th>
                     </tr>
-                    <tr style={{ opacity: 0.7 }}>
-                      <th style={{ padding: 4 }}>OI</th>
-                      <th style={{ padding: 4 }}>IV</th>
-                      <th style={{ padding: 4 }}>Δ</th>
-                      <th style={{ padding: 4 }}>Mark</th>
-                      <th style={{ padding: 4 }} />
+                    <tr style={{ opacity: 0.65, fontSize: 11 }}>
+                      <th style={{ padding: 4 }}>OI</th><th style={{ padding: 4 }}>IV</th><th style={{ padding: 4 }}>Δ</th><th style={{ padding: 4 }}>Mark</th><th />
                       <th />
-                      <th style={{ padding: 4 }} />
-                      <th style={{ padding: 4 }}>Mark</th>
-                      <th style={{ padding: 4 }}>Δ</th>
-                      <th style={{ padding: 4 }}>IV</th>
-                      <th style={{ padding: 4 }}>OI</th>
+                      <th /><th style={{ padding: 4 }}>Mark</th><th style={{ padding: 4 }}>Δ</th><th style={{ padding: 4 }}>IV</th><th style={{ padding: 4 }}>OI</th>
                     </tr>
                   </thead>
                   <tbody>
                     {chain.rows.map((r) => {
                       const atm = r.strike === chain.atmStrike;
+                      const label = (t: "CALL" | "PUT") => `${chain.underlying} ${formatExpiry(chain.expiry)} ${r.strike} ${t}`;
                       return (
-                        <tr
-                          key={r.strike}
-                          style={{
-                            borderTop: "1px solid var(--desk-outline-variant)",
-                            background: atm ? "var(--desk-primary-container)" : undefined,
-                          }}
-                        >
+                        <tr key={r.strike} style={{ borderTop: "1px solid var(--desk-outline-variant)", background: atm ? "var(--desk-primary-container)" : undefined }}>
                           <td style={{ padding: 4, textAlign: "right" }}>{r.call?.openInterest?.toLocaleString() ?? "—"}</td>
                           <td style={{ padding: 4, textAlign: "right" }}>{r.call?.ivPct ? `${r.call.ivPct.toFixed(1)}%` : "—"}</td>
                           <td style={{ padding: 4, textAlign: "right" }}>{r.call?.greeks ? r.call.greeks.delta.toFixed(3) : "—"}</td>
                           <td style={{ padding: 4, textAlign: "right", fontWeight: 600 }}>{r.call ? usd(r.call.markPrice, 2) : "—"}</td>
                           <td style={{ padding: 4, whiteSpace: "nowrap" }}>
                             {r.call && (
-                              <>
-                                <DeskButton variant="tonal" onClick={() => addLeg(r.call!.symbol, `${chain.underlying} ${formatExpiry(chain.expiry)} ${r.strike} CALL`, "BUY")}>
-                                  B
-                                </DeskButton>{" "}
-                                <DeskButton variant="outlined" onClick={() => addLeg(r.call!.symbol, `${chain.underlying} ${formatExpiry(chain.expiry)} ${r.strike} CALL`, "SELL")}>
-                                  S
-                                </DeskButton>
-                              </>
+                              <span style={{ display: "inline-flex", gap: 4 }}>
+                                <DeskButton variant="tonal" onClick={() => addLeg(r.call!.symbol, label("CALL"), "BUY")}>B</DeskButton>
+                                <DeskButton variant="outlined" onClick={() => addLeg(r.call!.symbol, label("CALL"), "SELL")}>S</DeskButton>
+                              </span>
                             )}
                           </td>
                           <td style={{ padding: 4, textAlign: "center", fontWeight: 700 }}>{r.strike.toLocaleString()}</td>
                           <td style={{ padding: 4, whiteSpace: "nowrap" }}>
                             {r.put && (
-                              <>
-                                <DeskButton variant="tonal" onClick={() => addLeg(r.put!.symbol, `${chain.underlying} ${formatExpiry(chain.expiry)} ${r.strike} PUT`, "BUY")}>
-                                  B
-                                </DeskButton>{" "}
-                                <DeskButton variant="outlined" onClick={() => addLeg(r.put!.symbol, `${chain.underlying} ${formatExpiry(chain.expiry)} ${r.strike} PUT`, "SELL")}>
-                                  S
-                                </DeskButton>
-                              </>
+                              <span style={{ display: "inline-flex", gap: 4 }}>
+                                <DeskButton variant="tonal" onClick={() => addLeg(r.put!.symbol, label("PUT"), "BUY")}>B</DeskButton>
+                                <DeskButton variant="outlined" onClick={() => addLeg(r.put!.symbol, label("PUT"), "SELL")}>S</DeskButton>
+                              </span>
                             )}
                           </td>
                           <td style={{ padding: 4, textAlign: "right", fontWeight: 600 }}>{r.put ? usd(r.put.markPrice, 2) : "—"}</td>
@@ -826,27 +914,17 @@ export default function CryptoPositionsPage() {
         </DeskCard>
       )}
 
-      {/* ── perpetuals ───────────────────────────────────────────────────── */}
       {tab === "perps" && (
         <DeskCard padding="md" style={{ marginTop: 12 }}>
-          <DeskSectionHeader
-            title="Perpetuals"
-            subtitle={`${perps.length} contracts · Delta India lists no dated futures, so these never expire and pay funding instead`}
-          />
-          <DeskDataTable
-            columns={perpCols}
-            rows={perps}
-            getRowKey={(i) => i.symbol}
-            empty={<DeskEmptyState title="No perpetuals" subtitle="Waiting for the venue." />}
-          />
+          <DeskSectionHeader title="Perpetuals" subtitle={`${perps.length} contracts · Delta India lists no dated futures, so these never expire and pay funding instead`} />
+          <DeskDataTable columns={perpCols} rows={perps} getRowKey={(i) => i.symbol} empty={<DeskEmptyState title="No perpetuals" subtitle="Waiting for the venue." />} />
         </DeskCard>
       )}
 
-      {/* ── top movers ───────────────────────────────────────────────────── */}
       {tab === "movers" && (
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
           <DeskCard padding="md">
-            <DeskSectionHeader title="Top calls" subtitle="Ranked by traded value, not by percent change — a 200% move on a $0.05 option is not a mover" />
+            <DeskSectionHeader title="Top calls" subtitle="Ranked by traded value, not percent change — a 200% move on a $0.05 option is not a mover" />
             <DeskDataTable columns={moverCols} rows={movers?.topCalls ?? []} getRowKey={(m) => m.symbol} empty={<DeskEmptyState title="Loading" />} />
           </DeskCard>
           <DeskCard padding="md">
@@ -861,49 +939,117 @@ export default function CryptoPositionsPage() {
         <DeskCard padding="md" style={{ marginTop: 12 }}>
           <DeskSectionHeader
             title="Positions"
-            subtitle={`${positions.length} in ${active?.name ?? "—"}`}
+            subtitle={`${positions.length} in ${active?.name ?? "—"} · marked to the live Delta price`}
             actions={
               <span style={{ display: "inline-flex", gap: 6 }}>
-                <DeskButton variant={posFilter === "OPEN" ? "filled" : "outlined"} onClick={() => setPosFilter("OPEN")}>
-                  Open
-                </DeskButton>
-                <DeskButton variant={posFilter === "all" ? "filled" : "outlined"} onClick={() => setPosFilter("all")}>
-                  All
-                </DeskButton>
+                <DeskButton variant={posFilter === "OPEN" ? "filled" : "outlined"} onClick={() => setPosFilter("OPEN")}>Open</DeskButton>
+                <DeskButton variant={posFilter === "all" ? "filled" : "outlined"} onClick={() => setPosFilter("all")}>All</DeskButton>
               </span>
             }
           />
-          <DeskDataTable
-            columns={positionCols}
-            rows={positions}
-            getRowKey={(p) => p.positionId}
-            empty={<DeskEmptyState title="No positions" subtitle="Build a basket from the chain or the perpetuals list." />}
-          />
+
+          {reduceFor && (
+            <DeskCard variant="outlined" padding="md" style={{ marginTop: 10 }}>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <b>{reduceFor.name}</b>
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>
+                    Holds {reduceFor.max} lots. Closing part of it leaves the rest open at the ORIGINAL entry — the
+                    remainder is not re-based to the current mark, so its unrealised P&amp;L is not quietly booked.
+                  </div>
+                </div>
+                <label style={{ display: "grid", gap: 4 }}>
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>Lots to close</span>
+                  <input value={reduceFor.lots} inputMode="numeric" onChange={(e) => setReduceFor({ ...reduceFor, lots: e.target.value })} style={{ ...sel, width: 100 }} />
+                </label>
+                <DeskButton variant="filled" onClick={submitReduce} disabled={busy !== null}>Close part</DeskButton>
+                <DeskButton variant="text" onClick={() => setReduceFor(null)}>Cancel</DeskButton>
+              </div>
+            </DeskCard>
+          )}
+
+          {openRows.length > 0 && (
+            <DeskCard variant="outlined" padding="md" style={{ marginTop: 10 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 260, fontSize: 13, lineHeight: 1.6 }}>
+                  {selected.length ? (
+                    <>
+                      <b>{selected.length} of {openRows.length} selected.</b> Roll applies to the{" "}
+                      {selectedRollable.length} option leg{selectedRollable.length === 1 ? "" : "s"} among them —
+                      perpetuals have no strike and are left alone.
+                    </>
+                  ) : (
+                    <>
+                      <b>Roll the book to the money.</b> Every option leg is closed at the live price and re-opened at
+                      the strike nearest its own spot — same side, same lots. Checked against your margin before
+                      anything is closed, and done per expiry group so a straddle never sits half-rolled. Tick rows to
+                      roll only some of them.
+                    </>
+                  )}
+                </div>
+                <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+                  {selected.length > 0 && (
+                    <DeskButton variant="danger-tonal" onClick={closeSelected} disabled={busy !== null}>
+                      {busy === "close-many" ? "Closing…" : `Close ${selected.length} selected`}
+                    </DeskButton>
+                  )}
+                  <DeskButton
+                    variant="tonal"
+                    disabled={busy !== null || (selected.length ? selectedRollable.length === 0 : rollable.length === 0)}
+                    onClick={() => roll(selected.length ? selectedRollable.map((p) => p.positionId) : undefined)}
+                  >
+                    {busy === "roll"
+                      ? "Rolling…"
+                      : selected.length
+                        ? `Re-add ATM · ${selectedRollable.length} selected`
+                        : `Re-add ATM · all ${rollable.length} leg${rollable.length === 1 ? "" : "s"}`}
+                  </DeskButton>
+                </span>
+              </div>
+            </DeskCard>
+          )}
+
+          <div style={{ marginTop: 10 }}>
+            <DeskDataTable
+              columns={positionCols}
+              rows={positions}
+              getRowKey={(p) => p.positionId}
+              empty={<DeskEmptyState title="No positions" subtitle="Build a basket from the chain or the perpetuals list." />}
+            />
+          </div>
         </DeskCard>
       )}
 
-      {/* ── orders ───────────────────────────────────────────────────────── */}
       {tab === "orders" && (
         <DeskCard padding="md" style={{ marginTop: 12 }}>
+          <DeskSectionHeader title="Orders" subtitle="Every fill and every rejection, with the reason it was refused" />
+          <DeskDataTable columns={orderCols} rows={orders} getRowKey={(o) => o.orderId} empty={<DeskEmptyState title="No orders yet" subtitle="Nothing has been placed on this account." />} />
+        </DeskCard>
+      )}
+
+      {tab === "specs" && (
+        <DeskCard padding="md" style={{ marginTop: 12 }}>
           <DeskSectionHeader
-            title="Orders"
-            subtitle="Every fill and every rejection, with the reason it was refused"
+            title="Contract specs"
+            subtitle="What one contract actually controls. A Delta option is quoted per whole unit of the underlying, so a $2,000 BTC call costs $2 for one 0.001 contract."
           />
-          <DeskDataTable
-            columns={orderCols}
-            rows={orders}
-            getRowKey={(o) => o.orderId}
-            empty={<DeskEmptyState title="No orders yet" subtitle="Nothing has been placed on this account." />}
-          />
+          <DeskDataTable columns={specCols} rows={specs} getRowKey={(s) => s.underlying} empty={<DeskEmptyState title="Loading specs" />} />
+        </DeskCard>
+      )}
+
+      {tab === "history" && (
+        <DeskCard padding="md" style={{ marginTop: 12 }}>
+          <DeskSectionHeader title="History" subtitle={`${closed.length} closed position${closed.length === 1 ? "" : "s"} in ${active?.name ?? "—"}`} />
+          <DeskDataTable columns={historyCols} rows={closed} getRowKey={(p) => p.positionId} empty={<DeskEmptyState title="Nothing closed yet" subtitle="Closed positions and rolls land here." />} />
         </DeskCard>
       )}
 
       <p style={{ marginTop: 16, fontSize: 12, opacity: 0.65, lineHeight: 1.6 }}>
         Paper money, real prices. This desk holds no API key, signs no request and has no order-routing path — nothing
         here can reach a broker. Fills cross the spread: a buy pays the ask and a sell hits the bid, from Delta&apos;s
-        published quotes, and where a contract has no quote the fill says it used the mark. Margin is scenario-based:
+        published quotes, and where a contract has no quote the fill says it used the mark. Margin is scenario-based —
         the whole book is revalued across a ±20% shock in spot and the worst loss is what gets blocked, so a bought
-        option that caps a sold one genuinely lowers the requirement. That model is ours, not the venue&apos;s — a real
+        option that caps a sold one genuinely lowers the requirement. That model is ours, not the venue&apos;s; a real
         Delta account would be charged something different.
       </p>
     </DeskShell>

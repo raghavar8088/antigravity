@@ -196,6 +196,54 @@ export type PositionsSummary = {
   marginBenefit: number;
   availableCash: number;
   totalFeesUsd: number;
+  /**
+   * Full notional of the open book at the mark.
+   *
+   * Shown next to margin because the two answer different questions and are
+   * routinely confused: margin is what the account has posted, exposure is what
+   * it is actually holding. A $116 straddle controls tens of thousands of
+   * dollars of BTC, and a desk that only reports the margin lets that go
+   * unnoticed until the position moves.
+   */
+  contractExposureUsd: number;
+  /** Distinct underlyings with an open position. */
+  underlyingsOpen: number;
+};
+
+/** What one contract of an underlying actually controls. */
+export type ContractSpec = {
+  underlying: string;
+  /** Units of the underlying per contract, e.g. 0.001 BTC. */
+  contractValue: number;
+  /** What the quote means, spelled out. */
+  priceUnit: string;
+  optionCount: number;
+  perpetualCount: number;
+  expiryCount: number;
+  spot: number | null;
+  tickSize: number | null;
+  /** Value of one contract at the current spot. */
+  contractValueUsd: number | null;
+};
+
+/** One leg's outcome inside a roll. */
+export type RollLeg = {
+  positionId: string;
+  from: string;
+  to: string;
+  exitPrice: number;
+  entryPrice: number;
+  realizedPnl: number;
+};
+
+export type RollResult = {
+  rolled: RollLeg[];
+  realizedPnl: number;
+  marginDelta: number;
+  feesUsd: number;
+  /** Groups left untouched, with the reason. */
+  failed: { underlying: string; expiry: string; reason: string }[];
+  note: string;
 };
 
 /** One leg of a basket, before it is priced. */

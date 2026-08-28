@@ -280,6 +280,26 @@ export async function closePositionDoc(
   );
 }
 
+/**
+ * Take some contracts off an open position, leaving the rest untouched.
+ *
+ * The entry price is deliberately NOT restated. Re-basing the remainder to the
+ * current mark would book the unrealised P&L of the part that is still open,
+ * which is not what a partial close does anywhere it is done for real.
+ */
+export async function reduceLots(
+  positionId: string,
+  lots: number,
+  realizedPnl: number,
+  feesUsd: number,
+): Promise<void> {
+  const col = await positionsCol();
+  await col.updateOne(
+    { _id: positionId, status: "OPEN" },
+    { $inc: { lots: -lots, realized_pnl: realizedPnl, fees_usd: feesUsd } },
+  );
+}
+
 export async function listOrders(accountId: string, limit = 200): Promise<Order[]> {
   const col = await ordersCol();
   const rows = await col.find({ account_id: accountId }).sort({ created_at: -1 }).limit(limit).toArray();

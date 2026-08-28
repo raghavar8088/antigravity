@@ -156,6 +156,40 @@ describe("fees", () => {
   });
 });
 
+describe("rolling to the money", () => {
+  it("costs more margin as a half-rolled pair than as either whole pair", () => {
+    // This is the reason a roll is one operation per expiry group rather than a
+    // loop over the rows. A short straddle rolled a leg at a time passes
+    // through a state where the two shorts sit at DIFFERENT strikes, and that
+    // intermediate book is wider than either the old pair or the new one. On a
+    // tight account it can be refused, stranding the position half-rolled —
+    // worse than where it started.
+    const oldCall = option("CALL", 78_000, 1_500, { delta: 0.5, gamma: 0.00002 });
+    const oldPut = option("PUT", 78_000, 1_400, { delta: -0.5, gamma: 0.00002 });
+    const newCall = option("CALL", 80_000, 900, { delta: 0.38, gamma: 0.000022 });
+    const newPut = option("PUT", 80_000, 2_100, { delta: -0.62, gamma: 0.000022 });
+
+    const before = marginFor([leg(oldCall, "SELL"), leg(oldPut, "SELL")]).marginRequired;
+    const after = marginFor([leg(newCall, "SELL"), leg(newPut, "SELL")]).marginRequired;
+    // The half-rolled state: old put still on, call already moved.
+    const halfway = marginFor([leg(newCall, "SELL"), leg(oldPut, "SELL")]).marginRequired;
+
+    expect(halfway).toBeGreaterThan(Math.min(before, after));
+  });
+
+  it("prices a straddle below the sum of its naked legs", () => {
+    // Not a hedge in the offsetting sense — both legs are short — but the two
+    // cannot lose at the same time, and the scenario scan is what sees that.
+    const call = option("CALL", 80_000, 1_500, { delta: 0.5, gamma: 0.00002 });
+    const put = option("PUT", 80_000, 1_400, { delta: -0.5, gamma: 0.00002 });
+    const both = marginFor([leg(call, "SELL"), leg(put, "SELL")]);
+    const apart =
+      marginFor([leg(call, "SELL")]).marginRequired + marginFor([leg(put, "SELL")]).marginRequired;
+    expect(both.marginRequired).toBeLessThan(apart);
+    expect(both.marginBenefit).toBeGreaterThan(0);
+  });
+});
+
 describe("labels", () => {
   it("formats an expiry the way the venue writes it", () => {
     expect(formatExpiry("2026-09-26")).toBe("26SEP26");
