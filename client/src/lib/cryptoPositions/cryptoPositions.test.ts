@@ -302,6 +302,70 @@ describe("liquidation", () => {
   });
 });
 
+describe("near-expiry gamma does not run away", () => {
+  // The bug this pins: a 1-day BTC 77,200 call marked at $531 has huge gamma,
+  // and 0.5*gamma*dS^2 at a +20% shock returned $83,187 — a price the contract
+  // could never trade at, since 20% up puts spot at $92,880 and the call is
+  // worth about $16,011. It overcharged a short straddle's margin more than
+  // fivefold and refused trades the account could easily afford.
+  const SPOT_NOW = 77_400;
+  const STRIKE = 77_200;
+  const MARK = 531;
+  const bigGamma = 0.0007;
+
+  function nearExpiryCall(): Instrument {
+    return {
+      ...option("CALL", STRIKE, MARK, { delta: 0.52, gamma: bigGamma }),
+      spot: SPOT_NOW,
+    };
+  }
+
+  it("never values an option above intrinsic plus the time value it holds today", () => {
+    const call = nearExpiryCall();
+    const m = marginFor([leg(call, "SELL", 50)]);
+    const qty = 50 * 0.001;
+    // Ceiling at +20%: intrinsic 15,680 plus today's extrinsic 331.
+    const ceiling = 15_680 + (MARK - (SPOT_NOW - STRIKE));
+    const worstPossible = (ceiling - MARK) * qty;
+    expect(m.marginRequired).toBeLessThanOrEqual(worstPossible + 1);
+    // And nowhere near the $4,159 the unbounded curve produced.
+    expect(m.marginRequired).toBeLessThan(1_200);
+  });
+
+  it("still charges real margin — the bound is not a way to make shorts free", () => {
+    const call = nearExpiryCall();
+    const m = marginFor([leg(call, "SELL", 50)]);
+    expect(m.marginRequired).toBeGreaterThan(500);
+  });
+
+  it("never prices an option below intrinsic at the shocked spot", () => {
+    // A deep ITM short cannot be revalued below what exercising it costs.
+    const itm = { ...option("CALL", 60_000, 17_500, { delta: 0.98, gamma: 0.0000001 }), spot: 77_400 };
+    const m = marginFor([leg(itm, "SELL", 10)]);
+    expect(Number.isFinite(m.marginRequired)).toBe(true);
+    expect(m.marginRequired).toBeGreaterThan(0);
+  });
+});
+
+describe("short option liquidation is quoted on the underlying", () => {
+  it("reports a spot level, not the option's own price", () => {
+    // Running a short option through the perp formula produced a liquidation a
+    // fraction of a percent from the option's mark, which reads as imminent and
+    // means nothing. What matters is where SPOT has to go.
+    const call = { ...option("CALL", 77_200, 531, { delta: 0.52, gamma: 0.0007 }), spot: 77_400 };
+    const liq = liquidationFor(call, "SELL", 50, 531, 1, 531)!;
+    expect(liq.basis).toBe("underlying");
+    // Somewhere in the neighbourhood of spot, not of the $531 premium.
+    expect(liq.price).toBeGreaterThan(50_000);
+    expect(liq.price).toBeLessThan(200_000);
+  });
+
+  it("puts a perpetual's liquidation on the contract itself", () => {
+    const p = perp(80_000);
+    expect(liquidationFor(p, "BUY", 10, 80_000, 10, 80_000)!.basis).toBe("contract");
+  });
+});
+
 describe("labels", () => {
   it("formats an expiry the way the venue writes it", () => {
     expect(formatExpiry("2026-09-26")).toBe("26SEP26");

@@ -212,6 +212,16 @@ export type Liquidation = {
   leverage: number;
   /** Charged by the venue on a liquidation, from liquidation_penalty_factor. */
   penaltyFactor: number;
+  /**
+   * What `price` is a price OF.
+   *
+   * "contract" for a perpetual, where the contract and the underlying are the
+   * same thing. "underlying" for a short option, where the level that matters
+   * is where SPOT has to go — quoting an option's own price there produced a
+   * liquidation half a percent from the mark, which reads as imminent and means
+   * nothing.
+   */
+  basis: "contract" | "underlying";
 };
 
 export type Order = {

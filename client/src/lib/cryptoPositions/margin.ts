@@ -16,15 +16,13 @@
  * of the arithmetic instead of being a rule someone has to maintain.
  *
  * HOW OPTIONS ARE REVALUED UNDER A SHOCK. From the venue's own published
- * greeks, second order:
- *
- *     value(S + dS) ~= max(0, mark + delta*dS + 0.5*gamma*dS^2)
- *
- * Delta and gamma are Delta Exchange's, not ours, so the revaluation follows
- * the same model the venue is marking against. The floor at zero matters: the
- * quadratic term turns negative far from the money and a naive curve would
- * price an option below worthless, which would show a short position making
- * more than the premium it collected.
+ * greeks, second order, and then BOUNDED by what an option can actually be
+ * worth — intrinsic at the shocked spot, at most that plus the time value it
+ * holds today. Delta-gamma is a local approximation and a near-expiry
+ * at-the-money option has enormous gamma, so extrapolating it 20% out returns a
+ * price the contract could never trade at. Unbounded, it overcharged a 1-day
+ * short straddle by more than five times and refused trades the account could
+ * comfortably afford. See shockedOptionValue.
  *
  * WHAT THIS IS NOT. It is not the venue's real margin engine, and a live
  * account would be charged something different. It is a consistent, hedge-aware
@@ -101,6 +99,14 @@ export function liquidationFor(
   // A long option cannot be liquidated. Nothing is borrowed against it.
   if (i.kind === "OPTION" && side === "BUY") return null;
 
+  // A SHORT OPTION IS NOT MARGINED BY LEVERAGE, so the futures formula does not
+  // describe it. Its requirement is risk-based — what it can lose if the
+  // underlying moves — and the level that matters is a price of the UNDERLYING,
+  // not of the option. Running it through the perp formula produced a
+  // "liquidation" a fraction of a percent from the option's own mark, which
+  // reads as imminent and means nothing.
+  if (i.kind === "OPTION") return shortOptionLiquidation(i, side, lots, entryPrice);
+
   const qty = lots * i.contractValue;
   const notional = Math.abs(qty * entryPrice);
   if (notional <= 0) return null;
@@ -126,6 +132,69 @@ export function liquidationFor(
     initialMarginUsd: im,
     leverage: effLev,
     penaltyFactor: i.penaltyFactor,
+    basis: "contract",
+  };
+}
+
+/**
+ * Where the UNDERLYING has to go for a short option to exhaust its margin.
+ *
+ * Solved against the same scenario model that sets the requirement, rather than
+ * derived from a formula: walk spot away from here until the loss eats the
+ * posted margin down to the maintenance floor, and report the spot level where
+ * that happens. Both directions are searched and the nearer one wins, because a
+ * short put and a short call fail in opposite directions and a strangle can be
+ * closer on one side than the other.
+ */
+function shortOptionLiquidation(
+  i: Instrument,
+  side: TransactionType,
+  lots: number,
+  entryPrice: number,
+): Liquidation | null {
+  // No mark parameter: the distance here is measured against SPOT, not against
+  // the option's own price, which is the whole point of this branch.
+  const qty = lots * i.contractValue;
+  const spot = i.spot ?? 0;
+  if (qty <= 0 || spot <= 0) return null;
+
+  const notional = Math.abs(qty * spot);
+  const posted = marginFor([
+    { symbol: i.symbol, underlying: i.underlying, side, lots, contractValue: i.contractValue, price: entryPrice, instrument: i, leverage: 1 },
+  ]).marginRequired;
+  const mm = maintenanceMarginUsd(i, notional);
+  const budget = Math.max(0, posted - mm);
+
+  const STEP = 0.0025; // 0.25% of spot per step, out to 100%
+  let best: { price: number; shock: number } | null = null;
+  for (const dir of [1, -1]) {
+    for (let k = 1; k <= 400; k++) {
+      const shock = dir * k * STEP;
+      const next = shockedPrice(i, spot * shock);
+      const move = (next - entryPrice) * qty;
+      const pnl = side === "BUY" ? move : -move;
+      if (-pnl >= budget) {
+        if (!best || Math.abs(shock) < Math.abs(best.shock)) best = { price: spot * (1 + shock), shock };
+        break;
+      }
+    }
+  }
+  // Nothing inside a 100% move exhausts it — a deep out-of-the-money short that
+  // the underlying cannot realistically reach. Saying "none" is truer than
+  // printing a number off the end of the search.
+  if (!best) return null;
+
+  return {
+    price: best.price,
+    // A short option has no separate bankruptcy level here: the posted margin
+    // and the maintenance floor are both risk-derived from the same scan.
+    bankruptcyPrice: best.price,
+    distancePct: best.shock * 100,
+    maintenanceMarginUsd: mm,
+    initialMarginUsd: posted,
+    leverage: 1,
+    penaltyFactor: i.penaltyFactor,
+    basis: "underlying",
   };
 }
 
@@ -162,17 +231,49 @@ export function scanGrid(): number[] {
   return out;
 }
 
-/** An option's value after a spot shock, floored at zero. */
+/**
+ * An option's value after a spot shock, bounded by what an option can be worth.
+ *
+ * THE QUADRATIC TERM MUST BE BOUNDED, and this was found the hard way. A
+ * near-expiry at-the-money option has enormous gamma, and `0.5*gamma*dS^2`
+ * extrapolated to a 20% move produces a number with no relation to any price
+ * the contract could trade at: a 1-day BTC 77,200 call marked at $531 came out
+ * at $83,187 under a +20% shock, when 20% up puts spot at $92,880 and the call
+ * is worth about $16,011. That overcharged a short straddle's margin by more
+ * than five times and refused trades the account could easily afford.
+ *
+ * Delta-gamma is a LOCAL approximation. So it is clamped between the two things
+ * an option's price is actually pinned by:
+ *
+ *   FLOOR    intrinsic at the shocked spot — no-arbitrage, an option is never
+ *            worth less than exercising it.
+ *   CEILING  that intrinsic plus the time value the contract has TODAY. Time
+ *            value peaks at the money and decays away from it, so a move cannot
+ *            leave the option with more extrinsic value than it holds now.
+ *
+ * Between those bounds the greeks are trusted, which is where they are good.
+ */
 function shockedOptionValue(i: Instrument, dS: number): number {
+  if (i.strike === null) return Math.max(0, i.markPrice);
+  const spot = i.spot ?? 0;
+  const shocked = spot + dS;
+  const intrinsicOf = (s: number) =>
+    i.optionType === "CALL" ? Math.max(0, s - i.strike!) : Math.max(0, i.strike! - s);
+
+  const intrinsicNext = intrinsicOf(shocked);
+  // Time value the contract carries right now. Never negative: a mark below
+  // intrinsic would otherwise push the ceiling under the floor.
+  const extrinsicNow = Math.max(0, i.markPrice - intrinsicOf(spot));
+  const ceiling = intrinsicNext + extrinsicNow;
+
   const g = i.greeks;
   if (!g) {
     // No greeks published. Intrinsic is the only defensible fallback: assuming
     // the price does not move would price a short option as riskless.
-    if (i.strike === null) return i.markPrice;
-    const s = (i.spot ?? 0) + dS;
-    return i.optionType === "CALL" ? Math.max(0, s - i.strike) : Math.max(0, i.strike - s);
+    return intrinsicNext;
   }
-  return Math.max(0, i.markPrice + g.delta * dS + 0.5 * g.gamma * dS * dS);
+  const est = i.markPrice + g.delta * dS + 0.5 * g.gamma * dS * dS;
+  return Math.min(Math.max(est, intrinsicNext), ceiling);
 }
 
 /** A contract's value after a spot shock, in USD per unit of underlying. */

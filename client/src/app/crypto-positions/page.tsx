@@ -529,14 +529,26 @@ export default function CryptoPositionsPage() {
       header: "Lev",
       align: "right",
       sortValue: (p) => p.liquidation?.leverage ?? p.leverage,
-      cell: (p) =>
-        p.liquidation ? (
+      cell: (p) => {
+        if (!p.liquidation) {
+          return <span title="A bought option is paid for in full — nothing is borrowed" style={{ opacity: 0.5 }}>1x</span>;
+        }
+        // A SHORT OPTION IS NOT LEVERAGED. Its margin is risk-based — what it
+        // can lose if the underlying moves — so printing an "x" would suggest a
+        // dial that does not exist on it.
+        if (p.kind === "OPTION") {
+          return (
+            <span style={{ opacity: 0.75 }} title={`Risk-margined, not leveraged — ${usd(p.liquidation.initialMarginUsd)} posted`}>
+              risk
+            </span>
+          );
+        }
+        return (
           <span title={`initial margin ${usd(p.liquidation.initialMarginUsd)}`}>
             {p.liquidation.leverage.toFixed(p.liquidation.leverage < 10 ? 1 : 0)}x
           </span>
-        ) : (
-          <span title="A bought option is paid for in full — nothing is borrowed" style={{ opacity: 0.5 }}>1x</span>
-        ),
+        );
+      },
     },
     {
       id: "liq",
@@ -557,10 +569,16 @@ export default function CryptoPositionsPage() {
         return (
           <span
             style={{ color: danger ? "var(--desk-loss)" : undefined, fontWeight: danger ? 700 : 500 }}
-            title={`bankruptcy ${usd(p.liquidation.bankruptcyPrice, 4)} · maintenance margin ${usd(p.liquidation.maintenanceMarginUsd)} · liquidation penalty ${(p.liquidation.penaltyFactor * 100).toFixed(0)}%`}
+            title={
+              p.liquidation.basis === "underlying"
+                ? `${p.underlying} spot level · ${usd(p.liquidation.initialMarginUsd)} margin posted · maintenance ${usd(p.liquidation.maintenanceMarginUsd)}`
+                : `bankruptcy ${usd(p.liquidation.bankruptcyPrice, 4)} · maintenance margin ${usd(p.liquidation.maintenanceMarginUsd)} · liquidation penalty ${(p.liquidation.penaltyFactor * 100).toFixed(0)}%`
+            }
           >
-            {usd(p.liquidation.price, 4)}
-            <span style={{ display: "block", fontSize: 11, opacity: 0.75 }}>{pct(p.liquidation.distancePct, 1)} away</span>
+            {usd(p.liquidation.price, p.liquidation.basis === "underlying" ? 0 : 4)}
+            <span style={{ display: "block", fontSize: 11, opacity: 0.75 }}>
+              {pct(p.liquidation.distancePct, 1)} · {p.liquidation.basis === "underlying" ? `${p.underlying} spot` : "mark"}
+            </span>
           </span>
         );
       },
@@ -831,8 +849,8 @@ export default function CryptoPositionsPage() {
             />
           </label>
           <label style={{ display: "grid", gap: 4 }}>
-            <span style={{ fontSize: 12, opacity: 0.7 }}>
-              Leverage{spec ? ` (max ${spec.maxLeverage}x)` : ""}
+            <span style={{ fontSize: 12, opacity: 0.7 }} title="Perpetuals only — options are margined on risk, not leverage">
+              Leverage · perps{spec ? ` (max ${spec.maxLeverage}x)` : ""}
             </span>
             <select
               value={leverage === null ? "" : String(leverage)}
@@ -871,7 +889,8 @@ export default function CryptoPositionsPage() {
                 initial rate is what caps leverage at {spec.maxLeverage}x, and Delta raises both as a position grows
               </div>
               <div style={{ opacity: 0.7 }}>
-                A BOUGHT option ignores this: the premium is paid in full, so it is always 1x with no liquidation.
+                Leverage applies to PERPETUALS. A bought option is paid for in full — always 1x, no liquidation. A sold
+                option is margined on what it can LOSE if spot moves, which no leverage setting changes.
               </div>
             </div>
           )}
@@ -913,10 +932,21 @@ export default function CryptoPositionsPage() {
             <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85, display: "grid", gap: 4 }}>
               {preview.legs.map((l) => (
                 <div key={`${l.symbol}-${l.side}`}>
-                  <b>{l.displayName}</b> — {l.leverage.toFixed(l.leverage < 10 ? 1 : 0)}x of max {l.maxLeverage}x
-                  {l.liquidation
-                    ? ` · liquidation ${usd(l.liquidation.price, 4)} (${pct(l.liquidation.distancePct, 1)} away) · initial margin ${usd(l.liquidation.initialMarginUsd)}`
-                    : " · bought outright, no liquidation"}
+                  <b>{l.displayName}</b>{" "}
+                  {!l.liquidation ? (
+                    <>— bought outright: premium paid in full, no leverage and no liquidation</>
+                  ) : l.liquidation.basis === "underlying" ? (
+                    <>
+                      — risk-margined, not leveraged · {usd(l.liquidation.initialMarginUsd)} posted · liquidation if
+                      spot reaches {usd(l.liquidation.price, 0)} ({pct(l.liquidation.distancePct, 1)})
+                    </>
+                  ) : (
+                    <>
+                      — {l.leverage.toFixed(l.leverage < 10 ? 1 : 0)}x of max {l.maxLeverage}x · liquidation{" "}
+                      {usd(l.liquidation.price, 4)} ({pct(l.liquidation.distancePct, 1)} away) · initial margin{" "}
+                      {usd(l.liquidation.initialMarginUsd)}
+                    </>
+                  )}
                 </div>
               ))}
             </div>
