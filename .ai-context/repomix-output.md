@@ -59,6 +59,7 @@ The content is organized as follows:
   app/api/cron/mock-trading-tick/route.ts
   app/api/cron/policy-snapshot/route.ts
   app/api/crypto-fno/[...path]/route.ts
+  app/api/crypto-positions/[...path]/route.ts
   app/api/crypto-screener/[...path]/route.ts
   app/api/delta/account/route.ts
   app/api/delta/mirror/route.ts
@@ -159,6 +160,7 @@ The content is organized as follows:
   app/btc-future-trading/page.tsx
   app/btc-pre-live/page.tsx
   app/crypto-fno/page.tsx
+  app/crypto-positions/page.tsx
   app/crypto-screener/page.tsx
   app/delta-paper-trading/page.tsx
   app/favicon.ico
@@ -539,6 +541,12 @@ The content is organized as follows:
   lib/btcSpotPrice.test.ts
   lib/chartTime.test.ts
   lib/commandPaletteItems.test.ts
+  lib/cryptoPositions/cryptoPositions.test.ts
+  lib/cryptoPositions/delta.ts
+  lib/cryptoPositions/engine.ts
+  lib/cryptoPositions/margin.ts
+  lib/cryptoPositions/store.ts
+  lib/cryptoPositions/types.ts
   lib/cryptoScreener/delta.ts
   lib/cryptoScreener/derivatives.ts
   lib/cryptoScreener/engine.ts
@@ -1898,6 +1906,7 @@ The content is organized as follows:
   scalp_prelive/profile_test.go
   scalp_prelive/rewardrisk_test.go
   scalp_prelive/risk_fraction_test.go
+  scalp_prelive/roster_registry_test.go
   scalp_prelive/sizing_mode_test.go
   scalp_prelive/symbols_test.go
   scalp_prelive/symbols_venue_test.go

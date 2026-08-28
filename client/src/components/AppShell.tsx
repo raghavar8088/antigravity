@@ -87,6 +87,11 @@ const ic = {
 
 const PRIMARY_NAV: NavItem[] = [
   { href: "/terminal", label: "Command Center", icon: ic.monitor },
+  // Directly below the Command Center, as requested. It is the manual
+  // counterpart to everything under it: the desks below run strategies and
+  // report what they did, this one is where a position is put on by hand —
+  // Delta option chains and perpetuals, real quoted premiums, paper money.
+  { href: "/crypto-positions", label: "Crypto Positions", icon: ic.layers },
   { href: "/live-engine", label: "Live Engine", icon: ic.live },
   // Directly under the Live Engine: the same venue and the same mechanics, with
   // paper money. Real Delta quotes, real contract specs, real funding and the
