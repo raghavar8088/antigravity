@@ -206,6 +206,11 @@ export type LivePosition = Position & {
   notionalUsd: number;
   /** notionalUsd / account equity. How many times the account this position is. */
   accountMultiple: number | null;
+  /**
+   * The listed strike nearest spot for this leg's expiry, or null on a
+   * perpetual. Equal to `strike` means a roll would do nothing.
+   */
+  atmStrike: number | null;
   /** Liquidation detail, or null where the position cannot be liquidated. */
   liquidation: Liquidation | null;
 };

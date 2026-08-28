@@ -28,6 +28,7 @@ import {
   listPerpetuals,
   listUnderlyings,
   marksFor,
+  atmStrikeFor,
 } from "./delta";
 import {
   bookMaintenanceMargin,
@@ -139,6 +140,16 @@ export async function livePositions(
 ): Promise<LivePosition[]> {
   const rows = await listPositions(accountId, status);
   const marks = await marksFor(rows.map((p) => p.symbol));
+
+  // The at-the-money strike per (underlying, expiry), resolved once per group
+  // rather than per row. Lets the UI disable a roll that would do nothing.
+  const atm = new Map<string, number | null>();
+  for (const p of rows) {
+    if (p.status !== "OPEN" || p.optionType === null || !p.expiry) continue;
+    const k = `${p.underlying}|${p.expiry}`;
+    if (!atm.has(k)) atm.set(k, await atmStrikeFor(p.underlying, p.expiry));
+  }
+
   return rows.map((p) => {
     const i = marks.get(p.symbol);
     const qty = p.lots * p.contractValue;
@@ -150,6 +161,7 @@ export async function livePositions(
         valueUsd: 0,
         notionalUsd: 0,
         accountMultiple: null,
+        atmStrike: null,
         liquidation: null,
       };
     }
@@ -164,6 +176,7 @@ export async function livePositions(
       // those differ by orders of magnitude — see the field's own note.
       notionalUsd: Math.abs(qty * (i.spot ?? i.markPrice)),
       accountMultiple: null,
+      atmStrike: p.optionType !== null && p.expiry ? (atm.get(`${p.underlying}|${p.expiry}`) ?? null) : null,
       liquidation: liquidationFor(i, p.side, p.lots, p.entryPrice, p.leverage, i.markPrice),
     };
   });
@@ -424,26 +437,54 @@ export async function rollToAtm(accountId: string, positionIds?: string[]): Prom
         continue;
       }
 
-      // It fits. Close the old legs, then open the replacements.
-      for (const { from, to } of plan) {
+      // IT FITS. Close the WHOLE group first, then open the whole group as one
+      // basket.
+      //
+      // Not leg by leg, which is what this used to do and which quietly broke
+      // the promise made above. Closing one leg and immediately re-opening it
+      // passes through a book holding the NEW strike alongside the OLD other
+      // leg, and that mixed state is wider than either the original pair or the
+      // intended one — the desk's own test pins that. On a tight account the
+      // second open is then refused, and because the first leg is already gone
+      // the position is left half-rolled: worse than either endpoint, and
+      // exactly the outcome the group-at-a-time design exists to prevent.
+      //
+      // Closing everything first means the intermediate book is FLAT, which is
+      // the cheapest state there is, so the re-open cannot be refused for
+      // margin it just released. Opening as a single basket also prices the
+      // legs against each other, so a straddle gets its offset instead of the
+      // first leg being charged as a naked short.
+      const exits = [];
+      for (const { from } of plan) {
         const exit = await exitPosition(accountId, from.positionId);
         realized += exit.realizedPnl;
-        const opened = await executeBasket(accountId, [
-          // The replacement inherits the leverage the original was opened at —
-          // a roll moves the strike, not the risk setting.
-          { symbol: to.symbol, transactionType: from.side, lots: from.lots, leverage: from.leverage },
-        ]);
-        const newPos = opened.positions[0];
-        feesTotal += opened.feesUsd;
+        exits.push({ from, exit });
+      }
+
+      const opened = await executeBasket(
+        accountId,
+        // Each replacement inherits the leverage its original was opened at —
+        // a roll moves the strike, not the risk setting.
+        plan.map(({ from, to }) => ({
+          symbol: to.symbol,
+          transactionType: from.side,
+          lots: from.lots,
+          leverage: from.leverage,
+        })),
+      );
+      feesTotal += opened.feesUsd;
+
+      exits.forEach(({ from, exit }, idx) => {
+        const newPos = opened.positions[idx];
         rolled.push({
           positionId: from.positionId,
           from: from.displayName,
-          to: newPos?.displayName ?? to.symbol,
+          to: newPos?.displayName ?? plan[idx].to.symbol,
           exitPrice: exit.fillPrice,
           entryPrice: newPos?.entryPrice ?? 0,
           realizedPnl: exit.realizedPnl,
         });
-      }
+      });
     } catch (e) {
       failed.push({
         underlying,
@@ -458,7 +499,8 @@ export async function rollToAtm(accountId: string, positionIds?: string[]): Prom
     rolled.length === 0
       ? failed.length > 0
         ? "Nothing was rolled."
-        : "Every leg was already at the money."
+        : "Nothing to roll — every leg is already at the nearest listed strike to spot, so a roll would " +
+          "close and re-open the same contract and pay two lots of fees for no change."
       : `Rolled ${rolled.length} leg${rolled.length === 1 ? "" : "s"} to the money.`;
 
   return {

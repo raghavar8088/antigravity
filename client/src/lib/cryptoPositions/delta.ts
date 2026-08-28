@@ -296,6 +296,28 @@ export async function getOptionChain(underlying: string, expiry: string): Promis
   return { underlying, expiry, spot, rows, atmStrike, asOf: s.builtAt };
 }
 
+/**
+ * The listed strike nearest spot for one expiry, off the cached snapshot.
+ *
+ * Exists so a position can say whether it is ALREADY at the money without
+ * building a whole chain per row. A roll of a leg that is already there is a
+ * no-op, and the UI needs to know that before the button is pressed rather than
+ * after — a confirm dialog promising to close and re-open, followed by nothing
+ * happening, reads as a broken button.
+ */
+export async function atmStrikeFor(underlying: string, expiry: string): Promise<number | null> {
+  const s = await getSnapshot();
+  let spot: number | null = null;
+  const strikes: number[] = [];
+  for (const o of s.options) {
+    if (o.underlying !== underlying || o.expiry !== expiry || o.strike === null) continue;
+    if (spot === null && o.spot !== null) spot = o.spot;
+    strikes.push(o.strike);
+  }
+  if (spot === null || strikes.length === 0) return null;
+  return strikes.reduce((best, k) => (Math.abs(k - spot!) < Math.abs(best - spot!) ? k : best));
+}
+
 export async function listPerpetuals(): Promise<Instrument[]> {
   const s = await getSnapshot();
   return [...s.perpetuals].sort((a, b) => (b.turnoverUsd ?? 0) - (a.turnoverUsd ?? 0));
