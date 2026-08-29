@@ -863,10 +863,17 @@ export default function CryptoPositionsPage() {
             sub={summary.marginLevelPct === null ? "nothing posted" : `maintenance ${usd(summary.maintenanceMarginUsd)}`}
             subColor={summary.marginLevelPct !== null && summary.marginLevelPct < 150 ? "loss" : "default"}
           />
+          {/*
+            MEASURED, NOT SET. This is what the open book already is — exposure
+            divided by equity — and it is unrelated to the ticket's leverage
+            control, which sets margin on a NEW perpetual. Both used to be
+            called "leverage", and a 9.77x here was read as a 10x cap being
+            applied to a 200x setting. It is neither a cap nor a setting.
+          */}
           <DeskMetricTile
-            label="Account leverage"
+            label="Book leverage"
             value={summary.accountLeverage === null ? "—" : `${summary.accountLeverage.toFixed(2)}x`}
-            sub={`${compact(summary.contractExposureUsd)} on ${compact(summary.equity)} · ${summary.liquidatablePositions} liquidatable`}
+            sub={`${compact(summary.contractExposureUsd)} ÷ ${compact(summary.equity)} equity · measured, not a limit`}
             subColor={summary.accountLeverage !== null && summary.accountLeverage >= 5 ? "loss" : "default"}
           />
           {summary.marginBenefit > 0 && <DeskMetricTile label="Hedge benefit" value={`−${usd(summary.marginBenefit)}`} subColor="profit" sub="saved by offsets" />}
@@ -912,8 +919,11 @@ export default function CryptoPositionsPage() {
             />
           </label>
           <label style={{ display: "grid", gap: 4 }}>
-            <span style={{ fontSize: 12, opacity: 0.7 }} title="Perpetuals only — options are margined on risk, not leverage">
-              Leverage · perps{spec ? ` (max ${spec.maxLeverage}x)` : ""}
+            <span
+              style={{ fontSize: 12, opacity: 0.7 }}
+              title="Sets the margin on a NEW perpetual. Options are margined on what they can lose, so this does not apply to them, and it is not the same thing as the Book leverage tile above."
+            >
+              Leverage · perps only{spec ? ` (max ${spec.maxLeverage}x)` : ""}
             </span>
             <select
               value={leverage === null ? "" : String(leverage)}
@@ -952,8 +962,10 @@ export default function CryptoPositionsPage() {
                 initial rate is what caps leverage at {spec.maxLeverage}x, and Delta raises both as a position grows
               </div>
               <div style={{ opacity: 0.7 }}>
-                Leverage applies to PERPETUALS. A bought option is paid for in full — always 1x, no liquidation. A sold
-                option is margined on what it can LOSE if spot moves, which no leverage setting changes.
+                Leverage sets the margin on a NEW PERPETUAL. A bought option is paid for in full — always 1x, no
+                liquidation. A sold option is margined on what it can LOSE if spot moves, which no leverage setting
+                changes. It is also not the &ldquo;Book leverage&rdquo; tile above: that one MEASURES the position you
+                already hold, exposure divided by equity, and is neither a setting nor a cap.
               </div>
             </div>
           )}
