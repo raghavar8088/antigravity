@@ -256,15 +256,15 @@ export default function CryptoPositionsPage() {
   }, [tab, accountId, blame]);
 
   /* ── selection ────────────────────────────────────────────────────────── */
-  // Only options can be rolled, and only ones NOT already at the money. A leg
-  // sitting on the nearest strike would be closed and re-opened as the same
-  // contract, paying two lots of fees to change nothing — so it does not count
-  // as rollable and its button is disabled rather than silently doing nothing.
+  // Every open option leg is rollable. A leg already on the at-the-money strike
+  // is included at the owner's direction: re-adding it closes and re-opens the
+  // same contract, which realises its P&L and resets the entry to the current
+  // price. That is a real operation rather than a no-op — it just costs an exit
+  // and an entry fee for a strike that has not moved.
+  //
+  // A perpetual has no strike and still cannot be rolled.
   const rollable = useMemo(
-    () =>
-      positions.filter(
-        (p) => p.status === "OPEN" && p.optionType !== null && p.atmStrike !== null && p.strike !== p.atmStrike,
-      ),
+    () => positions.filter((p) => p.status === "OPEN" && p.optionType !== null),
     [positions],
   );
   const openRows = useMemo(() => positions.filter((p) => p.status === "OPEN"), [positions]);
@@ -273,10 +273,7 @@ export default function CryptoPositionsPage() {
   // and a row can be closed from another tab, so a stale tick would otherwise
   // ask the server to act on legs that no longer exist.
   const selected = useMemo(() => openRows.filter((p) => picked.has(p.positionId)), [openRows, picked]);
-  const selectedRollable = useMemo(
-    () => selected.filter((p) => p.atmStrike !== null && p.strike !== p.atmStrike),
-    [selected],
-  );
+  const selectedRollable = useMemo(() => selected.filter((p) => p.optionType !== null), [selected]);
 
   const toggle = useCallback((id: string) => {
     setPicked((s) => {
@@ -647,26 +644,22 @@ export default function CryptoPositionsPage() {
           <DeskChip label="CLOSED" tone="default" />
         ) : (
           <span style={{ display: "inline-flex", gap: 6, whiteSpace: "nowrap" }}>
-            {p.optionType &&
-              (() => {
-                const atAtm = p.atmStrike !== null && p.strike === p.atmStrike;
-                return (
-                  <DeskButton
-                    variant="tonal"
-                    onClick={() => roll([p.positionId])}
-                    disabled={busy !== null || atAtm}
-                    title={
-                      atAtm
-                        ? `Already at the money — ${p.atmStrike?.toLocaleString()} is the nearest listed strike to spot, so a roll would re-open the same contract and pay fees for no change.`
-                        : p.atmStrike !== null
-                          ? `Roll to the ${p.atmStrike.toLocaleString()} strike`
-                          : "No at-the-money strike listed"
-                    }
-                  >
-                    {busy === "roll" ? "Rolling…" : atAtm ? "At the money" : "Re-add ATM"}
-                  </DeskButton>
-                );
-              })()}
+            {p.optionType && (
+              <DeskButton
+                variant="tonal"
+                onClick={() => roll([p.positionId])}
+                disabled={busy !== null}
+                title={
+                  p.atmStrike === null
+                    ? "Re-add at the money"
+                    : p.strike === p.atmStrike
+                      ? `Re-add on the same ${p.atmStrike.toLocaleString()} strike — realises P&L and resets the entry to the current price, for an exit and an entry fee`
+                      : `Roll to the ${p.atmStrike.toLocaleString()} strike`
+                }
+              >
+                {busy === "roll" ? "Rolling…" : "Re-add ATM"}
+              </DeskButton>
+            )}
             <DeskButton
               variant="outlined"
               disabled={busy !== null || p.lots < 2}
@@ -1191,16 +1184,11 @@ export default function CryptoPositionsPage() {
                       already at the money — perpetuals have no strike, and a leg already on the nearest strike would
                       be re-opened as the same contract.
                     </>
-                  ) : rollable.length === 0 ? (
-                    <>
-                      <b>Every option leg is already at the money.</b> Each is sitting on the nearest listed strike to
-                      spot, so rolling would close and re-open the same contract and pay two lots of fees for no
-                      change. The button turns back on when spot moves far enough that a different strike becomes the
-                      nearest one.
-                    </>
                   ) : (
                     <>
-                      <b>Roll the book to the money.</b> Every option leg is closed at the live price and re-opened at
+                      <b>Roll the book to the money.</b> Legs already on the nearest strike are re-added onto the same
+                      contract, which realises their P&amp;L and resets the entry at the current price for two lots of
+                      fees. Every option leg is closed at the live price and re-opened at
                       the strike nearest its own spot — same side, same lots. Checked against your margin before
                       anything is closed, and done per expiry group so a straddle never sits half-rolled. Tick rows to
                       roll only some of them.
@@ -1220,11 +1208,9 @@ export default function CryptoPositionsPage() {
                   >
                     {busy === "roll"
                       ? "Rolling…"
-                      : rollable.length === 0 && !selected.length
-                        ? "Nothing to roll"
-                        : selected.length
-                          ? `Re-add ATM · ${selectedRollable.length} selected`
-                          : `Re-add ATM · all ${rollable.length} leg${rollable.length === 1 ? "" : "s"}`}
+                      : selected.length
+                        ? `Re-add ATM · ${selectedRollable.length} selected`
+                        : `Re-add ATM · all ${rollable.length} leg${rollable.length === 1 ? "" : "s"}`}
                   </DeskButton>
                 </span>
               </div>

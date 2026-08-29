@@ -401,9 +401,14 @@ export async function rollToAtm(accountId: string, positionIds?: string[]): Prom
       }
 
       // Resolve every replacement BEFORE touching anything.
+      //
+      // A leg ALREADY on the at-the-money strike is re-added too, at the
+      // owner's direction. It closes and re-opens the same contract, which
+      // realises the position's P&L and resets its entry to the current price —
+      // a real operation, not a no-op, though it pays an exit and an entry fee
+      // and crosses the spread twice for a strike that has not changed.
       const plan: { from: Position; to: Instrument }[] = [];
       for (const leg of group) {
-        if (leg.strike === chain.atmStrike) continue; // already at the money
         const row = chain.rows.find((r) => r.strike === chain.atmStrike);
         const target = leg.optionType === "CALL" ? row?.call : row?.put;
         if (!target) {
@@ -495,13 +500,16 @@ export async function rollToAtm(accountId: string, positionIds?: string[]): Prom
   }
 
   const afterAll = marginFor(await openLegs(accountId));
+  const unchanged = rolled.filter((r) => r.from === r.to).length;
   const note =
     rolled.length === 0
       ? failed.length > 0
         ? "Nothing was rolled."
-        : "Nothing to roll — every leg is already at the nearest listed strike to spot, so a roll would " +
-          "close and re-open the same contract and pay two lots of fees for no change."
-      : `Rolled ${rolled.length} leg${rolled.length === 1 ? "" : "s"} to the money.`;
+        : "No option legs to roll."
+      : `Re-added ${rolled.length} leg${rolled.length === 1 ? "" : "s"} at the money` +
+        (unchanged > 0
+          ? ` (${unchanged} onto the same strike — P&L realised and entry reset at the current price).`
+          : ".");
 
   return {
     rolled,
