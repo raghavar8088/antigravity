@@ -29,6 +29,7 @@ import {
   listUnderlyings,
   marksFor,
   atmStrikeFor,
+  getSettledInstrument,
 } from "./delta";
 import {
   bookMaintenanceMargin,
@@ -70,6 +71,17 @@ export class Rejected extends Error {
     super(message);
     this.name = "Rejected";
   }
+}
+
+/**
+ * A contract's instrument, falling back to its SETTLEMENT once it has expired.
+ *
+ * Every path that needs a price goes through here. Delta drops an expired
+ * contract from the ticker feed, and without this fallback the position could
+ * not be valued, could not be closed, and stayed in the book forever.
+ */
+async function instrumentOrSettlement(symbol: string): Promise<Instrument | null> {
+  return (await getInstrument(symbol)) ?? (await getSettledInstrument(symbol));
 }
 
 /** The price a side would actually pay, and whether a real quote backed it. */
@@ -125,9 +137,8 @@ async function openLegs(accountId: string): Promise<(MarginLeg & { positionId: s
   const legs: (MarginLeg & { positionId: string })[] = [];
   for (const p of open) {
     const i = marks.get(p.symbol);
-    // A delisted or expired contract has no instrument to shock. It is excluded
-    // from the scan rather than assumed flat, and `summary` reports it as
-    // unpriced so the omission is visible instead of silently lowering margin.
+    // Not priced by the venue at all — excluded from the scan rather than
+    // assumed flat, so the omission cannot silently lower the requirement.
     if (!i) continue;
     legs.push({ ...legFrom(i, p.side, p.lots, p.entryPrice, p.leverage), positionId: p.positionId });
   }
@@ -140,6 +151,19 @@ export async function livePositions(
 ): Promise<LivePosition[]> {
   const rows = await listPositions(accountId, status);
   const marks = await marksFor(rows.map((p) => p.symbol));
+
+  // Anything the live snapshot did not carry may have expired rather than
+  // vanished. Resolve those to their settlement so they can be valued and
+  // closed instead of being stuck.
+  const settled = new Set<string>();
+  for (const p of rows) {
+    if (p.status !== "OPEN" || marks.has(p.symbol)) continue;
+    const s = await getSettledInstrument(p.symbol);
+    if (s) {
+      marks.set(p.symbol, s);
+      settled.add(p.symbol);
+    }
+  }
 
   // The at-the-money strike per (underlying, expiry), resolved once per group
   // rather than per row. Lets the UI disable a roll that would do nothing.
@@ -162,6 +186,8 @@ export async function livePositions(
         notionalUsd: 0,
         accountMultiple: null,
         atmStrike: null,
+        expired: false,
+        settlementPrice: null,
         liquidation: null,
       };
     }
@@ -177,6 +203,8 @@ export async function livePositions(
       notionalUsd: Math.abs(qty * (i.spot ?? i.markPrice)),
       accountMultiple: null,
       atmStrike: p.optionType !== null && p.expiry ? (atm.get(`${p.underlying}|${p.expiry}`) ?? null) : null,
+      expired: settled.has(p.symbol),
+      settlementPrice: settled.has(p.symbol) ? i.markPrice : null,
       liquidation: liquidationFor(i, p.side, p.lots, p.entryPrice, p.leverage, i.markPrice),
     };
   });
@@ -322,8 +350,8 @@ export async function reducePosition(
     return { closedLots: want, remainingLots: 0, realizedPnl: r.realizedPnl, fillPrice: r.fillPrice };
   }
 
-  const i = await getInstrument(p.symbol);
-  if (!i) throw new Rejected(`${p.symbol} is no longer listed, so it cannot be priced to close.`);
+  const i = await instrumentOrSettlement(p.symbol);
+  if (!i) throw new Rejected(`${p.symbol} has no price on Delta, so it cannot be reduced.`);
   const closingSide: TransactionType = p.side === "BUY" ? "SELL" : "BUY";
   const { price } = fillPriceFor(i, closingSide);
 
@@ -769,10 +797,17 @@ export async function exitPosition(
   if (!p || p.accountId !== accountId) throw new Rejected("No such position in this account.");
   if (p.status !== "OPEN") throw new Rejected("That position is already closed.");
 
-  const i = await getInstrument(p.symbol);
-  if (!i) throw new Rejected(`${p.symbol} is no longer listed, so it cannot be priced to close.`);
+  const i = await instrumentOrSettlement(p.symbol);
+  if (!i) {
+    throw new Rejected(
+      `${p.symbol} is neither listed nor settled — Delta has no price for it, so it cannot be closed automatically. ` +
+        `This is usually a contract that expired long enough ago that its candles are gone.`,
+    );
+  }
 
   // Closing a long SELLS, so it hits the bid; closing a short BUYS the ask.
+  // A settled contract quotes both sides at its settlement value, so there is
+  // no spread to cross and the "fill" is the settlement itself.
   const closingSide: TransactionType = p.side === "BUY" ? "SELL" : "BUY";
   const { price, quoted } = fillPriceFor(i, closingSide);
 

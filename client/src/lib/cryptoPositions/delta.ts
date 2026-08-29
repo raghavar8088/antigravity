@@ -318,6 +318,112 @@ export async function atmStrikeFor(underlying: string, expiry: string): Promise<
   return strikes.reduce((best, k) => (Math.abs(k - spot!) < Math.abs(best - spot!) ? k : best));
 }
 
+/**
+ * An EXPIRED option, priced at what it actually settled for.
+ *
+ * WHY THIS EXISTS. Delta drops a contract from the ticker feed the moment it
+ * expires, so an expired leg vanished from the snapshot and every path that
+ * needed a price refused it — including Close. A position that cannot be
+ * closed is stuck in the book forever, holding margin against a contract that
+ * no longer exists, and the only message was "no longer listed, so it cannot be
+ * priced to close". Expiry is the most ordinary thing that happens to an
+ * option; it must not be the one event the desk cannot handle.
+ *
+ * Delta still serves two things after expiry, and between them the settlement
+ * is recoverable exactly:
+ *
+ *   /v2/products/{symbol}   the spec — strike, contract value, settlement_time
+ *   /v2/history/candles     the underlying's price at that settlement minute
+ *
+ * An option settles at INTRINSIC against the underlying at settlement, so that
+ * is what is computed here. Not the option's own last trade, which is a price
+ * someone paid before expiry and is not what the contract paid out; and not the
+ * CURRENT spot, which has moved since and would settle the contract against a
+ * market that did not exist when it expired.
+ */
+const settlementCache = new Map<string, Instrument | null>();
+
+export async function getSettledInstrument(symbol: string): Promise<Instrument | null> {
+  if (settlementCache.has(symbol)) return settlementCache.get(symbol) ?? null;
+  const resolved = await resolveSettled(symbol);
+  // Settlement never changes once it has happened, so this is cached for the
+  // life of the process rather than re-fetched per read.
+  settlementCache.set(symbol, resolved);
+  return resolved;
+}
+
+async function resolveSettled(symbol: string): Promise<Instrument | null> {
+  let p: RawProduct & { strike_price?: string | number | null };
+  try {
+    const body = await getJson(`${BASE}/v2/products/${encodeURIComponent(symbol)}`);
+    p = (body.result as typeof p) ?? ({} as typeof p);
+  } catch {
+    return null;
+  }
+  if (!p.symbol || !p.settlement_time) return null;
+  const settleAt = new Date(p.settlement_time).getTime();
+  if (!Number.isFinite(settleAt) || settleAt > Date.now()) return null; // not expired
+
+  const ct = p.contract_type;
+  const isOption = ct === "call_options" || ct === "put_options";
+  if (!isOption) return null;
+  const strike = num(p.strike_price);
+  const underlying = p.underlying_asset?.symbol;
+  if (strike === null || !underlying) return null;
+
+  const settleSpot = await spotAt(`${underlying}USD`, Math.floor(settleAt / 1000));
+  if (settleSpot === null) return null;
+
+  const isCall = ct === "call_options";
+  const intrinsic = isCall ? Math.max(0, settleSpot - strike) : Math.max(0, strike - settleSpot);
+
+  return {
+    symbol: p.symbol,
+    kind: "OPTION",
+    underlying,
+    expiry: isoDate(p.settlement_time),
+    strike,
+    optionType: isCall ? "CALL" : "PUT",
+    contractValue: num(p.contract_value) ?? 1,
+    tickSize: num(p.tick_size) ?? 0.01,
+    // Settled contracts trade at exactly their settlement value, both sides.
+    markPrice: intrinsic,
+    bid: intrinsic,
+    ask: intrinsic,
+    spot: settleSpot,
+    openInterest: null,
+    turnoverUsd: null,
+    change24hPct: null,
+    ivPct: null,
+    // No greeks on a settled contract: it has no time value and cannot move.
+    greeks: { delta: isCall ? (intrinsic > 0 ? 1 : 0) : intrinsic > 0 ? -1 : 0, gamma: 0, theta: 0, vega: 0, rho: 0 },
+    fundingRatePct8h: null,
+    initialMarginPct: num(p.initial_margin) ?? 2,
+    maintenanceMarginPct: num(p.maintenance_margin) ?? 1,
+    imScalingFactor: num(p.initial_margin_scaling_factor) ?? 0,
+    mmScalingFactor: num(p.maintenance_margin_scaling_factor) ?? 0,
+    defaultLeverage: num(p.default_leverage) ?? 1,
+    maxLeverage: 1,
+    penaltyFactor: num(p.liquidation_penalty_factor) ?? 0,
+  };
+}
+
+/** The underlying's close at or just before a unix second. */
+async function spotAt(symbol: string, unixSec: number): Promise<number | null> {
+  try {
+    const body = await getJson(
+      `${BASE}/v2/history/candles?resolution=1m&symbol=${encodeURIComponent(symbol)}&start=${unixSec - 900}&end=${unixSec + 120}`,
+    );
+    const rows = ((body.result as { time?: number; close?: string | number }[] | undefined) ?? [])
+      .filter((r) => typeof r.time === "number" && (r.time as number) <= unixSec)
+      .sort((a, b) => (a.time as number) - (b.time as number));
+    const last = rows[rows.length - 1];
+    return last ? num(last.close) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function listPerpetuals(): Promise<Instrument[]> {
   const s = await getSnapshot();
   return [...s.perpetuals].sort((a, b) => (b.turnoverUsd ?? 0) - (a.turnoverUsd ?? 0));

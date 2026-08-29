@@ -211,6 +211,16 @@ export type LivePosition = Position & {
    * perpetual. Equal to `strike` means a roll would do nothing.
    */
   atmStrike: number | null;
+  /**
+   * TRUE when the contract has settled and is no longer listed.
+   *
+   * Such a leg has a fixed value — its intrinsic at settlement — and can only
+   * be settled, not traded. Before this existed it could not be closed at all
+   * and sat in the book permanently.
+   */
+  expired: boolean;
+  /** The price it settled at, once expired. */
+  settlementPrice: number | null;
   /** Liquidation detail, or null where the position cannot be liquidated. */
   liquidation: Liquidation | null;
 };

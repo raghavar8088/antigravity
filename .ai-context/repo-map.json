@@ -1,1 +1,1 @@
-{"other":{"communities":[0,1],"files":1,"symbols":9,"top_files":[{"file":"client/src/app/crypto-positions/page.tsx","symbols":9}]}}
+{"client-lib":{"communities":[0,1,2,3,4],"files":3,"symbols":67,"top_files":[{"file":"client/src/lib/cryptoPositions/types.ts","symbols":25},{"file":"client/src/lib/cryptoPositions/delta.ts","symbols":23},{"file":"client/src/lib/cryptoPositions/engine.ts","symbols":19}]},"other":{"communities":[4,5],"files":1,"symbols":9,"top_files":[{"file":"client/src/app/crypto-positions/page.tsx","symbols":9}]}}

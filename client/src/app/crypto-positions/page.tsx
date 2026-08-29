@@ -264,9 +264,11 @@ export default function CryptoPositionsPage() {
   //
   // A perpetual has no strike and still cannot be rolled.
   const rollable = useMemo(
-    () => positions.filter((p) => p.status === "OPEN" && p.optionType !== null),
+    () => positions.filter((p) => p.status === "OPEN" && p.optionType !== null && !p.expired),
     [positions],
   );
+  /** Settled legs. They can only be settled at their expiry value. */
+  const expired = useMemo(() => positions.filter((p) => p.status === "OPEN" && p.expired), [positions]);
   const openRows = useMemo(() => positions.filter((p) => p.status === "OPEN"), [positions]);
 
   // Read the selection back through the LIVE book. A roll replaces position ids
@@ -501,7 +503,20 @@ export default function CryptoPositionsPage() {
       cell: (p) => (
         <span style={{ display: "grid" }}>
           <strong>{p.displayName}</strong>
-          <span style={{ fontSize: 11, opacity: 0.6 }}>{p.kind === "OPTION" ? "OPTION" : "PERPETUAL"}</span>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>
+            {p.kind === "OPTION" ? "OPTION" : "PERPETUAL"}
+            {p.expired && (
+              <>
+                {" · "}
+                <span
+                  style={{ color: "var(--desk-loss)", fontWeight: 700 }}
+                  title={`Expired and settled at ${usd(p.settlementPrice ?? 0, 4)} — its intrinsic against the underlying at settlement. Close books that value.`}
+                >
+                  EXPIRED
+                </span>
+              </>
+            )}
+          </span>
         </span>
       ),
     },
@@ -523,7 +538,18 @@ export default function CryptoPositionsPage() {
       id: "ltp",
       header: "LTP",
       align: "right",
-      cell: (p) => (p.status === "OPEN" ? usd(p.markPrice, 4) : usd(p.exitPrice, 4)),
+      cell: (p) => {
+        if (p.status !== "OPEN") return usd(p.exitPrice, 4);
+        if (p.expired) {
+          return (
+            <span title="Settlement value — intrinsic against the underlying at expiry">
+              {usd(p.settlementPrice, 4)}
+              <span style={{ display: "block", fontSize: 11, opacity: 0.7 }}>settled</span>
+            </span>
+          );
+        }
+        return usd(p.markPrice, 4);
+      },
     },
     {
       id: "worth",
@@ -644,7 +670,7 @@ export default function CryptoPositionsPage() {
           <DeskChip label="CLOSED" tone="default" />
         ) : (
           <span style={{ display: "inline-flex", gap: 6, whiteSpace: "nowrap" }}>
-            {p.optionType && (
+            {p.optionType && !p.expired && (
               <DeskButton
                 variant="tonal"
                 onClick={() => roll([p.positionId])}
@@ -668,8 +694,13 @@ export default function CryptoPositionsPage() {
             >
               Edit
             </DeskButton>
-            <DeskButton variant="danger-tonal" onClick={() => exitOne(p)} disabled={busy !== null}>
-              Close
+            <DeskButton
+              variant="danger-tonal"
+              onClick={() => exitOne(p)}
+              disabled={busy !== null}
+              title={p.expired ? `Settle at ${usd(p.settlementPrice ?? 0, 4)}` : "Close at the live price"}
+            >
+              {p.expired ? "Settle" : "Close"}
             </DeskButton>
           </span>
         ),
@@ -1183,6 +1214,36 @@ export default function CryptoPositionsPage() {
                 <DeskButton variant="text" onClick={() => setReduceFor(null)}>Cancel</DeskButton>
               </div>
             </DeskCard>
+          )}
+
+          {expired.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <DeskBanner variant="warning" title={`${expired.length} position${expired.length === 1 ? " has" : "s have"} expired`}>
+                These contracts have settled and Delta no longer lists them, so they cannot be traded — only settled.
+                Each is valued at its intrinsic against the underlying at the settlement minute, which is what the
+                contract actually paid out. Settling books that value and frees the margin.
+                <div style={{ marginTop: 8 }}>
+                  <DeskButton
+                    variant="filled"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      if (!window.confirm(`Settle ${expired.length} expired position(s) at their settlement value?`)) return;
+                      act("settle", async () => {
+                        const r = await post<{ closed: number; realizedPnl: number; failed: { reason: string }[] }>(
+                          "positions/close-many",
+                          { account_id: accountId, position_ids: expired.map((p) => p.positionId) },
+                        );
+                        say(`Settled ${r.closed} expired position(s) — realized ${usd(r.realizedPnl)}`);
+                        if (r.failed.length) setError(r.failed.map((f) => f.reason).join(" · "));
+                        await loadBook();
+                      });
+                    }}
+                  >
+                    {busy === "settle" ? "Settling…" : `Settle all ${expired.length}`}
+                  </DeskButton>
+                </div>
+              </DeskBanner>
+            </div>
           )}
 
           {openRows.length > 0 && (
