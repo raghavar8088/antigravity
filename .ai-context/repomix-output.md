@@ -167,7 +167,9 @@ The content is organized as follows:
   app/forex-paper-trading/page.tsx
   app/globals.css
   app/gold-desk/page.tsx
+  app/high-volume-crypto/DeskView.tsx
   app/high-volume-crypto/page.tsx
+  app/high-volume-crypto/PaperTradingTab.tsx
   app/layout.tsx
   app/live-demo-engine/page.tsx
   app/live-engine-paper/page.tsx

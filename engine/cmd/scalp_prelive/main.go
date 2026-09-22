@@ -1428,6 +1428,30 @@ func main() {
 		return out
 	})
 
+	// High Volume Crypto PAPER Trading: the owner's selection off this desk's
+	// own leaderboard, on its own $500 book.
+	//
+	// Opt-in per process, like the symbol books, so only the desk whose board
+	// produced the selection carries it. Registering it everywhere would put
+	// nine streams and a $500 balance into the scalp desk and the demo desk
+	// too, where nobody chose them and no page would name them.
+	//
+	// Registered and seeded BEFORE the restore, which is the part that is easy
+	// to get wrong: loadPaperBooks drops any saved account that is not
+	// configured YET, so a book registered afterwards would lose its history on
+	// every restart and read as a fresh $500 — the exact silent reset the
+	// persistence layer exists to prevent.
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("SCALP_HV_PAPER")), "true") {
+		if n := delta.RegisterHighVolPaperBook(); n > 0 {
+			log.Printf("[HV PAPER] %s: %d streams, $%.2f book", delta.PaperAccountHighVol, n, delta.HighVolPaperEquityUSD)
+			if seeded := paperSeedBook(delta.PaperAccountHighVol); seeded > 0 {
+				log.Printf("[HV PAPER] seeded %d rows", seeded)
+			}
+		} else {
+			log.Printf("[HV PAPER] ⚠️  SCALP_HV_PAPER=true but the roster is empty — the tab will render no rows")
+		}
+	}
+
 	// Restore the paper books before any bar is processed, so a trade closing on
 	// the first tick lands on the real balance rather than a fresh $100.
 	loadPaperBooks(*stateDir)
@@ -1512,6 +1536,31 @@ func main() {
 				}
 			}
 		}
+		// The High Volume paper book's roster is written down rather than
+		// derived, so it is checked against what this process actually loaded.
+		//
+		// A stream whose strategy left the pack or whose symbol never cleared
+		// the turnover floor still renders a row, and that row sits at zero
+		// forever. On a board of 20,088 streams one silent zero is invisible;
+		// on a nine-row book it is a ninth of the desk, so it is named here
+		// instead of waiting to be noticed.
+		if delta.IsNamedPaperBook(delta.PaperAccountHighVol) {
+			syms := make([]string, 0, len(d.symbols))
+			for _, ss := range d.symbols {
+				syms = append(syms, ss.sym)
+			}
+			if bad := delta.HighVolPaperUnservedStreams(d.streamNames(), syms); len(bad) > 0 {
+				log.Printf("[HV PAPER] ⚠️  %d of %d rostered streams can never fill in this process:",
+					len(bad), len(delta.HighVolPaperStreams()))
+				for _, b := range bad {
+					log.Printf("[HV PAPER] ⚠️    %s", b)
+				}
+			} else {
+				log.Printf("[HV PAPER] all %d rostered streams are served by this process",
+					len(delta.HighVolPaperStreams()))
+			}
+		}
+
 		// Seed the board now that the list exists. The books were constructed
 		// during package init, when the gold roster was still empty.
 		if n := paperSeedBook(delta.PaperAccountGold); n > 0 {

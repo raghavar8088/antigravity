@@ -117,7 +117,18 @@ type livePaperDesk struct {
 	mu      sync.Mutex
 	// equity is THE account. One balance, shared by every strategy, exactly as
 	// the live bridge shares one Delta wallet.
-	equity   float64
+	equity float64
+	// start is what this book opened with, and it is per book rather than
+	// process-wide.
+	//
+	// It had to stop being a package-level constant the moment a book ran a
+	// different size. Every ratio the page shows — ROI, a stream's share of
+	// equity, the "started at" line — divided by the process default, so a $500
+	// book reporting against $100 would have printed five times its real return
+	// and a row that contributed 2% of the book as 10%. The balance would have
+	// been right and every number derived from it wrong, which is the harder
+	// failure to notice.
+	start    float64
 	accounts map[string]*paperAccount
 	open     map[string]*paperPos
 	closed   []paperTrade
@@ -127,6 +138,26 @@ type livePaperDesk struct {
 // livePaperStartingEquity is the whole account - the same $100 the live desk
 // runs, so a result here transfers without rescaling.
 var livePaperStartingEquity = paperEnvFloat("SCALP_PAPER_EQUITY", 100.0)
+
+// livePaperStartingEquityFor is ONE book's capital.
+//
+// Resolution order, most specific first: an explicit SCALP_PAPER_EQUITY_<ID>
+// for this book, then the size the book was registered with, then the
+// process-wide default. The middle step is what lets a registered book carry
+// its own capital in code rather than depending on an environment variable
+// being remembered at deploy time — a forgotten one would not fail, it would
+// quietly run the book at the wrong size and report confidently in the wrong
+// units.
+func livePaperStartingEquityFor(account string) float64 {
+	key := "SCALP_PAPER_EQUITY_" + strings.ToUpper(strings.TrimSpace(account))
+	if v := paperEnvFloat(key, 0); v > 0 {
+		return v
+	}
+	if v, ok := delta.NamedPaperBookEquity(account); ok && v > 0 {
+		return v
+	}
+	return livePaperStartingEquity
+}
 
 // paperEnvFloat reads a positive float from the environment.
 //
@@ -229,9 +260,11 @@ const livePaperProductLeverage = delta.PerpLeverage
 const livePaperMaintenanceMarginPct = 0.5
 
 func newLivePaperDesk(account string) *livePaperDesk {
+	start := livePaperStartingEquityFor(account)
 	d := &livePaperDesk{
 		account:  account,
-		equity:   livePaperStartingEquity,
+		equity:   start,
+		start:    start,
 		accounts: map[string]*paperAccount{},
 		open:     map[string]*paperPos{},
 		started:  time.Now().UTC(),
@@ -589,7 +622,7 @@ func (d *livePaperDesk) reset() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	n := len(d.closed)
-	d.equity = livePaperStartingEquity
+	d.equity = d.start
 	// Re-seed rather than empty: a cleared desk still watches the same streams,
 	// and an empty board would again read as "nothing configured".
 	d.accounts = map[string]*paperAccount{}
@@ -617,7 +650,7 @@ func (d *livePaperDesk) snapshot() map[string]any {
 		c.NetUSD = math.Round(c.NetUSD*100) / 100
 		c.GrossUSD = math.Round(c.GrossUSD*100) / 100
 		c.FeesUSD = math.Round(c.FeesUSD*100) / 100
-		c.ShareOfEquityPct = math.Round(c.NetUSD/livePaperStartingEquity*10000) / 100
+		c.ShareOfEquityPct = math.Round(c.NetUSD/d.start*10000) / 100
 		accts = append(accts, c)
 	}
 	sort.Slice(accts, func(i, j int) bool {
@@ -655,11 +688,11 @@ func (d *livePaperDesk) snapshot() map[string]any {
 	}
 
 	return map[string]any{
-		"startingEquityUsd": livePaperStartingEquity,
+		"startingEquityUsd": d.start,
 		// ONE balance for the whole desk, not one per strategy.
 		"equityUsd":       math.Round(d.equity*100) / 100,
-		"netUsd":          math.Round((d.equity-livePaperStartingEquity)*100) / 100,
-		"roiPct":          math.Round((d.equity-livePaperStartingEquity)/livePaperStartingEquity*10000) / 100,
+		"netUsd":          math.Round((d.equity-d.start)*100) / 100,
+		"roiPct":          math.Round((d.equity-d.start)/d.start*10000) / 100,
 		"openNotionalUsd": math.Round(d.openNotionalLocked()*100) / 100,
 		// Unrealised across every open position, NET of the exit fee each will
 		// pay. Summed here rather than in the UI so the page and the API cannot

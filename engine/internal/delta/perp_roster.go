@@ -342,6 +342,10 @@ func GoldPaperStreams() []PerpStream {
 // PaperAccountIDs is every book, in display order.
 func PaperAccountIDs() []string {
 	base := []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04, PaperAccount05, PaperAccount06, PaperAccountGold}
+	// Named books next: hand-picked cross-symbol rosters, registered by the
+	// process that wants them. Empty in every desk that registers none, so the
+	// order above is unchanged wherever this list was already being rendered.
+	base = append(base, NamedPaperBookIDs()...)
 	// Symbol books last, so the numbered crypto books and the Gold Desk keep
 	// their existing positions on every page that renders this list in order.
 	return append(base, SymbolBookIDs()...)
@@ -710,6 +714,13 @@ func ScalpPaperStreamsFor(account string) []PerpStream {
 		// altcoin streams.
 		return GoldPaperStreams()
 	default:
+		// A named book, if one is registered under this id. Checked before the
+		// symbol books and returned directly, for the same reason as gold: a
+		// hand-picked roster that fell through would be handed the default
+		// candidate list, which is a different set of streams entirely.
+		if st, ok := namedPaperBookStreams(account); ok {
+			return st
+		}
 		// A per-symbol book, if one is registered under this id. Returned
 		// directly for the same reason as gold: falling through would hand a
 		// symbol book the default candidate roster, which is a list of other

@@ -24,7 +24,12 @@ import io
 import re
 
 SRC = "client/src/app/scalp-desk/page.tsx"
-DST = "client/src/app/high-volume-crypto/page.tsx"
+# The VIEW, not the page. high-volume-crypto/page.tsx is hand-written and owns
+# the module's tab strip — the desk board on one tab, the $500 paper book on the
+# other. Generating over it would delete the paper tab on every regeneration,
+# and it would do so silently, since the desk board is what a reviewer looks at
+# to decide the clone worked.
+DST = "client/src/app/high-volume-crypto/DeskView.tsx"
 
 s = io.open(SRC, encoding="utf-8").read()
 
@@ -54,6 +59,11 @@ header = '''"use client";
  * GENERATED from the Crypto Scalp Desk page. Do not hand-edit: run
  * scripts/clone_high_volume_page.py, so a fix to the scalp desk reaches this
  * one instead of the two drifting apart.
+ *
+ * This is the DESK tab's body. The module's page.tsx is hand-written, owns the
+ * tab strip and renders this alongside the High Volume Crypto Paper Trading
+ * book — so regenerating this file replaces the board and leaves the paper tab
+ * alone.
  *
  * Same binary, same strategies, same maker-fill model, same pre-registered
  * gate. One thing differs: the symbol universe. The scalp desk discovers every
@@ -96,6 +106,16 @@ s = s[:m.start()] + '''            The same scalp strategies as the Crypto Scalp
             Delta. A separate engine process, so these streams compete only with each other for fill slots.
             Paper only — real money goes through the pre-registered gate, same as the scalp desk.
           </p>''' + s[m.end():]
+
+# --- export name -----------------------------------------------------------
+# It is a component now, not a route. Renamed so an import of it reads as what
+# it is, and asserted rather than replaced blind: a silent miss here produces a
+# page.tsx importing a name that does not exist, which fails the build with an
+# error that points at the wrong file.
+old_export = "export default function ScalpDeskPage() {"
+if old_export not in s:
+    raise SystemExit("the scalp page's default export is not named ScalpDeskPage — update this script")
+s = s.replace(old_export, "export default function HighVolumeDeskView() {", 1)
 
 io.open(DST, "w", encoding="utf-8", newline="").write(s)
 print("regenerated %s from %s (%d bytes)" % (DST, SRC, len(s)))
