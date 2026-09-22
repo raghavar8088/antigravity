@@ -133,13 +133,23 @@ jobs:
             mkdir -p /home/ubuntu/antigravity/data/scalp_prelive
             sudo chown -R 10001:10001 /home/ubuntu/antigravity/data/scalp_prelive || true
             SCALP_TOKEN=$(grep '^BTC_PRE_LIVE_API_TOKEN=' /home/ubuntu/antigravity/.env | cut -d= -f2-)
+            # --memory is 900m, not the 300m this desk launched with: that
+            # figure was written for the "100-strategy" desk named above. It
+            # now runs the 1674-strategy hunt pack over the whole ~127-symbol
+            # Delta universe - 212,598 streams, roughly 660m resident. At
+            # 300m (hand-patched to 620m on the box) it was SIGKILL-137'd on
+            # every boot, which is what made the Gold Desk and Crypto Scalp
+            # Desk read "unreachable (HTTP 502)". --memory-swap above
+            # --memory lets a spike spill to swap and run slow rather than
+            # die; setting the two equal disables swap entirely.
             docker run -d \
               --name antigravity_scalp_prelive \
               --restart unless-stopped \
               -p 8094:8094 \
               -e SCALP_API_TOKEN="$SCALP_TOKEN" \
               -v /home/ubuntu/antigravity/data/scalp_prelive:/app/data/scalp_prelive \
-              --memory 300m \
+              --memory 900m \
+              --memory-swap 2g \
               --cpus 0.50 \
               --pids-limit 128 \
               --ulimit nofile=8192:8192 \
