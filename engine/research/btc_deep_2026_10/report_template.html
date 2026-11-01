@@ -1,0 +1,668 @@
+<title>BTC Strategy Deep Backtest</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,600..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a research note. Prose holds a ~68ch column; data panels widen to the full 1120px measure. */
+:root {
+  --paper: #f4f5f6;
+  --panel: #ffffff;
+  --ink: #14171c;
+  --ink-2: #48505b;
+  --ink-3: #757d89;
+  --rule: #dde0e5;
+  --grid: #eceef1;
+  --gain: #2a78d6;
+  --loss: #e34948;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --btc: #757d89;
+  --accent: #985700;
+  --accent-soft: #f8ecd9;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --measure: 1120px;
+  --prose: 68ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1114; --panel: #171a1f; --ink: #e8eaee; --ink-2: #b3b9c3; --ink-3: #8a919c;
+    --rule: #2b3038; --grid: #22262d; --gain: #3987e5; --loss: #e66767; --s1: #3987e5; --s2: #d95926;
+    --btc: #8a919c; --accent: #f0a640; --accent-soft: #3a2b14; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1114; --panel: #171a1f; --ink: #e8eaee; --ink-2: #b3b9c3; --ink-3: #8a919c;
+  --rule: #2b3038; --grid: #22262d; --gain: #3987e5; --loss: #e66767; --s1: #3987e5; --s2: #d95926;
+  --btc: #8a919c; --accent: #f0a640; --accent-soft: #3a2b14; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.6; }
+.page { max-width: var(--measure); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: grid; gap: 56px; }
+section, header, footer { display: grid; gap: 18px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); font-stretch: 85%; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 800; line-height: 1.02; }
+h2 { font-size: clamp(1.45rem, 3vw, 1.9rem); font-weight: 750; line-height: 1.12; }
+h3 { font-size: 1.12rem; font-weight: 700; font-stretch: 90%; }
+p { margin: 0; max-width: var(--prose); }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 1.12rem; color: var(--ink-2); }
+.note { font-size: 0.86rem; color: var(--ink-3); }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+a { color: var(--accent); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.fig { background: var(--panel); padding: 18px 20px 20px; display: grid; gap: 6px; align-content: start; }
+.fig .label { font-size: 0.84rem; font-weight: 600; color: var(--ink-2); }
+.fig .value { font-family: var(--font-body); font-weight: 600; font-size: 2.3rem; line-height: 1.05; letter-spacing: -0.02em; }
+.fig .value.neg { color: var(--loss); }
+.fig .sub { font-size: 0.84rem; color: var(--ink-3); }
+.verdict { font-size: 1.05rem; max-width: 74ch; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.table-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.76rem; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+td.strat { white-space: normal; min-width: 240px; text-align: left; }
+td.strat .n { font-family: var(--font-mono); font-size: 0.84rem; font-weight: 500; white-space: nowrap; }
+td.strat .d { display: block; color: var(--ink-3); font-size: 0.78rem; line-height: 1.35; margin-top: 2px; }
+tr.book td { font-weight: 600; border-top: 1px solid var(--rule); }
+tr.context td { color: var(--ink-3); }
+td.heat { min-width: 62px; }
+td.zero { color: var(--ink-3); }
+.neg { color: var(--loss); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--font-mono); font-size: 0.78rem; border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
+.chip:hover { border-color: var(--ink-3); color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.chip:focus-visible, svg:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chart-wrap { overflow-x: auto; min-width: 0; position: relative; }
+.chart-wrap svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.chart-wrap svg text { fill: var(--ink-2); font-family: var(--font-body); font-size: 12px; font-variant-numeric: tabular-nums; }
+.chart-wrap svg text.muted { fill: var(--ink-3); }
+.chart-wrap svg text.strong { fill: var(--ink); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.84rem; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { display: inline-block; width: 18px; height: 2px; border-radius: 1px; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; font-size: 0.8rem; line-height: 1.45; box-shadow: 0 4px 14px rgba(0,0,0,0.12); min-width: 170px; z-index: 2; }
+.tip .t { color: var(--ink-3); font-size: 0.74rem; margin-bottom: 2px; }
+.tip .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.tip .r b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tip .r span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.tip i { display: inline-block; width: 12px; height: 2px; }
+.bars { display: grid; gap: 12px; }
+.bar-row { display: grid; gap: 4px; }
+.bar-row .lab { font-size: 0.86rem; color: var(--ink-2); }
+.bar-line { display: flex; align-items: center; gap: 10px; }
+.bar-track { flex: 1; min-width: 0; }
+.bar { height: 14px; background: var(--s1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.bar.zero { background: var(--rule); width: 2px; }
+.bar-val { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.9rem; width: 3.2em; text-align: right; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+ul.facts { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; max-width: var(--prose); }
+ul.facts li::marker { color: var(--ink-3); }
+ol.what { margin: 0; padding-left: 1.6em; display: grid; gap: 6px; font-size: 0.9rem; color: var(--ink-2); max-width: 90ch; }
+ol.what .mono { color: var(--ink); }
+details { border-top: 1px solid var(--rule); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; color: var(--ink-2); }
+details[open] summary { margin-bottom: 10px; }
+footer { border-top: 1px solid var(--rule); padding-top: 18px; color: var(--ink-3); font-size: 0.84rem; }
+@media (max-width: 560px) {
+  body { font-size: 15px; }
+  .fig .value { font-size: 2rem; }
+  .page { gap: 44px; padding-block: 28px 48px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chip { transition: background-color .15s, border-color .15s; }
+}
+</style>
+
+<main class="page">
+  <header>
+    <p class="eyebrow">antigravity engine · scalpers registry · Binance BTCUSDT 1m · Jan 2018 to 30 Oct 2026</p>
+    <h1>BTC Strategy Deep Backtest</h1>
+    <p class="lede" id="lede"></p>
+    <div class="figures" id="figures"></div>
+    <p class="verdict" id="verdict"></p>
+  </header>
+
+  <section id="top10">
+    <h2>The top 10 over the whole period</h2>
+    <p id="top-rule"></p>
+    <div class="panel"><div class="table-wrap"><table id="t-top"></table></div></div>
+    <p class="note" id="top-note"></p>
+  </section>
+
+  <section id="yearly">
+    <h2>Year by year</h2>
+    <p>Net return each calendar year as a share of the strategy's $10,000, booked when trades close. Blue cells made money, red cells lost it. BTC's own price change is the last row for context.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-year"></table></div></div>
+    <p class="note">2026 runs to 30 October. The book of ten splits $100,000 equally, so its return is the average of the ten.</p>
+  </section>
+
+  <section id="monthly">
+    <h2>Month by month</h2>
+    <p>Pick a strategy. Cells show the net return of trades that closed in that month; a blank cell had none.</p>
+    <div class="chips" id="chips" role="group" aria-label="Strategy"></div>
+    <div class="panel"><div class="table-wrap"><table id="t-month"></table></div></div>
+  </section>
+
+  <section id="holdout">
+    <h2>Hindsight against a real hold-out</h2>
+    <p id="holdout-intro"></p>
+    <div class="panel">
+      <div class="legend" id="eq-legend"></div>
+      <div class="chart-wrap" id="eq-wrap"></div>
+      <p class="note">Cumulative net return of each equal-weight book, % of its capital, no compounding. Below: BTC/USDT monthly close on a log scale, same months.</p>
+      <div class="chart-wrap" id="btc-wrap"></div>
+    </div>
+    <h3>The ten picked on 2018 to 2022, then held</h3>
+    <div class="panel"><div class="table-wrap"><table id="t-train"></table></div></div>
+    <p class="note" id="train-note"></p>
+  </section>
+
+  <section id="survivors">
+    <h2>How much of the registry survives</h2>
+    <p id="surv-intro"></p>
+    <div class="panel"><div class="bars" id="bars"></div></div>
+    <p class="note" id="surv-note"></p>
+  </section>
+
+  <section id="harness">
+    <h2>The existing harness trades on stale data</h2>
+    <p id="harness-intro"></p>
+    <div class="panel">
+      <h3>What a strategy can see when its entry fills</h3>
+      <div class="chart-wrap" id="timeline-wrap"></div>
+      <p class="note">One 4h window, drawn from the probe's own timestamps. The harness builds the context 14 candles behind the tick, and its cut-off includes the 4h bar still forming at that moment with its final high, low and close.</p>
+    </div>
+    <ul class="facts" id="harness-facts"></ul>
+    <div class="panel">
+      <h3>Same strategies, same costs, two clocks</h3>
+      <div class="chart-wrap" id="sc-wrap"></div>
+      <p class="note" id="sc-note"></p>
+    </div>
+    <div class="panel"><div class="table-wrap"><table id="t-gap"></table></div></div>
+    <p id="harness-why"></p>
+  </section>
+
+  <section id="whitelist">
+    <h2>The live 49-strategy whitelist</h2>
+    <p id="wl-intro"></p>
+    <details class="panel">
+      <summary>All 49 on the corrected clock</summary>
+      <div class="table-wrap"><table id="t-wl"></table></div>
+    </details>
+  </section>
+
+  <section id="method">
+    <h2>Data, method and checks</h2>
+    <div class="two">
+      <div class="panel"><h3>Data</h3><ul class="facts" id="m-data"></ul></div>
+      <div class="panel"><h3>How a trade is simulated</h3><ul class="facts" id="m-sim"></ul></div>
+      <div class="panel"><h3>Checks</h3><ul class="facts" id="m-checks"></ul></div>
+      <div class="panel"><h3>Limits</h3><ul class="facts" id="m-limits"></ul></div>
+    </div>
+  </section>
+
+  <footer>
+    <p id="foot"></p>
+  </footer>
+</main>
+
+<script>
+const D = /*DATA*/null;
+const MINUS = "−";
+const SVGNS = "http://www.w3.org/2000/svg";
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const YEARS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
+
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null) continue;
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function sv(tag, attrs, ...kids) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) if (v != null) e.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function fmt(v, d) { return Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function pct(v, d = 1, sign = true) {
+  if (v == null || Number.isNaN(v)) return "–";
+  if (Math.abs(v) < 0.5 * Math.pow(10, -d)) v = 0;
+  if (v < 0) return MINUS + fmt(v, d) + "%";
+  return (sign && v > 0 ? "+" : "") + fmt(v, d) + "%";
+}
+function num(v, d = 2) { if (v == null) return "–"; return (v < 0 ? MINUS : "") + fmt(v, d); }
+function usd(v) { return "$" + Math.round(v).toLocaleString("en-US"); }
+function heatStyle(v, cap) {
+  if (v == null || v === 0) return null;
+  const k = Math.min(Math.abs(v) / cap, 1);
+  return "background: color-mix(in oklab, var(" + (v > 0 ? "--gain" : "--loss") + ") " + Math.round(10 + k * 48) + "%, var(--panel))";
+}
+function side(f) { return f.long_share_pct === 0 ? "short" : f.long_share_pct === 100 ? "long" : "long and short"; }
+function stratCell(name, desc) { return h("td", { class: "strat" }, h("span", { class: "n" }, name), desc ? h("span", { class: "d" }, desc) : null); }
+
+const U = D.universe, B = D.book, TB = D.trainBook, PE = D.probe.engine;
+
+// ── header ───────────────────────────────────────────────────────────────
+document.getElementById("lede").textContent =
+  "Every OHLCV-compatible strategy in the engine's scalpers registry, " + U.strategies + " of them, replayed on " +
+  (D.data.bars / 1e6).toFixed(2) + " million one-minute BTCUSDT bars and charged Delta India's taker fees on every trade. " +
+  U.trades_fixed.toLocaleString("en-US") + " trades from January 2018 to the end of October 2026.";
+const figs = [
+  ["Top 10 picked on all years", pct(B.full_pct), "Equal-weight book over 8.8 years, max drawdown " + pct(B.max_dd_pct, 1, false) + ". Chosen with hindsight.", B.full_pct < 0],
+  ["Top 10 picked on 2018 to 2022", pct(TB.test_pct), "The same rule without hindsight, then held through Jan 2023 to Oct 2026. It made " + pct(TB.train_pct) + " in the years it was picked on.", TB.test_pct < 0],
+  ["Strongest single strategy", "t " + num(U.full_best_t), "Luck alone reaches about t " + num(U.expected_max_t_under_null) + " among " + U.strategies + " tries. None clears the " + num(U.bonferroni_t_one_sided_5pct) + " bar.", false],
+];
+const figBox = document.getElementById("figures");
+for (const [l, v, s, neg] of figs) figBox.append(h("div", { class: "fig" }, h("div", { class: "label" }, l), h("div", { class: "value" + (neg ? " neg" : "") }, v), h("div", { class: "sub" }, s)));
+document.getElementById("verdict").textContent =
+  "No strategy in the registry shows an edge that survives Delta's fees and a fair test. The ten best over the whole period look good because they were picked after the fact. Picked by the same rule on 2018 to 2022 alone, the ten best lost money in the years that followed. The engine's existing backtest harness flatters results: it evaluates strategies on data " +
+  "three and a half hours old and lets them read 4h candles that have not closed.";
+
+// ── top 10 ───────────────────────────────────────────────────────────────
+document.getElementById("top-rule").textContent =
+  "Ranked by the t-statistic of net return per trade over 2018 to October 2026, at least 80 trades. A strategy whose monthly returns correlate above 0.7 with one already chosen is skipped as a near-copy (" +
+  D.skippedFull.map(x => x.strategy).join(", ") + "). All ten are short-only.";
+{
+  const t = document.getElementById("t-top");
+  t.append(h("thead", {}, h("tr", {}, ["#", "Strategy", "Trades", "Per year", "Win rate", "Profit factor", "Net 2018–26", "Max drawdown", "t", "2018–22", "2023–26"].map((x, i) => h("th", { class: i < 2 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const r of D.top) {
+    const f = r.full;
+    tb.append(h("tr", {},
+      h("td", { class: "l" }, r.rank), stratCell(r.name, r.desc + " · " + (r.tf || []).join("/")),
+      h("td", {}, f.trades), h("td", {}, num(f.trades_per_year, 1)), h("td", {}, pct(f.win_rate_pct, 1, false)),
+      h("td", {}, num(f.profit_factor)), h("td", {}, pct(f.net_pct)), h("td", {}, pct(f.max_dd_pct, 1, false)),
+      h("td", {}, num(f.t_stat)), h("td", { class: r.train.net_pct < 0 ? "neg" : null }, pct(r.train.net_pct)),
+      h("td", { class: r.test.net_pct < 0 ? "neg" : null }, pct(r.test.net_pct))));
+  }
+  tb.append(h("tr", { class: "book" }, h("td", {}), h("td", { class: "l" }, "Book of ten, $10,000 each"), h("td", {}, B.trades),
+    h("td", {}), h("td", {}), h("td", {}), h("td", {}, pct(B.full_pct)), h("td", {}, pct(B.max_dd_pct, 1, false)), h("td", {}),
+    h("td", {}, pct(B.train_pct)), h("td", {}, pct(B.test_pct))));
+  t.append(tb);
+  document.getElementById("top-note").textContent =
+    "Each strategy has its own $10,000 and every trade is $10,000 notional (1x, no compounding). Net is after Delta India's taker fee of 0.05% plus 18% GST and 2 bp of spread and slippage on each leg, " +
+    D.costs.delta.toFixed(1) + " bp a leg in all, and after signed funding. Before costs the same ten made " + pct(D.top.reduce((a, r) => a + r.gross, 0) / D.top.length) +
+    " on average; at Binance's lower fees, " + pct(D.top.reduce((a, r) => a + r.binance, 0) / D.top.length) + ".";
+}
+
+// ── yearly heat table ─────────────────────────────────────────────────────
+{
+  const t = document.getElementById("t-year");
+  t.append(h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Strategy"), YEARS.map(y => h("th", {}, y === 2026 ? "2026*" : y)), h("th", {}, "2018–26"))));
+  const tb = h("tbody");
+  const row = (name, yearly, cls, colored) => {
+    let tot = 0;
+    const cells = YEARS.map(y => { const v = yearly[String(y)]; tot += v || 0; return h("td", { class: "heat" + (v === 0 ? " zero" : ""), style: colored ? heatStyle(v, 30) : null }, v === 0 ? "0" : pct(v)); });
+    tb.append(h("tr", { class: cls }, h("td", { class: "l mono" }, name), cells, h("td", {}, colored ? pct(tot) : "")));
+  };
+  for (const r of D.top) row(r.name, r.yearly, null, true);
+  row("Book of ten", B.yearly, "book", true);
+  const by = {}; for (const y of YEARS) by[String(y)] = D.btc.yearly[String(y)];
+  const tr = h("tr", { class: "context" }, h("td", { class: "l" }, "BTC price change"), YEARS.map(y => h("td", {}, pct(by[String(y)], 0))), h("td", {}, pct((D.btc.last / D.btc.first - 1) * 100, 0)));
+  tb.append(tr);
+  t.append(tb);
+}
+
+// ── monthly heat table with a strategy picker ────────────────────────────
+{
+  const chips = document.getElementById("chips");
+  const items = D.top.map(r => ({ key: r.name, label: r.rank + ". " + r.name, monthly: r.monthly }));
+  items.push({ key: "book", label: "Book of ten", monthly: B.monthly });
+  let current = items[0].key;
+  try { const saved = localStorage.getItem("btc-deep-month"); if (saved && items.some(i => i.key === saved)) current = saved; } catch (e) {}
+  const t = document.getElementById("t-month");
+  function render() {
+    const it = items.find(i => i.key === current);
+    t.replaceChildren();
+    t.append(h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Year"), MON.map(m => h("th", {}, m)), h("th", {}, "Year"))));
+    const tb = h("tbody");
+    for (const y of YEARS) {
+      let tot = 0;
+      const cells = MON.map((_, i) => {
+        const key = y + "-" + String(i + 1).padStart(2, "0");
+        if (y === 2026 && i > 9) return h("td", { class: "zero" }, "");
+        const v = it.monthly[key];
+        tot += v || 0;
+        return h("td", { class: "heat", style: heatStyle(v, 10) }, v ? pct(v) : "");
+      });
+      tb.append(h("tr", {}, h("td", { class: "l" }, y === 2026 ? "2026*" : y), cells, h("td", { style: heatStyle(tot, 30) }, pct(tot))));
+    }
+    t.append(tb);
+    for (const c of chips.children) c.setAttribute("aria-pressed", c.dataset.key === current ? "true" : "false");
+  }
+  for (const it of items) chips.append(h("button", { class: "chip", type: "button", "data-key": it.key, "aria-pressed": "false", id: "chip-" + it.key,
+    onclick: () => { current = it.key; try { localStorage.setItem("btc-deep-month", current); } catch (e) {} render(); } }, it.label));
+  render();
+}
+
+// ── equity curves + BTC strip, shared crosshair ──────────────────────────
+document.getElementById("holdout-intro").textContent =
+  "Ranking every strategy on all eight years and keeping the best ten uses the same years to choose and to score. The honest version chooses on 2018 to 2022 only and then leaves the list alone. Both books are below, with the hold-out years from January 2023 on the right of the line.";
+{
+  const months = D.btc.months;
+  const series = [
+    { name: "Picked on 2018–2026 (hindsight)", color: "var(--s1)", m: B.monthly },
+    { name: "Picked on 2018–2022, then held", color: "var(--s2)", m: TB.monthly },
+  ];
+  for (const s of series) { let c = 0; s.cum = months.map(k => (c += s.m[k] || 0)); }
+  const W = 1000, L = 56, R = 190, T = 14, H = 300, Bm = 30;
+  const x = i => L + (i / (months.length - 1)) * (W - L - R);
+  const all = series.flatMap(s => s.cum);
+  let lo = Math.min(0, ...all), hi = Math.max(...all);
+  const step = 10; lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - Bm);
+  const svg = sv("svg", { viewBox: "0 0 " + W + " " + H, role: "img", tabindex: "0", "aria-label": "Cumulative net return of the two books by month. Use the arrow keys to read months." });
+  for (let v = lo; v <= hi; v += step) {
+    svg.append(sv("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: v === 0 ? "var(--ink-3)" : "var(--grid)", "stroke-width": 1 }));
+    svg.append(sv("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end", class: "muted" }, pct(v, 0)));
+  }
+  months.forEach((k, i) => {
+    if (k.endsWith("-01")) {
+      svg.append(sv("line", { x1: x(i), x2: x(i), y1: H - Bm, y2: H - Bm + 5, stroke: "var(--ink-3)" }));
+      svg.append(sv("text", { x: x(i), y: H - Bm + 18, "text-anchor": "middle", class: "muted" }, k.slice(0, 4)));
+    }
+  });
+  const iHold = months.indexOf("2023-01");
+  svg.append(sv("line", { x1: x(iHold), x2: x(iHold), y1: T, y2: H - Bm, stroke: "var(--ink-3)", "stroke-width": 1 }));
+  svg.append(sv("text", { x: x(iHold) + 6, y: T + 12, class: "muted" }, "hold-out from Jan 2023"));
+  for (const s of series) {
+    const d = s.cum.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" ");
+    svg.append(sv("path", { d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  }
+  // end labels, nudged apart only if they would overlap
+  const ends = series.map(s => ({ s, v: s.cum[s.cum.length - 1], yy: y(s.cum[s.cum.length - 1]) })).sort((a, b) => a.yy - b.yy);
+  if (ends.length === 2 && ends[1].yy - ends[0].yy < 30) { const mid = (ends[0].yy + ends[1].yy) / 2; ends[0].ly = mid - 15; ends[1].ly = mid + 15; } else ends.forEach(e => e.ly = e.yy);
+  for (const e of ends) {
+    const xe = x(months.length - 1);
+    svg.append(sv("circle", { cx: xe, cy: e.yy, r: 4, fill: e.s.color, stroke: "var(--panel)", "stroke-width": 2 }));
+    svg.append(sv("line", { x1: xe + 8, x2: xe + 20, y1: e.ly, y2: e.ly, stroke: e.s.color, "stroke-width": 2 }));
+    svg.append(sv("text", { x: xe + 26, y: e.ly + 4, class: "strong" }, pct(e.v)));
+    svg.append(sv("text", { x: xe + 26, y: e.ly + 19, class: "muted" }, e.s === series[0] ? "hindsight" : "held"));
+  }
+  const cross = sv("line", { y1: T, y2: H - Bm, stroke: "var(--ink-3)", "stroke-width": 1, visibility: "hidden" });
+  const dots = series.map(s => sv("circle", { r: 4, fill: s.color, stroke: "var(--panel)", "stroke-width": 2, visibility: "hidden" }));
+  svg.append(cross, ...dots);
+  const hit = sv("rect", { x: L, y: T, width: W - L - R, height: H - T - Bm, fill: "transparent" });
+  svg.append(hit);
+  const wrap = document.getElementById("eq-wrap");
+  wrap.append(svg);
+  const legend = document.getElementById("eq-legend");
+  for (const s of series) legend.append(h("span", {}, h("i", { style: "background:" + s.color }), s.name));
+
+  // BTC strip
+  const H2 = 130, T2 = 10, B2 = 24;
+  const lv = D.btc.close.map(v => Math.log10(v));
+  const l0 = Math.log10(2000), l1 = Math.log10(200000);
+  const y2 = v => T2 + (1 - (Math.log10(v) - l0) / (l1 - l0)) * (H2 - T2 - B2);
+  const svg2 = sv("svg", { viewBox: "0 0 " + W + " " + H2, role: "img", "aria-label": "BTC/USDT monthly close, log scale" });
+  for (const v of [5000, 20000, 100000]) {
+    svg2.append(sv("line", { x1: L, x2: W - R, y1: y2(v), y2: y2(v), stroke: "var(--grid)" }));
+    svg2.append(sv("text", { x: L - 8, y: y2(v) + 4, "text-anchor": "end", class: "muted" }, v >= 1000 ? "$" + v / 1000 + "k" : "$" + v));
+  }
+  months.forEach((k, i) => { if (k.endsWith("-01")) svg2.append(sv("text", { x: x(i), y: H2 - 6, "text-anchor": "middle", class: "muted" }, k.slice(0, 4))); });
+  svg2.append(sv("line", { x1: x(iHold), x2: x(iHold), y1: T2, y2: H2 - B2, stroke: "var(--ink-3)" }));
+  svg2.append(sv("path", { d: D.btc.close.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y2(v).toFixed(1)).join(" "), fill: "none", stroke: "var(--btc)", "stroke-width": 2, "stroke-linejoin": "round" }));
+  const last = D.btc.close.length - 1;
+  svg2.append(sv("circle", { cx: x(last), cy: y2(D.btc.close[last]), r: 4, fill: "var(--btc)", stroke: "var(--panel)", "stroke-width": 2 }));
+  svg2.append(sv("text", { x: x(last) + 10, y: y2(D.btc.close[last]) + 4, class: "strong" }, usd(D.btc.close[last])));
+  const cross2 = sv("line", { y1: T2, y2: H2 - B2, stroke: "var(--ink-3)", visibility: "hidden" });
+  svg2.append(cross2);
+  const hit2 = sv("rect", { x: L, y: T2, width: W - L - R, height: H2 - T2 - B2, fill: "transparent" });
+  svg2.append(hit2);
+  document.getElementById("btc-wrap").append(svg2);
+
+  const tip = h("div", { class: "tip", hidden: "" });
+  wrap.append(tip);
+  let cur = -1;
+  function show(i) {
+    cur = i;
+    const xi = x(i);
+    for (const [c, s] of [[cross, svg], [cross2, svg2]]) { c.setAttribute("x1", xi); c.setAttribute("x2", xi); c.setAttribute("visibility", "visible"); }
+    dots.forEach((d, k) => { d.setAttribute("cx", xi); d.setAttribute("cy", y(series[k].cum[i])); d.setAttribute("visibility", "visible"); });
+    const [yy, mm] = months[i].split("-");
+    tip.replaceChildren(h("div", { class: "t" }, MON[+mm - 1] + " " + yy),
+      ...series.map(s => h("div", { class: "r" }, h("span", {}, h("i", { style: "background:" + s.color }), s === series[0] ? "Hindsight" : "Held"), h("b", {}, pct(s.cum[i])))),
+      h("div", { class: "r" }, h("span", {}, "Month"), h("b", {}, pct(series[0].m[months[i]] || 0) + " / " + pct(series[1].m[months[i]] || 0))),
+      h("div", { class: "r" }, h("span", {}, "BTC close"), h("b", {}, usd(D.btc.close[i]))));
+    tip.hidden = false;
+    const box = svg.getBoundingClientRect(), wb = wrap.getBoundingClientRect();
+    const px = (xi / W) * box.width + (box.left - wb.left) + wrap.scrollLeft;
+    const tw = tip.offsetWidth;
+    tip.style.left = Math.max(4, px + 14 + tw > wrap.scrollWidth ? px - tw - 14 : px + 14) + "px";
+    tip.style.top = "8px";
+  }
+  function hide() { cross.setAttribute("visibility", "hidden"); cross2.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); tip.hidden = true; }
+  function onMove(ev, target) {
+    const box = target.ownerSVGElement ? target.ownerSVGElement.getBoundingClientRect() : target.getBoundingClientRect();
+    const sx = ((ev.clientX - box.left) / box.width) * W;
+    const i = Math.max(0, Math.min(months.length - 1, Math.round(((sx - L) / (W - L - R)) * (months.length - 1))));
+    show(i);
+  }
+  hit.addEventListener("pointermove", ev => onMove(ev, hit));
+  hit2.addEventListener("pointermove", ev => onMove(ev, hit2));
+  hit.addEventListener("pointerleave", hide); hit2.addEventListener("pointerleave", hide);
+  svg.addEventListener("keydown", ev => {
+    if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") { ev.preventDefault(); show(Math.max(0, Math.min(months.length - 1, (cur < 0 ? months.length - 1 : cur) + (ev.key === "ArrowRight" ? 1 : -1)))); }
+    if (ev.key === "Escape") hide();
+  });
+  svg.addEventListener("blur", hide);
+}
+{
+  const t = document.getElementById("t-train");
+  t.append(h("thead", {}, h("tr", {}, ["#", "Strategy", "2018–22 trades", "2018–22 net", "t", "2023–26 trades", "2023–26 net", "t"].map((x, i) => h("th", { class: i < 2 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const r of D.trainTop) tb.append(h("tr", {}, h("td", { class: "l" }, r.rank), stratCell(r.name, null),
+    h("td", {}, r.train.trades), h("td", {}, pct(r.train.net_pct)), h("td", {}, num(r.train.t_stat)),
+    h("td", {}, r.test.trades), h("td", { class: r.test.net_pct < 0 ? "neg" : null }, pct(r.test.net_pct)), h("td", {}, num(r.test.t_stat))));
+  tb.append(h("tr", { class: "book" }, h("td", {}), h("td", { class: "l" }, "Book of ten"), h("td", {}), h("td", {}, pct(TB.train_pct)), h("td", {}), h("td", {}),
+    h("td", { class: TB.test_pct < 0 ? "neg" : null }, pct(TB.test_pct)), h("td", {})));
+  t.append(tb);
+  const pos = D.trainTop.filter(r => r.test.net_pct > 0).length;
+  document.getElementById("train-note").textContent =
+    pos + " of the ten stayed positive after 2022. The book's monthly Sharpe ratio was " + num(TB.test_monthly_sharpe) + " in the hold-out. Across the whole registry, " +
+    U.net_positive_train + " strategies were net-positive in 2018 to 2022, " + U.net_positive_test + " in 2023 to 2026 and " + U.net_positive_train_and_test + " in both.";
+}
+
+// ── survivors ────────────────────────────────────────────────────────────
+document.getElementById("surv-intro").textContent =
+  "Most of these rules find something before costs. The average trade earns " + num(U.mean_gross_trade_bp) + " bp gross, and Delta charges " + (2 * D.costs.delta).toFixed(1) +
+  " bp for the round trip, so it nets " + num(U.mean_net_trade_bp) + " bp. Each bar counts strategies on its own test, out of " + U.strategies + ".";
+{
+  const rows = [
+    ["Traded at least once", U.traded_at_all],
+    ["Profitable before costs", U.gross_positive_full],
+    ["Profitable at Binance's costs (6.5 bp a leg)", U.net_positive_full.binance],
+    ["Profitable at Delta's costs (7.9 bp a leg)", U.net_positive_full.delta],
+    ["Profitable at Delta's costs in 2018–22 and again in 2023–26", U.net_positive_train_and_test],
+    ["t above 2 over the whole run, 80+ trades", U.full_t_over_2],
+    ["Above the multiple-testing bar, t " + num(U.bonferroni_t_one_sided_5pct), U.full_t_over_bonferroni.length],
+  ];
+  const box = document.getElementById("bars");
+  for (const [lab, n] of rows) box.append(h("div", { class: "bar-row" }, h("div", { class: "lab" }, lab),
+    h("div", { class: "bar-line" }, h("div", { class: "bar-track" }, h("div", { class: "bar" + (n ? "" : " zero"), style: n ? "width:" + (100 * n / U.strategies).toFixed(1) + "%" : null })), h("div", { class: "bar-val" }, n))));
+  document.getElementById("surv-note").textContent =
+    "Among " + U.strategies + " rules with no edge at all, about " + Math.round(U.strategies * 0.0228) + " would reach t 2 by chance and the luckiest would reach about t " + num(U.expected_max_t_under_null) +
+    ". Three strategies the registry labels DEMO ONLY are counted here but not ranked.";
+}
+
+// ── harness ──────────────────────────────────────────────────────────────
+document.getElementById("harness-intro").textContent =
+  "The engine's backtest path (backtest.Runner with ScalerV3Adapter and the v3 engine) is the harness that qualified the live 49-strategy whitelist. A probe strategy run through it records what it can see at the moment its entry would fill. The same probe on the corrected clock used for every number above sees everything closed by that moment and nothing later.";
+{
+  const W = 1000, H = 236, L = 150, R = 20;
+  const t0 = 15 * 60, t1 = 21 * 60;
+  const X = m => L + ((m - t0) / (t1 - t0)) * (W - L - R);
+  const svg = sv("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "Timeline: the corrected clock sees data to 19:45 when the entry fills at 19:45; the harness sees 15m data only to 16:15 but includes the 16:00 to 20:00 4h bar with its 20:00 close." });
+  const entry = 19 * 60 + 45;
+  for (let m = t0; m <= t1; m += 60) {
+    svg.append(sv("line", { x1: X(m), x2: X(m), y1: 34, y2: H - 30, stroke: "var(--grid)" }));
+    svg.append(sv("text", { x: X(m), y: H - 10, "text-anchor": "middle", class: "muted" }, String(m / 60).padStart(2, "0") + ":00"));
+  }
+  const lane = (yy, label, sub) => { svg.append(sv("text", { x: 0, y: yy + 4, class: "strong" }, label)); if (sub) svg.append(sv("text", { x: 0, y: yy + 20, class: "muted" }, sub)); };
+  // corrected
+  lane(70, "Corrected clock", "used in this report");
+  svg.append(sv("rect", { x: X(t0), y: 56, width: X(entry) - X(t0), height: 26, rx: 3, fill: "color-mix(in oklab, var(--gain) 22%, var(--panel))" }));
+  svg.append(sv("text", { x: X(t0) + 10, y: 73, class: "strong" }, "every bar closed by 19:45"));
+  // harness
+  lane(140, "Existing harness", "backtest.Runner");
+  svg.append(sv("rect", { x: X(t0), y: 126, width: X(16 * 60 + 15) - X(t0), height: 26, rx: 3, fill: "color-mix(in oklab, var(--gain) 22%, var(--panel))" }));
+  svg.append(sv("text", { x: X(t0) + 10, y: 143, class: "strong" }, "15m to 16:15"));
+  svg.append(sv("rect", { x: X(16 * 60 + 15), y: 126, width: X(entry) - X(16 * 60 + 15), height: 26, rx: 3, fill: "var(--grid)" }));
+  svg.append(sv("text", { x: (X(16 * 60 + 15) + X(entry)) / 2, y: 143, "text-anchor": "middle", class: "muted" }, "3 h 30 min it cannot see"));
+  svg.append(sv("rect", { x: X(16 * 60), y: 158, width: X(20 * 60) - X(16 * 60), height: 22, rx: 3, fill: "color-mix(in oklab, var(--loss) 16%, var(--panel))", stroke: "var(--loss)", "stroke-width": 1.5 }));
+  svg.append(sv("text", { x: X(16 * 60) + 10, y: 173, class: "strong" }, "4h bar 16:00–20:00, final close included"));
+  // entry
+  svg.append(sv("line", { x1: X(entry), x2: X(entry), y1: 30, y2: H - 30, stroke: "var(--ink)", "stroke-width": 2 }));
+  svg.append(sv("text", { x: X(entry), y: 22, "text-anchor": "middle", class: "strong" }, "entry fills 19:45"));
+  document.getElementById("timeline-wrap").append(svg);
+
+  const E = D.engine;
+  const facts = [
+    "The newest 15m bar a strategy sees is " + PE.age.replace("0s", "").replace("h", " h ").replace("m", " min").trim() + " old when its entry fills, on " + PE.stale_pct.toFixed(0) + "% of " + PE.evaluations.toLocaleString("en-US") +
+      " evaluations. The v3 engine skips strategies until its 60-price warm-up fills (15 candles), but the adapter numbers candles by counting the calls it gets, so the context runs 14 candles behind the tick for the rest of the run.",
+    "On " + PE.lookahead_4h + "% of evaluations the newest 4h bar closes after the entry. ContextBuilder.BuildAt keeps the 1h and 4h bars still forming at its cut-off, with their final high, low and close.",
+    "ctx.Now is the open of the context bar, 15 minutes before the data it holds; ctx.Price is that bar's close.",
+    "On the corrected clock both numbers are zero: " + D.probe.fixed.stale_pct.toFixed(0) + "% stale and " + D.probe.fixed.lookahead_4h + "% look-ahead.",
+  ];
+  const ul = document.getElementById("harness-facts");
+  for (const f of facts) ul.append(h("li", {}, f));
+
+  // scatter
+  const P = D.scatter, lo = -300, hi = 350;
+  const Ws = 1000, Hs = 560, Ls = 80, Rs = 24, Ts = 20, Bs = 52;
+  const sx = v => Ls + ((v - lo) / (hi - lo)) * (Ws - Ls - Rs);
+  const sy = v => Ts + (1 - (v - lo) / (hi - lo)) * (Hs - Ts - Bs);
+  const svs = sv("svg", { viewBox: "0 0 " + Ws + " " + Hs, role: "img", "aria-label": "Each strategy's net return on the corrected clock against the existing harness, both at Binance costs." });
+  for (let v = -300; v <= 350; v += 100) {
+    svs.append(sv("line", { x1: sx(v), x2: sx(v), y1: Ts, y2: Hs - Bs, stroke: v === 0 ? "var(--ink-3)" : "var(--grid)" }));
+    svs.append(sv("line", { x1: Ls, x2: Ws - Rs, y1: sy(v), y2: sy(v), stroke: v === 0 ? "var(--ink-3)" : "var(--grid)" }));
+    svs.append(sv("text", { x: sx(v), y: Hs - Bs + 18, "text-anchor": "middle", class: "muted" }, pct(v, 0)));
+    svs.append(sv("text", { x: Ls - 8, y: sy(v) + 4, "text-anchor": "end", class: "muted" }, pct(v, 0)));
+  }
+  svs.append(sv("line", { x1: sx(lo), y1: sy(lo), x2: sx(hi), y2: sy(hi), stroke: "var(--ink-2)", "stroke-width": 1 }));
+  svs.append(sv("text", { x: sx(250), y: sy(250) + 18, class: "muted", "text-anchor": "start" }, "same result on both"));
+  svs.append(sv("text", { x: sx(-290), y: sy(330), class: "muted" }, "above the line: the harness flatters"));
+  svs.append(sv("text", { x: (Ls + Ws - Rs) / 2, y: Hs - 12, "text-anchor": "middle", class: "strong" }, "Net 2018–26, corrected clock"));
+  svs.append(sv("text", { x: 14, y: (Ts + Hs - Bs) / 2, "text-anchor": "middle", class: "strong", transform: "rotate(-90 14 " + ((Ts + Hs - Bs) / 2) + ")" }, "Net 2018–26, existing harness"));
+  const inView = P.filter(p => p.fx >= lo && p.fx <= hi && p.en >= lo && p.en <= hi);
+  const g = sv("g", {});
+  for (const p of inView) g.append(sv("circle", { cx: sx(p.fx).toFixed(1), cy: sy(p.en).toFixed(1), r: 4, fill: "var(--s1)", "fill-opacity": 0.8, stroke: "var(--panel)", "stroke-width": 1.5 }));
+  svs.append(g);
+  const named = [...inView].sort((a, b) => (b.en - b.fx) - (a.en - a.fx)).slice(0, 3);
+  const lx = Math.max(...named.map(p => sx(p.fx))) + 70;
+  named.sort((a, b) => b.en - a.en).forEach((p, k) => {
+    const cx = sx(p.fx), cy = sy(p.en), ly = sy(330) + k * 18;
+    svs.append(sv("line", { x1: cx + 3, y1: cy - 3, x2: lx - 4, y2: ly - 4, stroke: "var(--ink-3)" }));
+    svs.append(sv("text", { x: lx, y: ly, class: "strong" }, p.n));
+  });
+  const ring = sv("circle", { r: 7, fill: "none", stroke: "var(--ink)", "stroke-width": 2, visibility: "hidden" });
+  svs.append(ring);
+  const hits = sv("rect", { x: Ls, y: Ts, width: Ws - Ls - Rs, height: Hs - Ts - Bs, fill: "transparent" });
+  svs.append(hits);
+  const wrapS = document.getElementById("sc-wrap");
+  wrapS.append(svs);
+  const tipS = h("div", { class: "tip", hidden: "" });
+  wrapS.append(tipS);
+  hits.addEventListener("pointermove", ev => {
+    const box = svs.getBoundingClientRect();
+    const px = ((ev.clientX - box.left) / box.width) * Ws, py = ((ev.clientY - box.top) / box.height) * Hs;
+    let best = null, bd = Infinity;
+    for (const p of inView) { const d = (sx(p.fx) - px) ** 2 + (sy(p.en) - py) ** 2; if (d < bd) { bd = d; best = p; } }
+    if (!best || bd > 30 * 30) { ring.setAttribute("visibility", "hidden"); tipS.hidden = true; return; }
+    ring.setAttribute("cx", sx(best.fx)); ring.setAttribute("cy", sy(best.en)); ring.setAttribute("visibility", "visible");
+    tipS.replaceChildren(h("div", { class: "t mono" }, best.n),
+      h("div", { class: "r" }, h("span", {}, "Corrected clock"), h("b", {}, pct(best.fx))),
+      h("div", { class: "r" }, h("span", {}, "Existing harness"), h("b", {}, pct(best.en))),
+      h("div", { class: "r" }, h("span", {}, "Trades"), h("b", {}, best.t.toLocaleString("en-US"))));
+    tipS.hidden = false;
+    const wb = wrapS.getBoundingClientRect();
+    const left = (sx(best.fx) / Ws) * box.width + (box.left - wb.left) + wrapS.scrollLeft;
+    const top = (sy(best.en) / Hs) * box.height + (box.top - wb.top);
+    const tw = tipS.offsetWidth;
+    tipS.style.left = (left + 14 + tw > wrapS.scrollWidth ? left - tw - 14 : left + 14) + "px";
+    tipS.style.top = Math.max(4, top - 40) + "px";
+  });
+  hits.addEventListener("pointerleave", () => { ring.setAttribute("visibility", "hidden"); tipS.hidden = true; });
+  const off = P.length - inView.length;
+  document.getElementById("sc-note").textContent =
+    "Both axes use the engine's own Binance cost model. " + E.net_positive_full_engine_harness + " of " + P.length + " strategies are net-positive under the harness and " +
+    E.net_positive_full_fixed_binance_cost + " on the corrected clock; the rank correlation between the two is " + num(E.rank_correlation_engine_vs_fixed) + ". " +
+    off + " high-frequency strategies that lost more than 300% under either clock sit off the chart; strategies.csv has all of them.";
+
+  const t = document.getElementById("t-gap");
+  t.append(h("thead", {}, h("tr", {}, ["Strategy", "Harness trades", "Harness net", "Corrected net"].map((x, i) => h("th", { class: i < 1 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const r of E.best_engine.slice(0, 6)) tb.append(h("tr", {}, stratCell(r.strategy, null), h("td", {}, Math.round(r.engine_full_trades)), h("td", {}, pct(r.engine_full_net_pct)),
+    h("td", { class: r.binance_full_net_pct < 0 ? "neg" : null }, pct(r.binance_full_net_pct))));
+  t.append(tb);
+  const g0 = E.best_engine[0];
+  document.getElementById("harness-why").textContent =
+    "The six best results under the harness. " + g0.strategy + " buys when the latest 4h bar closes in the top 20% of its range. Under the harness that bar can still be forming and yet carry its final close, so the rule knows the bar will finish strong before it buys: " +
+    pct(g0.engine_full_net_pct) + " there, " + pct(g0.binance_full_net_pct) + " on the corrected clock. Big_Bear_Candle_Short is the same mechanism on the short side.";
+}
+
+// ── whitelist ────────────────────────────────────────────────────────────
+{
+  const W = D.whitelist, rows = D.whitelistRows;
+  document.getElementById("wl-intro").textContent =
+    "data/btc_prelive_whitelist.json holds the 49 strategies the BTC pre-live desk trades. They were qualified on the harness above, using Binance data from July 2021 to July 2026 and a validate window of " +
+    W.validate_window[0] + " to " + W.validate_window[1] + ". On the corrected clock with Delta's costs, " + W.net_positive_validate_window + " of " + W.found +
+    " are net-positive in that validate window, a falling market that suits short rules, and " + W.net_positive_full + " of " + W.found + " over 2018 to 2026. " + W.in_top10_full.length + " of them made the top 10: " +
+    W.in_top10_full.join(", ") + ".";
+  const t = document.getElementById("t-wl");
+  t.append(h("thead", {}, h("tr", {}, ["Strategy", "Trades 2018–26", "Net 2018–26", "Validate window", "Harness net 2018–26"].map((x, i) => h("th", { class: i < 1 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const r of rows) tb.append(h("tr", {}, stratCell(r.strategy, null), h("td", {}, r.full_trades), h("td", { class: r.full_net_pct < 0 ? "neg" : null }, pct(r.full_net_pct)),
+    h("td", { class: r.validate_net_pct < 0 ? "neg" : null }, pct(r.validate_net_pct)), h("td", {}, pct(r.engine_full_net_pct))));
+  t.append(tb);
+}
+
+// ── method ───────────────────────────────────────────────────────────────
+{
+  const dd = D.data, cc = dd.cross_check_old_cache, V = D.verify;
+  const add = (id, items) => { const ul = document.getElementById(id); for (const x of items) ul.append(h("li", {}, x)); };
+  add("m-data", [
+    "Binance Vision spot BTCUSDT 1m klines, " + dd.bars.toLocaleString("en-US") + " bars from " + dd.first_bar + " to " + dd.last_bar + " UTC. Every archive was checked against its published SHA-256.",
+    "Late 2017 is warm-up for the indicators. Decisions run from 1 January 2018 to 30 October 2026.",
+    dd.holes + " holes, " + dd.missing_minutes.toLocaleString("en-US") + " missing minutes (0.18%), all Binance outages. The longest is " + dd.largest_holes[0].missing_minutes.toLocaleString("en-US") + " minutes from " + dd.largest_holes[0].after + ".",
+    dd.off_grid_times_realigned.toLocaleString("en-US") + " bars from Dec 2017 and Feb 2018 were stamped 14 to 20 seconds past the minute and were moved back onto it.",
+    cc.identical_ohlc.toLocaleString("en-US") + " of " + cc.full_hours_compared.toLocaleString("en-US") + " complete hours match the engine's existing 2021 to 2026 cache exactly.",
+    "Funding: " + dd.funding_prints.toLocaleString("en-US") + " Binance USDT-M 8h prints, Jan 2020 to Sep 2026. Before 2020 and in October 2026 the engine's synthetic 0.01% per 8h applies.",
+  ]);
+  add("m-sim", [
+    "A decision at every 15m close, as on the live desk. The context holds only bars closed by then on each timeframe, with the backtest's caps (1m 100, 5m 100, 15m 60, 1h 72, 4h 100).",
+    "CVD is cumulative Binance taker-buy minus taker-sell volume, compared cycle to cycle the way the live desk does.",
+    "The entry fills at the next 1m open. The position is then walked minute by minute: the stop is taken first when one minute reaches both levels, and a minute that opens past a level fills at its open.",
+    "Kept from the engine: one position per strategy, at most 5 entries a UTC day, a 7-day time stop, the first declared regime pinned, and 0.35% / 0.70% stop and target when a signal has none.",
+    "Costs per leg: Delta " + D.costs.delta.toFixed(1) + " bp (fee 0.05% + 18% GST, plus 2 bp spread and slippage), Binance " + D.costs.binance.toFixed(1) + " bp. A long pays positive funding, a short receives it.",
+  ]);
+  add("m-checks", [
+    "No look-ahead by construction: before any strategy runs, every one of the " + D.probe.fixed.evaluations.toLocaleString("en-US") + " contexts is checked to hold exactly the bars closed by its decision time.",
+    "No look-ahead in practice: a re-run on data cut at " + V.truncation_cut + " reproduces all " + V.truncation_trades.toLocaleString("en-US") + " trades that closed before the cut, " + (V.truncation_identical ? "identically." : "NOT identically."),
+    "Fills: all " + V.mechanics_trades.toLocaleString("en-US") + " trades of the 17 listed strategies were re-walked on the raw bars in separate code. " + V.mechanics_problems.length + " mismatches.",
+    "No strategy wrote into the shared candle arrays (fingerprinted before and after the run).",
+  ]);
+  add("m-limits", [
+    "Spot prices stand in for the perpetual. Delta's own funding and basis are not modelled.",
+    "Inputs the history cannot supply, such as the order book, open interest, liquidations and DVOL, are empty, as in the engine. Strategies that need them fire only on their price branch.",
+    "The regime label is pinned to each strategy's own choice. The live desk passes its classifier's label instead.",
+    "1x notional, no compounding. Leverage multiplies returns and drawdowns alike.",
+    "The full-period top 10 is the best of 331 ranked candidates, so read its numbers as the best case.",
+  ]);
+  document.getElementById("foot").textContent =
+    "Generated " + D.generated + ". Harness: engine/cmd/deep_backtest (modes fixed, engine, probe). Scripts and results: engine/research/btc_deep_2026_10 (deep_fetch.py, deep_analyze.py, deep_verify.py, deep_report.py, REPORT.md, results/). The 1m data stays in the git-ignored engine/data/historical/deep.";
+}
+</script>

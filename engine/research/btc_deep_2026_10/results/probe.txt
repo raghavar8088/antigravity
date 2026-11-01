@@ -1,0 +1,14 @@
+ENGINE harness — what the strategy sees when it is evaluated (the entry fills at this tick):
+  tick 12-30 18:30 | ctx.Now 12-30 15:00 | newest 15m closes 12-30 15:00 | newest 1h closes 12-30 16:00 | newest 4h closes 12-30 16:00
+  tick 12-30 18:45 | ctx.Now 12-30 15:15 | newest 15m closes 12-30 15:15 | newest 1h closes 12-30 16:00 | newest 4h closes 12-30 16:00
+  tick 12-30 19:00 | ctx.Now 12-30 15:30 | newest 15m closes 12-30 15:30 | newest 1h closes 12-30 16:00 | newest 4h closes 12-30 16:00
+  tick 12-30 19:15 | ctx.Now 12-30 15:45 | newest 15m closes 12-30 15:45 | newest 1h closes 12-30 16:00 | newest 4h closes 12-30 16:00
+  evaluations 309188 | mean age of newest 15m bar at the entry tick 3h30m0s | stale >15m: 100.0%
+  newest bar closes AFTER the entry tick (look-ahead): 1m 0.0%  1h 0.0%  4h 12.5%
+FIXED clock — the same probe:
+  entry 01-01 00:00 | ctx.Now 01-01 00:00 | newest 15m closes 01-01 00:00 | newest 1h closes 01-01 00:00 | newest 4h closes 01-01 00:00
+  entry 01-01 00:15 | ctx.Now 01-01 00:15 | newest 15m closes 01-01 00:15 | newest 1h closes 01-01 00:00 | newest 4h closes 01-01 00:00
+  entry 01-01 00:30 | ctx.Now 01-01 00:30 | newest 15m closes 01-01 00:30 | newest 1h closes 01-01 00:00 | newest 4h closes 01-01 00:00
+  entry 01-01 00:45 | ctx.Now 01-01 00:45 | newest 15m closes 01-01 00:45 | newest 1h closes 01-01 00:00 | newest 4h closes 01-01 00:00
+  evaluations 309070 | mean age of newest 15m bar at the entry tick 0s | stale >15m: 0.0%
+  newest bar closes AFTER the entry tick (look-ahead): 1m 0.0%  1h 0.0%  4h 0.0%

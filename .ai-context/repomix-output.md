@@ -1874,6 +1874,10 @@ The content is organized as follows:
   backtest/main.go
   btc_qualify_25/main.go
   btc_signal_probe/main.go
+  deep_backtest/data.go
+  deep_backtest/engine.go
+  deep_backtest/main.go
+  deep_backtest/sim.go
   delta_correlation/main.go
   delta_day_backtest/main.go
   delta_fetch_history/main.go
