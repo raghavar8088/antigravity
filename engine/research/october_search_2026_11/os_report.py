@@ -20,7 +20,11 @@ FAM = {"A": "Session-open breakout", "B": "Trend-day follow", "C": "Cross-coin",
        "KEL": "Keltner channel", "WPR": "Williams %R", "CCI": "CCI extreme", "ZEM": "EMA z-score fade", "MTF": "4h Bollinger + 1h RSI",
        "TD2": "Hour-of-day", "RS2": "RSI fade", "BB2": "Bollinger fade", "DOW": "Day-of-week window", "XS": "Cross-coin intraday",
        "ATX": "Range-expansion bar", "ICH": "Ichimoku", "SAR": "Parabolic SAR", "DMI": "DMI cross", "CMB": "RSI fade by hour and VWAP",
-       "RZ": "RSI fade", "BZ": "Bollinger fade", "HZ": "Hour-of-day"}
+       "RZ": "RSI fade", "BZ": "Bollinger fade", "HZ": "Hour-of-day", "KZ": "Keltner channel", "CZ": "RSI fade by hour and VWAP",
+       "MT2": "4h band + fast RSI", "FSH": "Fisher transform", "CRS": "Connors RSI", "MFI": "Money Flow Index",
+       "DOF": "Fade from the day's open", "PCF": "Fade from yesterday's close", "KZH": "Keltner channel",
+       "BZX": "Bollinger fade", "RZX": "RSI fade", "KZX": "Keltner channel", "ZEX": "EMA z-score fade", "HZX": "Hour-of-day",
+       "MXX": "4h band + fast RSI"}
 
 
 def title_a(vid, fallback):
