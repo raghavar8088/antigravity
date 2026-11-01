@@ -1,0 +1,18 @@
+{
+ "sample_variants": [
+  "A|US|30|close|far|none|none",
+  "A|US|60|retest|far|1.5|trend",
+  "A|LDN|15|retest|mid|3.0|nr4",
+  "A|UTC|60|stop|mid|none|tight",
+  "A|UTC|15|retest|far|3.0|none",
+  "A|LDN|30|stop|far|1.5|trend",
+  "B|US1h|0.75|trend|open",
+  "B|04|0.5|none|half",
+  "F|0.5|stop|none|open",
+  "F|0.3|close|trend|none",
+  "G|13|2|long",
+  "G|00|4|short"
+ ],
+ "trades_checked": 79229,
+ "mismatches": []
+}

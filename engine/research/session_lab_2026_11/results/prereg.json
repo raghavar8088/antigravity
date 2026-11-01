@@ -1,0 +1,17 @@
+{
+ "fingerprint": "42a0edf94fe51590",
+ "registered_utc": "2026-11-01T14:18:55+00:00",
+ "protocol": "Session-strategy lab: discovery, selection, hold-out.\n\nProtocol (fixed before the first run, fingerprinted in results/prereg.json):\n  discovery  2021-01-01 .. 2023-12-31  all 880 variants\n  eligible   >= 150 trades, net profit in EACH of 2021, 2022 and 2023, and a\n             daily-P&L t-statistic >= 2.0\n  finalists  per family, the 3 eligible variants with the highest discovery t,\n             skipping one whose daily P&L correlates > 0.7 with a finalist\n             already chosen\n  hold-out   2024-01-01 .. 2025-09-30, never looked at before this run; only\n             finalists are scored. PASS = net profit, daily t >= the one-sided\n             5% Bonferroni bar for the number of finalists, profit in both\n             halves (Jan-Oct 2024, Nov 2024-Sep 2025), and (single-coin\n             families) profit on at least 4 of the 6 coins\n  recent     2025-10-01 .. 2026-10-31 reported for every finalist (this window\n             was used by the previous study, so it is not part of the pass rule)\nDaily P&L = sum over coins of the day's trades (by entry day), $10,000 per trade.",
+ "families": "Strategy families and the full parameter grid, fixed before any run.\n\nA  Session opening-range breakout (Crabel 1990; Zarattini, Barbon & Aziz 2024;\n   the US-open gross edge found in the previous study). Sessions: US (NYSE\n   open, weekdays), LDN (London 08:00 local, weekdays), UTC (00:00, every day).\n   Range = first 15/30/60 min. Entry: 'close' (market after a 1m close outside\n   the range), 'stop' (resting stop orders at both edges; first touch), 'retest'\n   (after a close outside, a limit back at the broken edge; maker). Stop at the\n   far edge or the range middle; target 1.5R, 3R or none; filters: none,\n   'trend' (with the sign of the 10-day return), 'nr4' (yesterday was the\n   narrowest of 4 days), 'tight' (opening range below its 20-day median).\n   Entries until half the session has passed; exit at the session close.\nB  Trend-day continuation (intraday momentum on large early moves, Gao et al.\n   2018; Caporale & Plastun 2019). At 04/08/12 UTC or US open + 1 h, if the\n   day's move is at least k x ATR(14 days), follow it to 00:00. Stop at the day\n   open or halfway back; optional 10-day trend filter.\nC  Cross-sectional intraday (Liu, Tsyvinski & Wu 2022 on crypto momentum, in a\n   day-trading form). At 04/08/12 UTC rank the 6 coins by return since 00:00\n   or over 24 h; long the top 1-2 and short the bottom 1-2 (or the reverse);\n   flat at 00:00. Market-neutral.\nF  Volatility breakout (Williams 1999) with a stop-order entry option and\n   optional trend filter; stop at the day open or none; exit at 00:00.\nG  Time-of-day drift: long or short from hour h for 1, 2 or 4 h, every day.",
+ "variants": 880,
+ "maker": 0.000236,
+ "taker": 0.00059,
+ "slip": {
+  "BTCUSDT": 0.0002,
+  "ETHUSDT": 0.0002,
+  "SOLUSDT": 0.0004,
+  "XRPUSDT": 0.0004,
+  "DOGEUSDT": 0.0004,
+  "BNBUSDT": 0.0004
+ }
+}

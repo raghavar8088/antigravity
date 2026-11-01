@@ -1,0 +1,323 @@
+<title>Session Strategy Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,600..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a research protocol read top to bottom: funnel, finalists, each finalist's own track record, then method. */
+:root {
+  --paper: #f4f4f1;
+  --panel: #ffffff;
+  --ink: #15161a;
+  --ink-2: #4a4c55;
+  --ink-3: #777a84;
+  --rule: #dddde2;
+  --grid: #ececef;
+  --gain: #2a78d6;
+  --loss: #e34948;
+  --s1: #2a78d6;
+  --disc: #eef0f4;
+  --hold: #fbf1e2;
+  --recent: #e9f3ee;
+  --good: #0ca30c;
+  --accent: #5b3fc4;
+  --accent-soft: #ece8fb;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --measure: 1120px;
+  --prose: 68ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #101114; --panel: #17191e; --ink: #e8e9ec; --ink-2: #b4b6bf; --ink-3: #888b95;
+    --rule: #2b2d34; --grid: #22242a; --gain: #3987e5; --loss: #e66767; --s1: #3987e5;
+    --disc: #1f222a; --hold: #2e2617; --recent: #182821; --accent: #a594f0; --accent-soft: #262040; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #101114; --panel: #17191e; --ink: #e8e9ec; --ink-2: #b4b6bf; --ink-3: #888b95;
+  --rule: #2b2d34; --grid: #22242a; --gain: #3987e5; --loss: #e66767; --s1: #3987e5;
+  --disc: #1f222a; --hold: #2e2617; --recent: #182821; --accent: #a594f0; --accent-soft: #262040; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.6; }
+.page { max-width: var(--measure); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: grid; gap: 56px; }
+section, header, footer { display: grid; gap: 18px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); font-stretch: 85%; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 800; line-height: 1.02; }
+h2 { font-size: clamp(1.45rem, 3vw, 1.9rem); font-weight: 750; line-height: 1.12; }
+h3 { font-size: 1.08rem; font-weight: 700; font-stretch: 90%; }
+p { margin: 0; max-width: var(--prose); }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 1.12rem; color: var(--ink-2); }
+.note { font-size: 0.86rem; color: var(--ink-3); }
+.mono { font-family: var(--font-mono); font-size: 0.84em; }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.fig { background: var(--panel); padding: 18px 20px 20px; display: grid; gap: 6px; align-content: start; }
+.fig .label { font-size: 0.84rem; font-weight: 600; color: var(--ink-2); }
+.fig .value { font-weight: 600; font-size: 2.3rem; line-height: 1.05; letter-spacing: -0.02em; }
+.fig .sub { font-size: 0.84rem; color: var(--ink-3); }
+.verdict { font-size: 1.05rem; max-width: 76ch; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.table-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.76rem; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th.l, td.l { text-align: left; }
+td.strat { white-space: normal; min-width: 200px; text-align: left; }
+td.strat .n { font-weight: 600; }
+td.strat .d { display: block; color: var(--ink-3); font-size: 0.76rem; font-family: var(--font-mono); }
+.neg { color: var(--loss); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-2); }
+.pill.pass { border-color: var(--good); color: var(--good); }
+.pill.pass::before { content: "✓"; }
+.pill.fail::before { content: "×"; color: var(--loss); }
+.funnel { display: grid; gap: 10px; }
+.frow { display: grid; grid-template-columns: minmax(0, 17em) 1fr 4em; gap: 12px; align-items: center; }
+.frow .lab { font-size: 0.88rem; color: var(--ink-2); }
+.frow .bar { height: 14px; background: var(--s1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.frow .val { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.card .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.card .fam { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+.card .rules { font-size: 0.86rem; color: var(--ink-2); }
+.card svg { width: 100%; height: auto; display: block; }
+.card svg text { fill: var(--ink-3); font-family: var(--font-body); font-size: 11px; font-variant-numeric: tabular-nums; }
+.card .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 0.8rem; }
+.card .nums div { display: grid; }
+.card .nums b { font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+.card .nums span { color: var(--ink-3); }
+.keys { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--ink-2); }
+.keys span { display: inline-flex; gap: 6px; align-items: center; }
+.keys i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; border: 1px solid var(--rule); }
+details { border-top: 1px solid var(--rule); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; color: var(--ink-2); }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+details[open] summary { margin-bottom: 10px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+ul.facts { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; max-width: var(--prose); }
+footer { border-top: 1px solid var(--rule); padding-top: 18px; color: var(--ink-3); font-size: 0.84rem; }
+@media (max-width: 560px) {
+  body { font-size: 15px; }
+  .fig .value { font-size: 2rem; }
+  .page { gap: 44px; padding-block: 28px 48px; }
+  .frow { grid-template-columns: 1fr 3.5em; }
+  .frow .lab { grid-column: 1 / -1; }
+}
+</style>
+
+<main class="page">
+  <header>
+    <p class="eyebrow">Binance USDT-M perpetuals · BTC ETH SOL XRP DOGE BNB · Jan 2021 to Oct 2026 · Delta India costs</p>
+    <h1>Session Strategy Lab</h1>
+    <p class="lede" id="lede"></p>
+    <div class="figures" id="figures"></div>
+    <p class="verdict" id="verdict"></p>
+  </header>
+
+  <section id="funnel">
+    <h2>How a strategy had to earn its place</h2>
+    <p id="funnel-intro"></p>
+    <div class="panel"><div class="funnel" id="funnel-bars"></div></div>
+  </section>
+
+  <section id="finalists">
+    <h2>The finalists</h2>
+    <p id="fin-intro"></p>
+    <div class="panel"><div class="table-wrap"><table id="t-fin"></table></div></div>
+    <p class="note" id="fin-note"></p>
+  </section>
+
+  <section id="records">
+    <h2>Each finalist's track record</h2>
+    <p>Cumulative net profit on $10,000 per trade, all six coins together, with the three windows shaded.</p>
+    <div class="keys" id="keys"></div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section id="families">
+    <h2>What the 880 variants showed</h2>
+    <div class="panel"><div class="table-wrap"><table id="t-fam"></table></div></div>
+    <details class="panel">
+      <summary>The 40 best variants in discovery</summary>
+      <div class="table-wrap"><table id="t-top"></table></div>
+    </details>
+  </section>
+
+  <section id="method">
+    <h2>Method and checks</h2>
+    <div class="two">
+      <div class="panel"><h3>Data</h3><ul class="facts" id="m-data"></ul></div>
+      <div class="panel"><h3>Fills and costs</h3><ul class="facts" id="m-fill"></ul></div>
+      <div class="panel"><h3>Checks</h3><ul class="facts" id="m-checks"></ul></div>
+      <div class="panel"><h3>Limits</h3><ul class="facts" id="m-limits"></ul></div>
+    </div>
+  </section>
+
+  <footer><p id="foot"></p></footer>
+</main>
+
+<script>
+const D = /*DATA*/null;
+const MINUS = "−";
+const SVGNS = "http://www.w3.org/2000/svg";
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null) continue; if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function sv(tag, attrs, ...kids) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) if (v != null) e.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+const fmt = (v, d) => Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const usd = v => v == null ? "–" : (v < -0.5 ? MINUS : v > 0.5 ? "+" : "") + "$" + fmt(v, 0);
+const num = (v, d = 2) => v == null ? "–" : (v < 0 ? MINUS : "") + fmt(v, d);
+const ts = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 1000;
+const W0 = ts("2021-01-01"), W1 = ts("2024-01-01"), W2 = ts("2025-10-01"), W3 = ts("2026-11-01");
+const F = D.finalists, passed = F.filter(f => f.pass);
+
+document.getElementById("lede").textContent =
+  "A search for intraday crypto strategies that make money after Delta India's fees, run the way a real test should be: " + D.variants +
+  " variants tried on 2021 to 2023, a handful chosen by a rule written down in advance, then judged on 21 months of data none of them had seen.";
+const best = [...F].sort((a, b) => (b.holdout.t_daily || -9) - (a.holdout.t_daily || -9))[0];
+const figs = [
+  ["Variants tested", D.variants.toLocaleString("en-US"), "5 families, 6 coins, Jan 2021 to Oct 2026"],
+  ["Passed the hold-out", passed.length + " of " + F.length, "Profit, t ≥ " + num(D.bar) + ", both halves positive, 4 of 6 coins"],
+  passed.length
+    ? ["Best survivor, hold-out", usd(passed[0].holdout.pnl), passed[0].title + ", t " + num(passed[0].holdout.t_daily)]
+    : ["Closest finalist, hold-out", best ? usd(best.holdout.pnl) : "–", best ? best.title + ", t " + num(best.holdout.t_daily) : ""],
+];
+for (const [l, v, s] of figs) document.getElementById("figures").append(h("div", { class: "fig" }, h("div", { class: "label" }, l), h("div", { class: "value" }, v), h("div", { class: "sub" }, s)));
+{
+  let txt;
+  const top10 = D.top40.slice(0, 10);
+  const yr = y => top10.reduce((a, r) => a + r.years[y], 0) / top10.length;
+  const fade = "The ten best variants in discovery averaged " + usd(yr("2021")) + " in 2021, " + usd(yr("2022")) + " in 2022 and " + usd(yr("2023")) + " in 2023: the edge was shrinking before the hold-out began.";
+  if (passed.length) {
+    txt = passed.length + " of the " + F.length + " finalists kept making money on data they had never seen: " + passed.map(f => f.title).join("; ") +
+      ". Their recent 13 months: " + passed.map(f => usd(f.recent.pnl)).join(", ") + ". These are candidates for a paper test on Delta, not proven money-makers. " + fade;
+  } else if (F.length === 1) {
+    txt = "Only one of the " + D.variants + " variants made money after costs in each of 2021, 2022 and 2023, " + F[0].title + ". On the unseen January 2024 to September 2025 data it lost " +
+      "$" + fmt(Math.abs(F[0].holdout.pnl), 0) + ", in both halves and on " + (6 - F[0].holdout_coins_positive) + " of 6 coins. " + fade +
+      " No intraday strategy in this search survives Delta's costs, so none of them should be traded.";
+  } else {
+    txt = "None of the " + F.length + " finalists held up on unseen data, although each made money in every discovery year. " + fade +
+      " No intraday strategy in this search survives Delta's costs, so none of them should be traded.";
+  }
+  document.getElementById("verdict").textContent = txt;
+}
+
+// funnel
+document.getElementById("funnel-intro").textContent =
+  "Every variant ran on 2021, 2022 and 2023. To be eligible it had to make money after costs in each of those three years and have a daily t-statistic of at least 2. " +
+  "The best three eligible variants of each family, skipping near-copies, became finalists. Only then were the finalists run on January 2024 to September 2025.";
+{
+  const rows = [["Variants tested", D.variants], ["Profitable in discovery", Object.values(D.families).reduce((a, x) => a + x.disc_positive, 0)],
+    ["Eligible: profitable in each of 2021, 2022, 2023 and t ≥ 2", D.eligible], ["Finalists", F.length], ["Passed the hold-out", passed.length]];
+  const box = document.getElementById("funnel-bars");
+  for (const [lab, n] of rows) box.append(h("div", { class: "frow" }, h("div", { class: "lab" }, lab),
+    h("div", {}, h("div", { class: "bar", style: "width:" + Math.max(0.3, 100 * n / D.variants).toFixed(2) + "%" })), h("div", { class: "val" }, n.toLocaleString("en-US"))));
+}
+
+// finalists table
+document.getElementById("fin-intro").textContent =
+  "Discovery and hold-out decide; the recent window (October 2025 to October 2026) was already used by the previous study, so it is shown but does not count toward passing.";
+{
+  const t = document.getElementById("t-fin");
+  t.append(h("thead", {}, h("tr", {}, ["Strategy", "Discovery 2021–23", "t", "Hold-out 2024–Sep 25", "t", "Hold-out halves", "Coins up", "Result", "Recent"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const f of F) tb.append(h("tr", {},
+    h("td", { class: "strat" }, h("span", { class: "n" }, f.title), h("span", { class: "d" }, f.variant)),
+    h("td", {}, usd(f.discovery.pnl)), h("td", {}, num(f.discovery.t_daily)),
+    h("td", { class: f.holdout.pnl < 0 ? "neg" : null }, usd(f.holdout.pnl)), h("td", {}, num(f.holdout.t_daily)),
+    h("td", { style: "white-space:normal" }, f.holdout_halves.map(usd).join(" / ")), h("td", {}, f.holdout_coins_positive + " of 6"),
+    h("td", { class: "l" }, h("span", { class: "pill " + (f.pass ? "pass" : "fail") }, f.pass ? "Passed" : "Failed")),
+    h("td", { class: f.recent.pnl < 0 ? "neg" : null }, usd(f.recent.pnl))));
+  t.append(tb);
+  document.getElementById("fin-note").textContent =
+    "Net profit is in dollars on $10,000 per trade, summed over the six coins. t is computed on daily profit, so trades on different coins the same day are not counted as independent. The hold-out bar t ≥ " +
+    num(D.bar) + " is the one-sided 5% level after splitting it across " + F.length + " finalists.";
+}
+
+// cards
+{
+  const keys = document.getElementById("keys");
+  for (const [c, l] of [["var(--disc)", "Discovery 2021–2023"], ["var(--hold)", "Hold-out Jan 2024–Sep 2025"], ["var(--recent)", "Recent Oct 2025–Oct 2026"]])
+    keys.append(h("span", {}, h("i", { style: "background:" + c }), l));
+  const box = document.getElementById("cards");
+  for (const f of F) {
+    const W = 330, Hh = 130, L = 46, R = 8, T = 8, B = 18;
+    const x = s => L + (s - W0) / (W3 - W0) * (W - L - R);
+    const xs = f.cum.d.map(d => d * 86400), ys = f.cum.v;
+    const lo = Math.min(0, ...ys), hi = Math.max(0, ...ys);
+    const span = (hi - lo) || 1;
+    const y = v => T + (1 - (v - lo) / span) * (Hh - T - B);
+    const svg = sv("svg", { viewBox: "0 0 " + W + " " + Hh, role: "img", "aria-label": f.title + " cumulative profit" });
+    for (const [a, b, c] of [[W0, W1, "var(--disc)"], [W1, W2, "var(--hold)"], [W2, W3, "var(--recent)"]])
+      svg.append(sv("rect", { x: x(a), y: T, width: x(b) - x(a), height: Hh - T - B, fill: c }));
+    svg.append(sv("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--ink-3)", "stroke-width": 1 }));
+    for (const yr of [2021, 2022, 2023, 2024, 2025, 2026]) svg.append(sv("text", { x: x(ts(yr + "-07-01")), y: Hh - 4, "text-anchor": "middle" }, String(yr)));
+    for (const v of [lo, hi]) svg.append(sv("text", { x: L - 4, y: y(v) + 4, "text-anchor": "end" }, usd(v).replace("+", "")));
+    if (xs.length) svg.append(sv("path", { d: xs.map((s, i) => (i ? "L" : "M") + x(s).toFixed(1) + " " + y(ys[i]).toFixed(1)).join(" "), fill: "none", stroke: "var(--s1)", "stroke-width": 1.6, "stroke-linejoin": "round" }));
+    box.append(h("article", { class: "card" },
+      h("div", { class: "top" }, h("span", { class: "fam" }, f.family), h("span", { class: "pill " + (f.pass ? "pass" : "fail") }, f.pass ? "Passed" : "Failed")),
+      h("h3", {}, f.title), h("p", { class: "rules" }, f.rules), svg,
+      h("div", { class: "nums" },
+        h("div", {}, h("span", {}, "Discovery"), h("b", {}, usd(f.discovery.pnl))),
+        h("div", {}, h("span", {}, "Hold-out"), h("b", { class: f.holdout.pnl < 0 ? "neg" : null }, usd(f.holdout.pnl))),
+        h("div", {}, h("span", {}, "Recent"), h("b", { class: f.recent.pnl < 0 ? "neg" : null }, usd(f.recent.pnl))))));
+  }
+}
+
+// families + top 40
+{
+  const t = document.getElementById("t-fam");
+  t.append(h("thead", {}, h("tr", {}, ["Family", "Variants", "Profitable before costs", "Profitable after costs", "Eligible"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const [k, x] of Object.entries(D.families)) tb.append(h("tr", {}, h("td", { class: "l" }, D.family_names[k]), h("td", {}, x.variants),
+    h("td", {}, x.disc_gross_positive), h("td", {}, x.disc_positive), h("td", {}, x.eligible)));
+  t.append(tb);
+  const t2 = document.getElementById("t-top");
+  t2.append(h("thead", {}, h("tr", {}, ["Variant", "Trades", "Net 2021–23", "t", "2021", "2022", "2023", "Eligible"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb2 = h("tbody");
+  for (const r of D.top40) tb2.append(h("tr", {}, h("td", { class: "strat" }, h("span", { class: "n" }, r.title), h("span", { class: "d" }, r.variant)),
+    h("td", {}, r.trades), h("td", {}, usd(r.pnl)), h("td", {}, num(r.t_daily)), ...["2021", "2022", "2023"].map(y => h("td", { class: r.years[y] < 0 ? "neg" : null }, usd(r.years[y]))),
+    h("td", { class: "l" }, r.eligible ? "yes" : "no")));
+  t2.append(tb2);
+}
+
+// method
+{
+  const add = (id, items) => { const ul = document.getElementById(id); for (const x of items) ul.append(h("li", {}, x)); };
+  add("m-data", [
+    "Binance Vision USDT-M perpetual 1-minute candles and funding prints for BTC, ETH, SOL, XRP, DOGE and BNB, 1 January 2021 to 31 October 2026, " + D.data.minutes.toLocaleString("en-US") + " minutes per coin, every archive SHA-256 checked.",
+    "Days not traded: " + (D.data.bad_days.length ? D.data.bad_days.join(", ") : "none") + " (missing or rebuilt exchange data).",
+  ]);
+  add("m-fill", [
+    "Signals read only closed bars. Market orders fill at the next 1-minute open. Stop orders fill at their level, or at the open if price gaps past it.",
+    "Limit orders fill only when price trades 1 bp through them, to allow for the queue, and pay the maker fee.",
+    "If an order fills inside a minute and that minute also reaches the stop, the stop is taken. Within a minute the stop is checked before the target. Everything is flat by 00:00 UTC.",
+    "Delta India fees: maker 0.02% and taker 0.05%, both plus 18% GST. Takers also pay 2 bp (BTC, ETH) or 4 bp (alts) of slippage. Binance funding prints are charged signed.",
+  ]);
+  const V = D.verify;
+  add("m-checks", [
+    "The grid, the selection rule and the pass test were fingerprinted (" + D.fingerprint + ") before the first run" + (D.amendments.length ? "; amendments: " + D.amendments.map(a => a.why).join(" ") : "; no amendments") + ".",
+    "Hold-out results exist only for the finalists, so no other variant could be picked after the fact.",
+    "Fills: " + V.fill_trades_checked.toLocaleString("en-US") + " finalist trades re-filled by a separately written engine, " + V.fill_mismatches.length + " mismatches.",
+    (D.verify_sample ? "Engine: " + D.verify_sample.trades_checked.toLocaleString("en-US") + " trades from " + D.verify_sample.sample_variants.length + " variants covering every entry type were re-filled the same way, " + D.verify_sample.mismatches.length + " mismatches." : ""),
+    "No look-ahead: a re-run on data cut at " + V.truncation_cut + " reproduced " + V.truncation_trades.toLocaleString("en-US") + " earlier trades, " + V.truncation_mismatches.length + " mismatches.",
+  ]);
+  add("m-limits", [
+    "Binance prices stand in for Delta. Delta's books are thinner, so real slippage on the alts may be higher.",
+    "A limit order that is filled in a backtest may sit unfilled in reality when the queue ahead of it is long. The 1 bp rule only partly covers this.",
+    "Passing a hold-out lowers the odds of a fluke but does not remove them. A survivor still needs a live paper test before any real money.",
+  ]);
+  document.getElementById("foot").textContent = "Generated " + D.generated + ". Code and results: engine/research/session_lab_2026_11 (sl_fetch.py, sl_core.py, sl_families.py, sl_run.py, sl_verify.py, sl_report.py, REPORT.md, results/). Market data stays in the git-ignored engine/data/historical/session_lab.";
+}
+</script>

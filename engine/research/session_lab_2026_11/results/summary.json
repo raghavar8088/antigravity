@@ -1,0 +1,670 @@
+{
+ "fingerprint": "42a0edf94fe51590",
+ "variants": 880,
+ "holdout_bar": 1.64,
+ "families": {
+  "A": {
+   "variants": 648,
+   "disc_positive": 66,
+   "disc_gross_positive": 481,
+   "eligible": 1
+  },
+  "B": {
+   "variants": 48,
+   "disc_positive": 33,
+   "disc_gross_positive": 44,
+   "eligible": 0
+  },
+  "C": {
+   "variants": 24,
+   "disc_positive": 4,
+   "disc_gross_positive": 12,
+   "eligible": 0
+  },
+  "F": {
+   "variants": 24,
+   "disc_positive": 9,
+   "disc_gross_positive": 24,
+   "eligible": 0
+  },
+  "G": {
+   "variants": 136,
+   "disc_positive": 0,
+   "disc_gross_positive": 68,
+   "eligible": 0
+  }
+ },
+ "finalists": [
+  {
+   "variant": "A|US|60|stop|far|1.5|nr4",
+   "discovery": {
+    "trades": 885,
+    "pnl": 21777.66,
+    "gross_pnl": 36154.62,
+    "t_daily": 2.69,
+    "win_rate": 52.3,
+    "avg_net_bp": 24.61,
+    "avg_gross_bp": 40.85,
+    "max_dd": 3301.19,
+    "by_coin": {
+     "BTCUSDT": 3344.23,
+     "ETHUSDT": 5553.07,
+     "SOLUSDT": 6068.2,
+     "XRPUSDT": 5324.73,
+     "DOGEUSDT": -815.3,
+     "BNBUSDT": 2302.73
+    },
+    "years": {
+     "2021": 12803.97,
+     "2022": 5309.71,
+     "2023": 3663.97
+    },
+    "eligible": true
+   },
+   "holdout": {
+    "trades": 507,
+    "pnl": -12517.14,
+    "gross_pnl": -3652.1,
+    "t_daily": -2.15,
+    "win_rate": 42.8,
+    "avg_net_bp": -24.69,
+    "avg_gross_bp": -7.2,
+    "max_dd": 14722.13,
+    "by_coin": {
+     "BTCUSDT": -1015.95,
+     "ETHUSDT": -671.76,
+     "SOLUSDT": -2851.97,
+     "XRPUSDT": -3148.81,
+     "DOGEUSDT": -4894.89,
+     "BNBUSDT": 66.24
+    }
+   },
+   "holdout_halves": [
+    -6444.66,
+    -6072.49
+   ],
+   "holdout_coins_positive": 1,
+   "pass": false,
+   "recent": {
+    "trades": 272,
+    "pnl": 5694.24,
+    "gross_pnl": 10440.42,
+    "t_daily": 1.36,
+    "win_rate": 49.3,
+    "avg_net_bp": 20.93,
+    "avg_gross_bp": 38.38,
+    "max_dd": 2745.81,
+    "by_coin": {
+     "BTCUSDT": 65.69,
+     "ETHUSDT": 1825.03,
+     "SOLUSDT": 1333.16,
+     "XRPUSDT": 745.0,
+     "DOGEUSDT": 919.29,
+     "BNBUSDT": 806.07
+    }
+   }
+  }
+ ],
+ "discovery_top40": [
+  {
+   "variant": "A|US|60|stop|far|1.5|nr4",
+   "trades": 885,
+   "pnl": 21777.66,
+   "gross_pnl": 36154.62,
+   "t_daily": 2.69,
+   "avg_net_bp": 24.61,
+   "years": {
+    "2021": 12803.97,
+    "2022": 5309.71,
+    "2023": 3663.97
+   },
+   "eligible": true
+  },
+  {
+   "variant": "B|US1h|0.75|trend|open",
+   "trades": 342,
+   "pnl": 27328.41,
+   "gross_pnl": 34930.88,
+   "t_daily": 1.9,
+   "avg_net_bp": 79.91,
+   "years": {
+    "2021": 16264.56,
+    "2022": 10280.29,
+    "2023": 783.56
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|stop|far|3.0|nr4",
+   "trades": 885,
+   "pnl": 16330.85,
+   "gross_pnl": 32153.82,
+   "t_daily": 1.79,
+   "avg_net_bp": 18.45,
+   "years": {
+    "2021": 8612.82,
+    "2022": 5439.13,
+    "2023": 2278.89
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|stop|mid|3.0|nr4",
+   "trades": 885,
+   "pnl": 12178.52,
+   "gross_pnl": 27011.69,
+   "t_daily": 1.77,
+   "avg_net_bp": 13.76,
+   "years": {
+    "2021": 6561.58,
+    "2022": 3386.66,
+    "2023": 2230.27
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|close|far|1.5|nr4",
+   "trades": 853,
+   "pnl": 14192.42,
+   "gross_pnl": 28316.18,
+   "t_daily": 1.75,
+   "avg_net_bp": 16.64,
+   "years": {
+    "2021": 10287.98,
+    "2022": 3764.08,
+    "2023": 140.36
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|US1h|0.75|none|open",
+   "trades": 596,
+   "pnl": 32230.8,
+   "gross_pnl": 43960.72,
+   "t_daily": 1.69,
+   "avg_net_bp": 54.08,
+   "years": {
+    "2021": 22359.2,
+    "2022": 7915.3,
+    "2023": 1956.31
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|stop|far|none|nr4",
+   "trades": 885,
+   "pnl": 13767.66,
+   "gross_pnl": 30198.19,
+   "t_daily": 1.49,
+   "avg_net_bp": 15.56,
+   "years": {
+    "2021": 8668.06,
+    "2022": 4082.86,
+    "2023": 1016.74
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|retest|far|1.5|nr4",
+   "trades": 752,
+   "pnl": 10119.09,
+   "gross_pnl": 17329.36,
+   "t_daily": 1.44,
+   "avg_net_bp": 13.46,
+   "years": {
+    "2021": 9833.16,
+    "2022": 1262.34,
+    "2023": -976.4
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|US1h|0.5|trend|open",
+   "trades": 633,
+   "pnl": 24732.67,
+   "gross_pnl": 37998.04,
+   "t_daily": 1.41,
+   "avg_net_bp": 39.07,
+   "years": {
+    "2021": 17017.42,
+    "2022": 5923.12,
+    "2023": 1792.12
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|retest|mid|3.0|trend",
+   "trades": 1774,
+   "pnl": 13928.19,
+   "gross_pnl": 32525.49,
+   "t_daily": 1.32,
+   "avg_net_bp": 7.85,
+   "years": {
+    "2021": 5777.87,
+    "2022": 8577.77,
+    "2023": -427.45
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|retest|far|1.5|trend",
+   "trades": 1774,
+   "pnl": 15914.81,
+   "gross_pnl": 34045.27,
+   "t_daily": 1.26,
+   "avg_net_bp": 8.97,
+   "years": {
+    "2021": 9331.82,
+    "2022": 6498.24,
+    "2023": 84.74
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|04|0.5|trend|half",
+   "trades": 251,
+   "pnl": 17928.3,
+   "gross_pnl": 23860.32,
+   "t_daily": 1.21,
+   "avg_net_bp": 71.43,
+   "years": {
+    "2021": 16376.33,
+    "2022": 2093.16,
+    "2023": -541.19
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|US1h|0.5|none|open",
+   "trades": 1201,
+   "pnl": 28701.14,
+   "gross_pnl": 51666.17,
+   "t_daily": 1.2,
+   "avg_net_bp": 23.9,
+   "years": {
+    "2021": 24056.5,
+    "2022": 2275.27,
+    "2023": 2369.37
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|US1h|0.75|trend|half",
+   "trades": 342,
+   "pnl": 17036.28,
+   "gross_pnl": 24579.83,
+   "t_daily": 1.19,
+   "avg_net_bp": 49.81,
+   "years": {
+    "2021": 7163.5,
+    "2022": 8650.45,
+    "2023": 1222.33
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|stop|far|1.5|trend",
+   "trades": 2106,
+   "pnl": 16924.84,
+   "gross_pnl": 52482.68,
+   "t_daily": 1.17,
+   "avg_net_bp": 8.04,
+   "years": {
+    "2021": 7870.96,
+    "2022": 10117.14,
+    "2023": -1063.26
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|08|0.75|none|open",
+   "trades": 306,
+   "pnl": 34614.04,
+   "gross_pnl": 41092.85,
+   "t_daily": 1.16,
+   "avg_net_bp": 113.12,
+   "years": {
+    "2021": 42603.78,
+    "2022": 2151.24,
+    "2023": -10140.99
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|04|0.5|none|open",
+   "trades": 432,
+   "pnl": 48786.23,
+   "gross_pnl": 56733.43,
+   "t_daily": 1.15,
+   "avg_net_bp": 112.93,
+   "years": {
+    "2021": 43988.63,
+    "2022": 7041.2,
+    "2023": -2243.59
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|04|0.5|none|half",
+   "trades": 432,
+   "pnl": 46615.97,
+   "gross_pnl": 55356.92,
+   "t_daily": 1.15,
+   "avg_net_bp": 107.91,
+   "years": {
+    "2021": 49648.48,
+    "2022": -1758.9,
+    "2023": -1273.61
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|close|mid|3.0|nr4",
+   "trades": 853,
+   "pnl": 7595.39,
+   "gross_pnl": 22169.46,
+   "t_daily": 1.09,
+   "avg_net_bp": 8.9,
+   "years": {
+    "2021": 5349.33,
+    "2022": 2504.39,
+    "2023": -258.32
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|30|retest|far|3.0|nr4",
+   "trades": 860,
+   "pnl": 7254.92,
+   "gross_pnl": 16104.55,
+   "t_daily": 0.96,
+   "avg_net_bp": 8.44,
+   "years": {
+    "2021": 6438.19,
+    "2022": 1465.81,
+    "2023": -649.08
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|04|0.5|trend|open",
+   "trades": 251,
+   "pnl": 15765.56,
+   "gross_pnl": 21893.19,
+   "t_daily": 0.9,
+   "avg_net_bp": 62.81,
+   "years": {
+    "2021": 12546.65,
+    "2022": 4947.08,
+    "2023": -1728.17
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|stop|mid|3.0|trend",
+   "trades": 2106,
+   "pnl": 10044.46,
+   "gross_pnl": 46200.01,
+   "t_daily": 0.83,
+   "avg_net_bp": 4.77,
+   "years": {
+    "2021": 1350.83,
+    "2022": 11970.53,
+    "2023": -3276.89
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|stop|mid|none|nr4",
+   "trades": 885,
+   "pnl": 6434.33,
+   "gross_pnl": 22927.48,
+   "t_daily": 0.83,
+   "avg_net_bp": 7.27,
+   "years": {
+    "2021": 3819.68,
+    "2022": 2844.04,
+    "2023": -229.39
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|US1h|0.5|trend|half",
+   "trades": 633,
+   "pnl": 13674.77,
+   "gross_pnl": 26814.52,
+   "t_daily": 0.81,
+   "avg_net_bp": 21.6,
+   "years": {
+    "2021": 6880.49,
+    "2022": 4741.62,
+    "2023": 2052.65
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|30|retest|far|1.5|nr4",
+   "trades": 860,
+   "pnl": 4855.92,
+   "gross_pnl": 12479.17,
+   "t_daily": 0.8,
+   "avg_net_bp": 5.65,
+   "years": {
+    "2021": 5592.57,
+    "2022": -1065.06,
+    "2023": 328.41
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|08|0.75|none|half",
+   "trades": 306,
+   "pnl": 22560.16,
+   "gross_pnl": 28889.27,
+   "t_daily": 0.79,
+   "avg_net_bp": 73.73,
+   "years": {
+    "2021": 29892.26,
+    "2022": 2508.08,
+    "2023": -9840.18
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|04|0.25|none|half",
+   "trades": 1566,
+   "pnl": 35615.0,
+   "gross_pnl": 65736.32,
+   "t_daily": 0.78,
+   "avg_net_bp": 22.74,
+   "years": {
+    "2021": 51264.16,
+    "2022": -9620.53,
+    "2023": -6028.63
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|12|0.75|none|open",
+   "trades": 520,
+   "pnl": 22292.01,
+   "gross_pnl": 33139.76,
+   "t_daily": 0.78,
+   "avg_net_bp": 42.87,
+   "years": {
+    "2021": 26508.87,
+    "2022": 339.08,
+    "2023": -4555.94
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|08|0.5|none|open",
+   "trades": 756,
+   "pnl": 26031.76,
+   "gross_pnl": 40256.29,
+   "t_daily": 0.76,
+   "avg_net_bp": 34.43,
+   "years": {
+    "2021": 38684.93,
+    "2022": -5593.45,
+    "2023": -7059.71
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|retest|mid|3.0|nr4",
+   "trades": 752,
+   "pnl": 4123.04,
+   "gross_pnl": 11654.02,
+   "t_daily": 0.73,
+   "avg_net_bp": 5.48,
+   "years": {
+    "2021": 5175.59,
+    "2022": 266.24,
+    "2023": -1318.79
+   },
+   "eligible": false
+  },
+  {
+   "variant": "C|08|day|mom|1",
+   "trades": 2150,
+   "pnl": 22339.35,
+   "gross_pnl": 62962.14,
+   "t_daily": 0.73,
+   "avg_net_bp": 10.39,
+   "years": {
+    "2021": 44890.84,
+    "2022": -15321.7,
+    "2023": -7229.79
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|close|far|3.0|nr4",
+   "trades": 853,
+   "pnl": 6227.29,
+   "gross_pnl": 21630.94,
+   "t_daily": 0.69,
+   "avg_net_bp": 7.3,
+   "years": {
+    "2021": 5392.85,
+    "2022": 1576.38,
+    "2023": -741.94
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|retest|mid|1.5|trend",
+   "trades": 1774,
+   "pnl": 5356.99,
+   "gross_pnl": 21459.09,
+   "t_daily": 0.68,
+   "avg_net_bp": 3.02,
+   "years": {
+    "2021": 3343.62,
+    "2022": 5061.14,
+    "2023": -3047.77
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|UTC|60|retest|mid|none|trend",
+   "trades": 3102,
+   "pnl": 17853.81,
+   "gross_pnl": 56603.8,
+   "t_daily": 0.68,
+   "avg_net_bp": 5.76,
+   "years": {
+    "2021": 28853.57,
+    "2022": 5665.69,
+    "2023": -16665.45
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|stop|far|none|tight",
+   "trades": 2249,
+   "pnl": 11112.21,
+   "gross_pnl": 52399.53,
+   "t_daily": 0.67,
+   "avg_net_bp": 4.94,
+   "years": {
+    "2021": -5634.53,
+    "2022": 5506.54,
+    "2023": 11240.19
+   },
+   "eligible": false
+  },
+  {
+   "variant": "C|04|day|mom|1",
+   "trades": 2150,
+   "pnl": 27967.16,
+   "gross_pnl": 68821.33,
+   "t_daily": 0.67,
+   "avg_net_bp": 13.01,
+   "years": {
+    "2021": 49161.34,
+    "2022": -17723.95,
+    "2023": -3470.23
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|04|0.25|none|open",
+   "trades": 1566,
+   "pnl": 32383.34,
+   "gross_pnl": 61886.36,
+   "t_daily": 0.64,
+   "avg_net_bp": 20.68,
+   "years": {
+    "2021": 44553.25,
+    "2022": -5834.84,
+    "2023": -6335.07
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|30|retest|far|none|nr4",
+   "trades": 860,
+   "pnl": 4952.56,
+   "gross_pnl": 14807.58,
+   "t_daily": 0.61,
+   "avg_net_bp": 5.76,
+   "years": {
+    "2021": 7306.0,
+    "2022": -667.96,
+    "2023": -1685.49
+   },
+   "eligible": false
+  },
+  {
+   "variant": "A|US|60|retest|far|none|nr4",
+   "trades": 752,
+   "pnl": 4782.49,
+   "gross_pnl": 13449.38,
+   "t_daily": 0.6,
+   "avg_net_bp": 6.36,
+   "years": {
+    "2021": 5869.12,
+    "2022": 1963.35,
+    "2023": -3049.97
+   },
+   "eligible": false
+  },
+  {
+   "variant": "B|08|0.75|trend|open",
+   "trades": 195,
+   "pnl": 9546.95,
+   "gross_pnl": 14078.74,
+   "t_daily": 0.6,
+   "avg_net_bp": 48.96,
+   "years": {
+    "2021": 15865.5,
+    "2022": 4106.45,
+    "2023": -10424.99
+   },
+   "eligible": false
+  }
+ ]
+}

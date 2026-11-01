@@ -1,0 +1,323 @@
+<title>Session Strategy Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,600..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a research protocol read top to bottom: funnel, finalists, each finalist's own track record, then method. */
+:root {
+  --paper: #f4f4f1;
+  --panel: #ffffff;
+  --ink: #15161a;
+  --ink-2: #4a4c55;
+  --ink-3: #777a84;
+  --rule: #dddde2;
+  --grid: #ececef;
+  --gain: #2a78d6;
+  --loss: #e34948;
+  --s1: #2a78d6;
+  --disc: #eef0f4;
+  --hold: #fbf1e2;
+  --recent: #e9f3ee;
+  --good: #0ca30c;
+  --accent: #5b3fc4;
+  --accent-soft: #ece8fb;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --measure: 1120px;
+  --prose: 68ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #101114; --panel: #17191e; --ink: #e8e9ec; --ink-2: #b4b6bf; --ink-3: #888b95;
+    --rule: #2b2d34; --grid: #22242a; --gain: #3987e5; --loss: #e66767; --s1: #3987e5;
+    --disc: #1f222a; --hold: #2e2617; --recent: #182821; --accent: #a594f0; --accent-soft: #262040; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #101114; --panel: #17191e; --ink: #e8e9ec; --ink-2: #b4b6bf; --ink-3: #888b95;
+  --rule: #2b2d34; --grid: #22242a; --gain: #3987e5; --loss: #e66767; --s1: #3987e5;
+  --disc: #1f222a; --hold: #2e2617; --recent: #182821; --accent: #a594f0; --accent-soft: #262040; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.6; }
+.page { max-width: var(--measure); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: grid; gap: 56px; }
+section, header, footer { display: grid; gap: 18px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); font-stretch: 85%; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 800; line-height: 1.02; }
+h2 { font-size: clamp(1.45rem, 3vw, 1.9rem); font-weight: 750; line-height: 1.12; }
+h3 { font-size: 1.08rem; font-weight: 700; font-stretch: 90%; }
+p { margin: 0; max-width: var(--prose); }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 1.12rem; color: var(--ink-2); }
+.note { font-size: 0.86rem; color: var(--ink-3); }
+.mono { font-family: var(--font-mono); font-size: 0.84em; }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.fig { background: var(--panel); padding: 18px 20px 20px; display: grid; gap: 6px; align-content: start; }
+.fig .label { font-size: 0.84rem; font-weight: 600; color: var(--ink-2); }
+.fig .value { font-weight: 600; font-size: 2.3rem; line-height: 1.05; letter-spacing: -0.02em; }
+.fig .sub { font-size: 0.84rem; color: var(--ink-3); }
+.verdict { font-size: 1.05rem; max-width: 76ch; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.table-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.76rem; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th.l, td.l { text-align: left; }
+td.strat { white-space: normal; min-width: 200px; text-align: left; }
+td.strat .n { font-weight: 600; }
+td.strat .d { display: block; color: var(--ink-3); font-size: 0.76rem; font-family: var(--font-mono); }
+.neg { color: var(--loss); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-2); }
+.pill.pass { border-color: var(--good); color: var(--good); }
+.pill.pass::before { content: "✓"; }
+.pill.fail::before { content: "×"; color: var(--loss); }
+.funnel { display: grid; gap: 10px; }
+.frow { display: grid; grid-template-columns: minmax(0, 17em) 1fr 4em; gap: 12px; align-items: center; }
+.frow .lab { font-size: 0.88rem; color: var(--ink-2); }
+.frow .bar { height: 14px; background: var(--s1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.frow .val { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.card .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.card .fam { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+.card .rules { font-size: 0.86rem; color: var(--ink-2); }
+.card svg { width: 100%; height: auto; display: block; }
+.card svg text { fill: var(--ink-3); font-family: var(--font-body); font-size: 11px; font-variant-numeric: tabular-nums; }
+.card .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 0.8rem; }
+.card .nums div { display: grid; }
+.card .nums b { font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+.card .nums span { color: var(--ink-3); }
+.keys { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--ink-2); }
+.keys span { display: inline-flex; gap: 6px; align-items: center; }
+.keys i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; border: 1px solid var(--rule); }
+details { border-top: 1px solid var(--rule); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; color: var(--ink-2); }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+details[open] summary { margin-bottom: 10px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+ul.facts { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; max-width: var(--prose); }
+footer { border-top: 1px solid var(--rule); padding-top: 18px; color: var(--ink-3); font-size: 0.84rem; }
+@media (max-width: 560px) {
+  body { font-size: 15px; }
+  .fig .value { font-size: 2rem; }
+  .page { gap: 44px; padding-block: 28px 48px; }
+  .frow { grid-template-columns: 1fr 3.5em; }
+  .frow .lab { grid-column: 1 / -1; }
+}
+</style>
+
+<main class="page">
+  <header>
+    <p class="eyebrow">Binance USDT-M perpetuals · BTC ETH SOL XRP DOGE BNB · Jan 2021 to Oct 2026 · Delta India costs</p>
+    <h1>Session Strategy Lab</h1>
+    <p class="lede" id="lede"></p>
+    <div class="figures" id="figures"></div>
+    <p class="verdict" id="verdict"></p>
+  </header>
+
+  <section id="funnel">
+    <h2>How a strategy had to earn its place</h2>
+    <p id="funnel-intro"></p>
+    <div class="panel"><div class="funnel" id="funnel-bars"></div></div>
+  </section>
+
+  <section id="finalists">
+    <h2>The finalists</h2>
+    <p id="fin-intro"></p>
+    <div class="panel"><div class="table-wrap"><table id="t-fin"></table></div></div>
+    <p class="note" id="fin-note"></p>
+  </section>
+
+  <section id="records">
+    <h2>Each finalist's track record</h2>
+    <p>Cumulative net profit on $10,000 per trade, all six coins together, with the three windows shaded.</p>
+    <div class="keys" id="keys"></div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section id="families">
+    <h2>What the 880 variants showed</h2>
+    <div class="panel"><div class="table-wrap"><table id="t-fam"></table></div></div>
+    <details class="panel">
+      <summary>The 40 best variants in discovery</summary>
+      <div class="table-wrap"><table id="t-top"></table></div>
+    </details>
+  </section>
+
+  <section id="method">
+    <h2>Method and checks</h2>
+    <div class="two">
+      <div class="panel"><h3>Data</h3><ul class="facts" id="m-data"></ul></div>
+      <div class="panel"><h3>Fills and costs</h3><ul class="facts" id="m-fill"></ul></div>
+      <div class="panel"><h3>Checks</h3><ul class="facts" id="m-checks"></ul></div>
+      <div class="panel"><h3>Limits</h3><ul class="facts" id="m-limits"></ul></div>
+    </div>
+  </section>
+
+  <footer><p id="foot"></p></footer>
+</main>
+
+<script>
+const D = {"generated":"2026-11-01","variants":880,"bar":1.64,"families":{"A":{"variants":648,"disc_positive":66,"disc_gross_positive":481,"eligible":1},"B":{"variants":48,"disc_positive":33,"disc_gross_positive":44,"eligible":0},"C":{"variants":24,"disc_positive":4,"disc_gross_positive":12,"eligible":0},"F":{"variants":24,"disc_positive":9,"disc_gross_positive":24,"eligible":0},"G":{"variants":136,"disc_positive":0,"disc_gross_positive":68,"eligible":0}},"family_names":{"A":"Session opening-range breakout","B":"Trend-day continuation","C":"Cross-coin intraday","F":"Volatility breakout","G":"Time-of-day drift"},"eligible":1,"finalists":[{"variant":"A|US|60|stop|far|1.5|nr4","discovery":{"trades":885,"pnl":21777.66,"gross_pnl":36154.62,"t_daily":2.69,"win_rate":52.3,"avg_net_bp":24.61,"avg_gross_bp":40.85,"max_dd":3301.19,"by_coin":{"BTCUSDT":3344.23,"ETHUSDT":5553.07,"SOLUSDT":6068.2,"XRPUSDT":5324.73,"DOGEUSDT":-815.3,"BNBUSDT":2302.73},"years":{"2021":12803.97,"2022":5309.71,"2023":3663.97},"eligible":true},"holdout":{"trades":507,"pnl":-12517.14,"gross_pnl":-3652.1,"t_daily":-2.15,"win_rate":42.8,"avg_net_bp":-24.69,"avg_gross_bp":-7.2,"max_dd":14722.13,"by_coin":{"BTCUSDT":-1015.95,"ETHUSDT":-671.76,"SOLUSDT":-2851.97,"XRPUSDT":-3148.81,"DOGEUSDT":-4894.89,"BNBUSDT":66.24}},"holdout_halves":[-6444.66,-6072.49],"holdout_coins_positive":1,"pass":false,"recent":{"trades":272,"pnl":5694.24,"gross_pnl":10440.42,"t_daily":1.36,"win_rate":49.3,"avg_net_bp":20.93,"avg_gross_bp":38.38,"max_dd":2745.81,"by_coin":{"BTCUSDT":65.69,"ETHUSDT":1825.03,"SOLUSDT":1333.16,"XRPUSDT":745.0,"DOGEUSDT":919.29,"BNBUSDT":806.07}},"title":"US-open 60-min range breakout","rules":"Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.","family":"Session opening-range breakout","monthly":{"2021-01":205.7,"2021-02":329.06,"2021-03":340.81,"2021-04":-1172.45,"2021-05":359.75,"2021-06":3784.95,"2021-07":2340.94,"2021-08":2878.98,"2021-09":-814.29,"2021-10":2327.61,"2021-11":229.42,"2021-12":1993.49,"2022-01":2874.74,"2022-02":1300.64,"2022-03":1737.97,"2022-04":525.3,"2022-05":-452.06,"2022-06":-814.31,"2022-07":835.82,"2022-08":963.41,"2022-09":99.96,"2022-10":110.36,"2022-11":-2843.79,"2022-12":971.68,"2023-01":2619.54,"2023-02":991.38,"2023-03":-1152.57,"2023-04":-173.37,"2023-05":129.44,"2023-06":634.0,"2023-07":353.82,"2023-08":-138.02,"2023-09":-163.77,"2023-10":742.18,"2023-11":398.47,"2023-12":-577.13,"2024-01":601.52,"2024-02":488.4,"2024-03":-2322.99,"2024-04":-1997.94,"2024-05":-267.84,"2024-06":-484.96,"2024-07":397.47,"2024-08":-1077.38,"2024-09":-14.26,"2024-10":-1766.69,"2024-11":-1905.74,"2024-12":-1676.03,"2025-01":-1803.97,"2025-02":1463.18,"2025-03":-362.9,"2025-04":-1333.02,"2025-05":-1515.96,"2025-06":1325.3,"2025-07":50.01,"2025-08":248.09,"2025-09":-561.44,"2025-10":948.08,"2025-11":3664.32,"2025-12":504.35,"2026-01":148.47,"2026-02":496.24,"2026-03":672.76,"2026-04":94.01,"2026-05":350.23,"2026-06":-634.55,"2026-07":-491.64,"2026-08":-1218.21,"2026-09":636.89,"2026-10":523.28},"yearly":{"2021":12803.97,"2022":5309.71,"2023":3663.97,"2024":-10026.43,"2025":2626.04,"2026":577.49},"cum":{"d":[18633,18634,18635,18638,18640,18641,18642,18645,18646,18647,18648,18652,18656,18659,18660,18661,18662,18668,18669,18670,18673,18675,18676,18677,18683,18684,18689,18690,18691,18694,18695,18696,18698,18701,18703,18704,18705,18708,18710,18712,18715,18716,18719,18722,18726,18733,18739,18743,18744,18745,18747,18750,18753,18754,18759,18765,18766,18772,18773,18774,18775,18778,18780,18781,18782,18785,18789,18793,18794,18796,18802,18803,18806,18807,18813,18815,18816,18820,18822,18827,18828,18831,18834,18837,18838,18842,18845,18848,18850,18851,18855,18858,18859,18862,18863,18865,18869,18870,18873,18876,18877,18880,18885,18887,18890,18894,18899,18900,18901,18904,18905,18906,18908,18913,18914,18915,18918,18919,18920,18925,18926,18932,18933,18934,18935,18936,18939,18940,18941,18943,18946,18953,18956,18957,18961,18963,18964,18967,18968,18969,18970,18974,18978,18981,18983,18984,18988,18989,18992,18995,18999,19002,19006,19009,19012,19016,19018,19020,19023,19025,19027,19030,19033,19037,19038,19040,19046,19047,19052,19054,19058,19060,19065,19066,19069,19075,19076,19082,19087,19088,19090,19096,19100,19102,19107,19111,19114,19115,19116,19121,19128,19129,19130,19135,19138,19142,19144,19146,19149,19153,19160,19164,19165,19166,19167,19171,19173,19177,19180,19181,19188,19191,19195,19198,19200,19205,19206,19207,19208,19209,19212,19216,19221,19223,19226,19228,19229,19230,19233,19234,19236,19237,19240,19244,19247,19250,19251,19256,19261,19262,19264,19265,19269,19272,19275,19278,19282,19285,19296,19298,19299,19300,19304,19310,19312,19313,19314,19320,19321,19324,19328,19331,19333,19335,19342,19345,19347,19348,19349,19352,19356,19359,19361,19363,19373,19375,19377,19380,19381,19384,19387,19389,19391,19396,19397,19411,19412,19415,19416,19417,19422,19423,19432,19433,19436,19437,19440,19443,19446,19447,19450,19452,19453,19454,19457,19459,19461,19464,19466,19471,19478,19480,19481,19482,19485,19487,19503,19510,19513,19516,19517,19520,19521,19524,19527,19530,19534,19536,19541,19542,19548,19550,19555,19558,19562,19564,19566,19572,19573,19576,19578,19579,19580,19590,19592,19593,19594,19604,19608,19614,19615,19618,19628,19634,19635,19636,19639,19643,19649,19650,19653,19657,19668,19670,19674,19676,19677,19681,19682,19685,19691,19692,19698,19699,19702,19704,19706,19709,19711,19712,19713,19717,19719,19720,19723,19730,19734,19738,19739,19740,19744,19747,19748,19754,19755,19758,19760,19762,19765,19772,19773,19776,19779,19789,19790,19793,19796,19800,19801,19804,19807,19808,19809,19810,19811,19814,19817,19818,19821,19825,19829,19830,19832,19835,19836,19837,19839,19842,19843,19846,19849,19852,19856,19860,19870,19872,19873,19874,19880,19881,19884,19885,19888,19891,19894,19901,19912,19914,19915,19920,19923,19927,19933,19934,19942,19943,19950,19954,19955,19957,19958,19961,19962,19965,19972,19975,19977,19979,19982,19983,19984,19986,19991,19992,19996,20000,20003,20010,20014,20017,20021,20024,20025,20026,20035,20042,20045,20046,20047,20048,20053,20054,20055,20056,20059,20062,20063,20066,20070,20073,20080,20082,20083,20087,20088,20089,20090,20091,20094,20095,20098,20101,20105,20109,20110,20111,20112,20118,20119,20124,20125,20126,20132,20133,20136,20139,20140,20143,20147,20153,20154,20160,20161,20165,20166,20168,20171,20175,20178,20179,20180,20192,20193,20194,20195,20196,20203,20206,20207,20208,20210,20216,20220,20222,20223,20224,20231,20234,20235,20241,20242,20244,20248,20255,20258,20259,20264,20265,20269,20273,20283,20285,20294,20297,20301,20304,20305,20307,20311,20318,20322,20328,20329,20332,20335,20339,20341,20342,20346,20348,20350,20353,20360,20370,20371,20375,20377,20378,20381,20382,20384,20385,20391,20399,20402,20403,20405,20416,20419,20420,20423,20427,20444,20446,20447,20451,20455,20458,20462,20468,20469,20476,20482,20486,20488,20489,20493,20494,20497,20501,20502,20503,20504,20507,20511,20515,20516,20518,20524,20525,20532,20537,20538,20544,20545,20559,20563,20564,20565,20566,20567,20570,20572,20574,20577,20581,20591,20592,20593,20594,20598,20599,20605,20608,20609,20613,20615,20621,20626,20633,20640,20642,20644,20647,20650,20651,20654,20658,20661,20663,20669,20670,20675,20676,20679,20684,20689,20690,20692,20693,20699,20703,20704,20713,20714,20719,20721,20724,20728,20733,20742,20746,20748,20752,20753],"v":[-362.02,-315.75,12.08,-458.41,-388.35,-182.31,128.07,-159.1,-13.9,11.44,-263.44,116.74,205.7,-381.52,-472.43,-773.95,-65.16,-529.26,-188.4,206.11,450.95,922.15,496.73,822.4,625.76,534.76,600.68,1354.67,1157.84,1464.57,1287.28,1190.84,1052.41,1175.62,1090.83,964.69,1181.86,1397.79,1577.99,1620.1,1260.68,875.57,782.53,802.33,312.21,260.68,1428.78,801.07,613.42,-643.56,-296.88,-77.37,-195.81,-79.45,456.75,-78.92,-730.76,-986.15,-911.87,156.61,59.14,62.88,213.47,-80.68,-136.12,500.08,1596.08,1178.21,1476.2,1585.93,1694.15,3906.15,4303.16,3847.82,4049.55,4152.93,4357.07,4871.54,4767.01,4647.01,4981.77,5345.65,5837.84,5947.56,6188.76,6369.48,6649.14,6511.19,6874.15,6804.59,6930.69,7468.58,7673.78,7819.85,8529.45,8620.2,9299.41,9067.74,8914.9,9279.23,9911.19,9472.12,9672.5,9406.29,9224.77,8718.93,8666.02,8253.45,8349.01,8823.51,8912.08,8795.1,8873.21,9079.45,9251.41,9986.21,9996.78,10002.22,10675.2,10576.37,10581.06,10367.91,10288.65,10571.19,10608.83,10923.85,10910.92,10927.13,10642.27,10666.3,10841.17,11235.05,11103.78,10603.51,10810.49,10691.54,11365.09,11234.42,11258.58,10843.8,10971.51,11787.76,11901.4,12783.56,12673.52,13010.3,12794.74,12675.78,12803.97,13344.96,13161.21,13168.69,13220.97,12924.68,13016.47,15635.84,14833.07,15191.48,15678.72,15481.86,15952.91,15716.81,15347.1,15605.9,15443.64,15688.25,15962.98,16979.36,16702.43,17228.8,17280.15,17057.58,16992.92,17090.26,18066.53,18246.51,18482.78,18717.32,18667.24,18560.87,17538.64,17382.99,17239.83,17313.22,18210.07,19242.62,19043.69,19202.62,18648.27,19450.29,19016.57,19643.55,19951.95,19263.64,18935.85,18790.56,19267.77,18950.27,19518.51,18956.41,18871.37,18615.94,18518.67,17894.8,17781.39,18263.06,17976.25,17964.66,18177.34,18341.01,18198.73,17985.63,19035.13,18610.73,18812.07,18134.43,18214.72,18114.52,18110.8,17939.61,18042.24,18463.76,18515.03,18287.09,18208.7,18501.65,18395.85,19952.68,19796.28,19775.48,19406.84,18935.9,18919.62,18651.81,18796.4,19168.77,18960.77,19113.14,18828.14,19417.92,19485.14,19875.44,19672.71,19744.55,19516.88,20049.18,20047.12,20141.46,19985.8,19934.18,20004.29,19359.08,19886.09,19429.63,18986.87,18813.08,18545.27,18600.63,18307.42,17142.01,17046.27,16840.28,16903.17,16987.86,17584.28,18119.71,18136.3,18022.09,17994.55,18061.3,18113.69,18375.26,18500.04,18571.6,19070.88,20103.87,20927.0,21008.38,20571.46,20624.43,20733.23,20781.62,20643.11,20860.3,21265.23,21145.37,21880.81,21911.35,21724.6,21840.71,21653.8,21284.48,21354.68,20539.97,20627.79,20496.61,20302.46,20702.02,20710.7,20572.04,20630.13,20522.86,20505.37,20112.99,20210.28,20045.74,20294.34,20253.94,20146.98,20398.67,20395.08,20160.02,20135.03,20514.76,20391.67,20613.5,20528.1,20660.71,21047.65,20944.58,21218.28,21049.53,21261.83,20926.78,20931.16,21048.81,21597.51,21162.11,21068.04,20910.27,20966.53,21089.63,21525.48,21852.97,21641.25,21763.23,21515.92,21545.84,21481.18,21281.41,21379.37,21273.89,21139.92,21318.97,21429.84,21527.81,21377.9,21411.11,21335.09,21308.98,21349.67,21137.76,21214.14,20935.75,21178.9,21465.04,21571.52,21560.06,21484.63,21470.45,21574.91,21956.32,21892.88,23766.6,23894.28,23649.48,23579.87,23366.74,23221.92,22474.07,22354.79,22446.26,22312.3,22205.67,22372.96,22499.81,22266.77,22001.36,21612.98,21780.38,21653.8,21771.61,21653.35,21777.66,22010.66,21934.02,22426.74,22460.4,22384.64,22492.51,22441.68,22215.95,22379.18,22313.54,21870.56,21902.09,22049.13,21943.21,22535.39,22545.33,22261.4,22026.16,22867.58,22446.55,21686.69,21555.85,22165.23,22225.64,21762.72,20832.33,21019.3,20993.91,20555.02,20579.35,20544.59,20921.88,20686.49,20567.76,20572.78,21233.09,20762.39,19486.31,19404.23,18633.44,18588.61,18768.46,18694.19,18714.76,18546.65,18425.84,18598.25,18742.94,18746.9,18992.87,18729.52,18541.76,18347.49,18278.81,18002.91,18083.74,18243.21,18550.48,18741.14,18085.91,17934.04,17793.86,17659.74,16987.55,17218.27,17331.31,18052.72,17743.51,18400.09,18191.33,18168.16,18269.77,18027.51,18235.7,18041.25,17907.95,16669.94,16813.4,16668.12,17113.95,18388.05,18083.48,17222.54,17421.72,17623.62,17405.33,17290.21,16990.05,16957.4,17069.5,17099.69,16856.64,16554.62,16556.67,16551.88,16332.05,15884.06,15510.17,15359.84,15333.0,15321.78,14348.37,14154.71,13988.12,14541.71,14561.36,14209.29,14597.29,13879.09,13427.26,13043.98,12768.67,12798.08,13696.92,13427.04,13726.1,12415.97,12424.3,11771.78,11677.47,11751.23,11706.2,11565.8,11546.22,11644.08,11836.1,11766.52,12051.52,12074.09,12105.2,11533.27,10213.27,10605.81,10504.76,9947.25,10072.86,10028.92,10338.53,10405.1,10160.95,10772.02,10518.92,11671.23,11700.23,11410.44,10125.41,10152.79,10827.45,11463.67,11289.43,11293.26,11243.28,11375.24,11372.05,11047.53,11181.16,11050.39,10458.73,10723.23,10579.63,10246.73,9926.6,9901.61,9689.18,9647.97,9714.51,9542.13,9790.57,10075.86,9866.51,9026.91,8999.34,8488.42,8424.35,8198.55,8145.44,8155.9,8491.35,8774.27,9026.72,8902.65,10074.68,9629.31,9469.03,9523.85,9526.42,10124.43,9972.04,9649.16,9573.86,9345.52,9066.07,9073.3,8935.89,8656.0,8811.67,9619.83,9821.21,9821.96,9704.97,9659.84,9562.19,9627.15,9463.96,9441.79,9032.63,9396.04,9285.7,9260.51,9299.77,9583.83,9728.3,10454.4,9980.9,9889.59,9843.06,10225.18,9997.83,10208.59,12789.53,12651.11,12962.59,13377.6,13943.36,14065.81,13872.92,13889.01,14438.37,14557.93,14433.86,14314.86,14377.26,14406.17,14688.92,14180.04,14204.48,14095.99,14594.22,14525.73,14327.15,14385.14,14688.99,15450.52,15337.51,15496.41,15282.33,15115.15,14949.13,14948.28,15107.57,15021.97,14792.17,15269.05,14995.73,14716.07,15323.4,15153.95,15269.3,15694.73,15822.95,16125.11,16540.4,16209.26,15783.83,16033.74,16097.52,15993.99,15852.21,15788.75,15724.74,15675.18,15769.35,15656.8,15570.67,15618.51,15686.92,15623.3,16138.98,15935.74,15797.46,15985.06,15305.58,14923.95,14823.81,15024.53,15504.43,15866.49,15528.51,15092.09,14965.16,14775.17,14811.85,15057.87,15105.73,15121.16,15012.79,15012.26,15197.09,15105.46,15130.38,15063.34,15176.31,14349.66,14135.57,13993.5,13794.58,14988.53,14917.49,14867.85,14775.37,14943.22,14808.22,14718.67,14431.48,15462.46,15474.91,15608.29,15302.21,15368.06,14921.35,14954.76]}}],"passed":0,"top40":[{"variant":"A|US|60|stop|far|1.5|nr4","trades":885,"pnl":21777.66,"gross_pnl":36154.62,"t_daily":2.69,"avg_net_bp":24.61,"years":{"2021":12803.97,"2022":5309.71,"2023":3663.97},"eligible":true,"title":"US-open 60-min range breakout"},{"variant":"B|US1h|0.75|trend|open","trades":342,"pnl":27328.41,"gross_pnl":34930.88,"t_daily":1.9,"avg_net_bp":79.91,"years":{"2021":16264.56,"2022":10280.29,"2023":783.56},"eligible":false,"title":"Trend-day follow at 1 h after the NYSE open"},{"variant":"A|US|60|stop|far|3.0|nr4","trades":885,"pnl":16330.85,"gross_pnl":32153.82,"t_daily":1.79,"avg_net_bp":18.45,"years":{"2021":8612.82,"2022":5439.13,"2023":2278.89},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"A|US|60|stop|mid|3.0|nr4","trades":885,"pnl":12178.52,"gross_pnl":27011.69,"t_daily":1.77,"avg_net_bp":13.76,"years":{"2021":6561.58,"2022":3386.66,"2023":2230.27},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"A|US|60|close|far|1.5|nr4","trades":853,"pnl":14192.42,"gross_pnl":28316.18,"t_daily":1.75,"avg_net_bp":16.64,"years":{"2021":10287.98,"2022":3764.08,"2023":140.36},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"B|US1h|0.75|none|open","trades":596,"pnl":32230.8,"gross_pnl":43960.72,"t_daily":1.69,"avg_net_bp":54.08,"years":{"2021":22359.2,"2022":7915.3,"2023":1956.31},"eligible":false,"title":"Trend-day follow at 1 h after the NYSE open"},{"variant":"A|US|60|stop|far|none|nr4","trades":885,"pnl":13767.66,"gross_pnl":30198.19,"t_daily":1.49,"avg_net_bp":15.56,"years":{"2021":8668.06,"2022":4082.86,"2023":1016.74},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"A|US|60|retest|far|1.5|nr4","trades":752,"pnl":10119.09,"gross_pnl":17329.36,"t_daily":1.44,"avg_net_bp":13.46,"years":{"2021":9833.16,"2022":1262.34,"2023":-976.4},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"B|US1h|0.5|trend|open","trades":633,"pnl":24732.67,"gross_pnl":37998.04,"t_daily":1.41,"avg_net_bp":39.07,"years":{"2021":17017.42,"2022":5923.12,"2023":1792.12},"eligible":false,"title":"Trend-day follow at 1 h after the NYSE open"},{"variant":"A|US|60|retest|mid|3.0|trend","trades":1774,"pnl":13928.19,"gross_pnl":32525.49,"t_daily":1.32,"avg_net_bp":7.85,"years":{"2021":5777.87,"2022":8577.77,"2023":-427.45},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"A|US|60|retest|far|1.5|trend","trades":1774,"pnl":15914.81,"gross_pnl":34045.27,"t_daily":1.26,"avg_net_bp":8.97,"years":{"2021":9331.82,"2022":6498.24,"2023":84.74},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"B|04|0.5|trend|half","trades":251,"pnl":17928.3,"gross_pnl":23860.32,"t_daily":1.21,"avg_net_bp":71.43,"years":{"2021":16376.33,"2022":2093.16,"2023":-541.19},"eligible":false,"title":"Trend-day follow at 04:00 UTC"},{"variant":"B|US1h|0.5|none|open","trades":1201,"pnl":28701.14,"gross_pnl":51666.17,"t_daily":1.2,"avg_net_bp":23.9,"years":{"2021":24056.5,"2022":2275.27,"2023":2369.37},"eligible":false,"title":"Trend-day follow at 1 h after the NYSE open"},{"variant":"B|US1h|0.75|trend|half","trades":342,"pnl":17036.28,"gross_pnl":24579.83,"t_daily":1.19,"avg_net_bp":49.81,"years":{"2021":7163.5,"2022":8650.45,"2023":1222.33},"eligible":false,"title":"Trend-day follow at 1 h after the NYSE open"},{"variant":"A|US|60|stop|far|1.5|trend","trades":2106,"pnl":16924.84,"gross_pnl":52482.68,"t_daily":1.17,"avg_net_bp":8.04,"years":{"2021":7870.96,"2022":10117.14,"2023":-1063.26},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"B|08|0.75|none|open","trades":306,"pnl":34614.04,"gross_pnl":41092.85,"t_daily":1.16,"avg_net_bp":113.12,"years":{"2021":42603.78,"2022":2151.24,"2023":-10140.99},"eligible":false,"title":"Trend-day follow at 08:00 UTC"},{"variant":"B|04|0.5|none|open","trades":432,"pnl":48786.23,"gross_pnl":56733.43,"t_daily":1.15,"avg_net_bp":112.93,"years":{"2021":43988.63,"2022":7041.2,"2023":-2243.59},"eligible":false,"title":"Trend-day follow at 04:00 UTC"},{"variant":"B|04|0.5|none|half","trades":432,"pnl":46615.97,"gross_pnl":55356.92,"t_daily":1.15,"avg_net_bp":107.91,"years":{"2021":49648.48,"2022":-1758.9,"2023":-1273.61},"eligible":false,"title":"Trend-day follow at 04:00 UTC"},{"variant":"A|US|60|close|mid|3.0|nr4","trades":853,"pnl":7595.39,"gross_pnl":22169.46,"t_daily":1.09,"avg_net_bp":8.9,"years":{"2021":5349.33,"2022":2504.39,"2023":-258.32},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"A|US|30|retest|far|3.0|nr4","trades":860,"pnl":7254.92,"gross_pnl":16104.55,"t_daily":0.96,"avg_net_bp":8.44,"years":{"2021":6438.19,"2022":1465.81,"2023":-649.08},"eligible":false,"title":"US-open 30-min range breakout"},{"variant":"B|04|0.5|trend|open","trades":251,"pnl":15765.56,"gross_pnl":21893.19,"t_daily":0.9,"avg_net_bp":62.81,"years":{"2021":12546.65,"2022":4947.08,"2023":-1728.17},"eligible":false,"title":"Trend-day follow at 04:00 UTC"},{"variant":"A|US|60|stop|mid|3.0|trend","trades":2106,"pnl":10044.46,"gross_pnl":46200.01,"t_daily":0.83,"avg_net_bp":4.77,"years":{"2021":1350.83,"2022":11970.53,"2023":-3276.89},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"A|US|60|stop|mid|none|nr4","trades":885,"pnl":6434.33,"gross_pnl":22927.48,"t_daily":0.83,"avg_net_bp":7.27,"years":{"2021":3819.68,"2022":2844.04,"2023":-229.39},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"B|US1h|0.5|trend|half","trades":633,"pnl":13674.77,"gross_pnl":26814.52,"t_daily":0.81,"avg_net_bp":21.6,"years":{"2021":6880.49,"2022":4741.62,"2023":2052.65},"eligible":false,"title":"Trend-day follow at 1 h after the NYSE open"},{"variant":"A|US|30|retest|far|1.5|nr4","trades":860,"pnl":4855.92,"gross_pnl":12479.17,"t_daily":0.8,"avg_net_bp":5.65,"years":{"2021":5592.57,"2022":-1065.06,"2023":328.41},"eligible":false,"title":"US-open 30-min range breakout"},{"variant":"B|08|0.75|none|half","trades":306,"pnl":22560.16,"gross_pnl":28889.27,"t_daily":0.79,"avg_net_bp":73.73,"years":{"2021":29892.26,"2022":2508.08,"2023":-9840.18},"eligible":false,"title":"Trend-day follow at 08:00 UTC"},{"variant":"B|04|0.25|none|half","trades":1566,"pnl":35615.0,"gross_pnl":65736.32,"t_daily":0.78,"avg_net_bp":22.74,"years":{"2021":51264.16,"2022":-9620.53,"2023":-6028.63},"eligible":false,"title":"Trend-day follow at 04:00 UTC"},{"variant":"B|12|0.75|none|open","trades":520,"pnl":22292.01,"gross_pnl":33139.76,"t_daily":0.78,"avg_net_bp":42.87,"years":{"2021":26508.87,"2022":339.08,"2023":-4555.94},"eligible":false,"title":"Trend-day follow at 12:00 UTC"},{"variant":"B|08|0.5|none|open","trades":756,"pnl":26031.76,"gross_pnl":40256.29,"t_daily":0.76,"avg_net_bp":34.43,"years":{"2021":38684.93,"2022":-5593.45,"2023":-7059.71},"eligible":false,"title":"Trend-day follow at 08:00 UTC"},{"variant":"A|US|60|retest|mid|3.0|nr4","trades":752,"pnl":4123.04,"gross_pnl":11654.02,"t_daily":0.73,"avg_net_bp":5.48,"years":{"2021":5175.59,"2022":266.24,"2023":-1318.79},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"C|08|day|mom|1","trades":2150,"pnl":22339.35,"gross_pnl":62962.14,"t_daily":0.73,"avg_net_bp":10.39,"years":{"2021":44890.84,"2022":-15321.7,"2023":-7229.79},"eligible":false,"title":"Cross-coin momentum at 08:00 UTC"},{"variant":"A|US|60|close|far|3.0|nr4","trades":853,"pnl":6227.29,"gross_pnl":21630.94,"t_daily":0.69,"avg_net_bp":7.3,"years":{"2021":5392.85,"2022":1576.38,"2023":-741.94},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"A|US|60|retest|mid|1.5|trend","trades":1774,"pnl":5356.99,"gross_pnl":21459.09,"t_daily":0.68,"avg_net_bp":3.02,"years":{"2021":3343.62,"2022":5061.14,"2023":-3047.77},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"A|UTC|60|retest|mid|none|trend","trades":3102,"pnl":17853.81,"gross_pnl":56603.8,"t_daily":0.68,"avg_net_bp":5.76,"years":{"2021":28853.57,"2022":5665.69,"2023":-16665.45},"eligible":false,"title":"UTC-day 60-min range breakout"},{"variant":"A|US|60|stop|far|none|tight","trades":2249,"pnl":11112.21,"gross_pnl":52399.53,"t_daily":0.67,"avg_net_bp":4.94,"years":{"2021":-5634.53,"2022":5506.54,"2023":11240.19},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"C|04|day|mom|1","trades":2150,"pnl":27967.16,"gross_pnl":68821.33,"t_daily":0.67,"avg_net_bp":13.01,"years":{"2021":49161.34,"2022":-17723.95,"2023":-3470.23},"eligible":false,"title":"Cross-coin momentum at 04:00 UTC"},{"variant":"B|04|0.25|none|open","trades":1566,"pnl":32383.34,"gross_pnl":61886.36,"t_daily":0.64,"avg_net_bp":20.68,"years":{"2021":44553.25,"2022":-5834.84,"2023":-6335.07},"eligible":false,"title":"Trend-day follow at 04:00 UTC"},{"variant":"A|US|30|retest|far|none|nr4","trades":860,"pnl":4952.56,"gross_pnl":14807.58,"t_daily":0.61,"avg_net_bp":5.76,"years":{"2021":7306.0,"2022":-667.96,"2023":-1685.49},"eligible":false,"title":"US-open 30-min range breakout"},{"variant":"A|US|60|retest|far|none|nr4","trades":752,"pnl":4782.49,"gross_pnl":13449.38,"t_daily":0.6,"avg_net_bp":6.36,"years":{"2021":5869.12,"2022":1963.35,"2023":-3049.97},"eligible":false,"title":"US-open 60-min range breakout"},{"variant":"B|08|0.75|trend|open","trades":195,"pnl":9546.95,"gross_pnl":14078.74,"t_daily":0.6,"avg_net_bp":48.96,"years":{"2021":15865.5,"2022":4106.45,"2023":-10424.99},"eligible":false,"title":"Trend-day follow at 08:00 UTC"}],"verify":{"finalists":["A|US|60|stop|far|1.5|nr4"],"fill_trades_checked":1664,"fill_mismatches":[],"truncation_cut":"2024-07-01","truncation_trades":1028,"truncation_mismatches":[]},"fingerprint":"42a0edf94fe51590","verify_sample":{"sample_variants":["A|US|30|close|far|none|none","A|US|60|retest|far|1.5|trend","A|LDN|15|retest|mid|3.0|nr4","A|UTC|60|stop|mid|none|tight","A|UTC|15|retest|far|3.0|none","A|LDN|30|stop|far|1.5|trend","B|US1h|0.75|trend|open","B|04|0.5|none|half","F|0.5|stop|none|open","F|0.3|close|trend|none","G|13|2|long","G|00|4|short"],"trades_checked":79229,"mismatches":[]},"amendments":[],"data":{"minutes":3067200,"bad_days":["2022-02-26","2022-02-27","2022-02-28","2022-04-01","2022-04-02","2026-10-28"]}};
+const MINUS = "−";
+const SVGNS = "http://www.w3.org/2000/svg";
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null) continue; if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function sv(tag, attrs, ...kids) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) if (v != null) e.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+const fmt = (v, d) => Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const usd = v => v == null ? "–" : (v < -0.5 ? MINUS : v > 0.5 ? "+" : "") + "$" + fmt(v, 0);
+const num = (v, d = 2) => v == null ? "–" : (v < 0 ? MINUS : "") + fmt(v, d);
+const ts = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 1000;
+const W0 = ts("2021-01-01"), W1 = ts("2024-01-01"), W2 = ts("2025-10-01"), W3 = ts("2026-11-01");
+const F = D.finalists, passed = F.filter(f => f.pass);
+
+document.getElementById("lede").textContent =
+  "A search for intraday crypto strategies that make money after Delta India's fees, run the way a real test should be: " + D.variants +
+  " variants tried on 2021 to 2023, a handful chosen by a rule written down in advance, then judged on 21 months of data none of them had seen.";
+const best = [...F].sort((a, b) => (b.holdout.t_daily || -9) - (a.holdout.t_daily || -9))[0];
+const figs = [
+  ["Variants tested", D.variants.toLocaleString("en-US"), "5 families, 6 coins, Jan 2021 to Oct 2026"],
+  ["Passed the hold-out", passed.length + " of " + F.length, "Profit, t ≥ " + num(D.bar) + ", both halves positive, 4 of 6 coins"],
+  passed.length
+    ? ["Best survivor, hold-out", usd(passed[0].holdout.pnl), passed[0].title + ", t " + num(passed[0].holdout.t_daily)]
+    : ["Closest finalist, hold-out", best ? usd(best.holdout.pnl) : "–", best ? best.title + ", t " + num(best.holdout.t_daily) : ""],
+];
+for (const [l, v, s] of figs) document.getElementById("figures").append(h("div", { class: "fig" }, h("div", { class: "label" }, l), h("div", { class: "value" }, v), h("div", { class: "sub" }, s)));
+{
+  let txt;
+  const top10 = D.top40.slice(0, 10);
+  const yr = y => top10.reduce((a, r) => a + r.years[y], 0) / top10.length;
+  const fade = "The ten best variants in discovery averaged " + usd(yr("2021")) + " in 2021, " + usd(yr("2022")) + " in 2022 and " + usd(yr("2023")) + " in 2023: the edge was shrinking before the hold-out began.";
+  if (passed.length) {
+    txt = passed.length + " of the " + F.length + " finalists kept making money on data they had never seen: " + passed.map(f => f.title).join("; ") +
+      ". Their recent 13 months: " + passed.map(f => usd(f.recent.pnl)).join(", ") + ". These are candidates for a paper test on Delta, not proven money-makers. " + fade;
+  } else if (F.length === 1) {
+    txt = "Only one of the " + D.variants + " variants made money after costs in each of 2021, 2022 and 2023, " + F[0].title + ". On the unseen January 2024 to September 2025 data it lost " +
+      "$" + fmt(Math.abs(F[0].holdout.pnl), 0) + ", in both halves and on " + (6 - F[0].holdout_coins_positive) + " of 6 coins. " + fade +
+      " No intraday strategy in this search survives Delta's costs, so none of them should be traded.";
+  } else {
+    txt = "None of the " + F.length + " finalists held up on unseen data, although each made money in every discovery year. " + fade +
+      " No intraday strategy in this search survives Delta's costs, so none of them should be traded.";
+  }
+  document.getElementById("verdict").textContent = txt;
+}
+
+// funnel
+document.getElementById("funnel-intro").textContent =
+  "Every variant ran on 2021, 2022 and 2023. To be eligible it had to make money after costs in each of those three years and have a daily t-statistic of at least 2. " +
+  "The best three eligible variants of each family, skipping near-copies, became finalists. Only then were the finalists run on January 2024 to September 2025.";
+{
+  const rows = [["Variants tested", D.variants], ["Profitable in discovery", Object.values(D.families).reduce((a, x) => a + x.disc_positive, 0)],
+    ["Eligible: profitable in each of 2021, 2022, 2023 and t ≥ 2", D.eligible], ["Finalists", F.length], ["Passed the hold-out", passed.length]];
+  const box = document.getElementById("funnel-bars");
+  for (const [lab, n] of rows) box.append(h("div", { class: "frow" }, h("div", { class: "lab" }, lab),
+    h("div", {}, h("div", { class: "bar", style: "width:" + Math.max(0.3, 100 * n / D.variants).toFixed(2) + "%" })), h("div", { class: "val" }, n.toLocaleString("en-US"))));
+}
+
+// finalists table
+document.getElementById("fin-intro").textContent =
+  "Discovery and hold-out decide; the recent window (October 2025 to October 2026) was already used by the previous study, so it is shown but does not count toward passing.";
+{
+  const t = document.getElementById("t-fin");
+  t.append(h("thead", {}, h("tr", {}, ["Strategy", "Discovery 2021–23", "t", "Hold-out 2024–Sep 25", "t", "Hold-out halves", "Coins up", "Result", "Recent"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const f of F) tb.append(h("tr", {},
+    h("td", { class: "strat" }, h("span", { class: "n" }, f.title), h("span", { class: "d" }, f.variant)),
+    h("td", {}, usd(f.discovery.pnl)), h("td", {}, num(f.discovery.t_daily)),
+    h("td", { class: f.holdout.pnl < 0 ? "neg" : null }, usd(f.holdout.pnl)), h("td", {}, num(f.holdout.t_daily)),
+    h("td", { style: "white-space:normal" }, f.holdout_halves.map(usd).join(" / ")), h("td", {}, f.holdout_coins_positive + " of 6"),
+    h("td", { class: "l" }, h("span", { class: "pill " + (f.pass ? "pass" : "fail") }, f.pass ? "Passed" : "Failed")),
+    h("td", { class: f.recent.pnl < 0 ? "neg" : null }, usd(f.recent.pnl))));
+  t.append(tb);
+  document.getElementById("fin-note").textContent =
+    "Net profit is in dollars on $10,000 per trade, summed over the six coins. t is computed on daily profit, so trades on different coins the same day are not counted as independent. The hold-out bar t ≥ " +
+    num(D.bar) + " is the one-sided 5% level after splitting it across " + F.length + " finalists.";
+}
+
+// cards
+{
+  const keys = document.getElementById("keys");
+  for (const [c, l] of [["var(--disc)", "Discovery 2021–2023"], ["var(--hold)", "Hold-out Jan 2024–Sep 2025"], ["var(--recent)", "Recent Oct 2025–Oct 2026"]])
+    keys.append(h("span", {}, h("i", { style: "background:" + c }), l));
+  const box = document.getElementById("cards");
+  for (const f of F) {
+    const W = 330, Hh = 130, L = 46, R = 8, T = 8, B = 18;
+    const x = s => L + (s - W0) / (W3 - W0) * (W - L - R);
+    const xs = f.cum.d.map(d => d * 86400), ys = f.cum.v;
+    const lo = Math.min(0, ...ys), hi = Math.max(0, ...ys);
+    const span = (hi - lo) || 1;
+    const y = v => T + (1 - (v - lo) / span) * (Hh - T - B);
+    const svg = sv("svg", { viewBox: "0 0 " + W + " " + Hh, role: "img", "aria-label": f.title + " cumulative profit" });
+    for (const [a, b, c] of [[W0, W1, "var(--disc)"], [W1, W2, "var(--hold)"], [W2, W3, "var(--recent)"]])
+      svg.append(sv("rect", { x: x(a), y: T, width: x(b) - x(a), height: Hh - T - B, fill: c }));
+    svg.append(sv("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--ink-3)", "stroke-width": 1 }));
+    for (const yr of [2021, 2022, 2023, 2024, 2025, 2026]) svg.append(sv("text", { x: x(ts(yr + "-07-01")), y: Hh - 4, "text-anchor": "middle" }, String(yr)));
+    for (const v of [lo, hi]) svg.append(sv("text", { x: L - 4, y: y(v) + 4, "text-anchor": "end" }, usd(v).replace("+", "")));
+    if (xs.length) svg.append(sv("path", { d: xs.map((s, i) => (i ? "L" : "M") + x(s).toFixed(1) + " " + y(ys[i]).toFixed(1)).join(" "), fill: "none", stroke: "var(--s1)", "stroke-width": 1.6, "stroke-linejoin": "round" }));
+    box.append(h("article", { class: "card" },
+      h("div", { class: "top" }, h("span", { class: "fam" }, f.family), h("span", { class: "pill " + (f.pass ? "pass" : "fail") }, f.pass ? "Passed" : "Failed")),
+      h("h3", {}, f.title), h("p", { class: "rules" }, f.rules), svg,
+      h("div", { class: "nums" },
+        h("div", {}, h("span", {}, "Discovery"), h("b", {}, usd(f.discovery.pnl))),
+        h("div", {}, h("span", {}, "Hold-out"), h("b", { class: f.holdout.pnl < 0 ? "neg" : null }, usd(f.holdout.pnl))),
+        h("div", {}, h("span", {}, "Recent"), h("b", { class: f.recent.pnl < 0 ? "neg" : null }, usd(f.recent.pnl))))));
+  }
+}
+
+// families + top 40
+{
+  const t = document.getElementById("t-fam");
+  t.append(h("thead", {}, h("tr", {}, ["Family", "Variants", "Profitable before costs", "Profitable after costs", "Eligible"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const [k, x] of Object.entries(D.families)) tb.append(h("tr", {}, h("td", { class: "l" }, D.family_names[k]), h("td", {}, x.variants),
+    h("td", {}, x.disc_gross_positive), h("td", {}, x.disc_positive), h("td", {}, x.eligible)));
+  t.append(tb);
+  const t2 = document.getElementById("t-top");
+  t2.append(h("thead", {}, h("tr", {}, ["Variant", "Trades", "Net 2021–23", "t", "2021", "2022", "2023", "Eligible"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb2 = h("tbody");
+  for (const r of D.top40) tb2.append(h("tr", {}, h("td", { class: "strat" }, h("span", { class: "n" }, r.title), h("span", { class: "d" }, r.variant)),
+    h("td", {}, r.trades), h("td", {}, usd(r.pnl)), h("td", {}, num(r.t_daily)), ...["2021", "2022", "2023"].map(y => h("td", { class: r.years[y] < 0 ? "neg" : null }, usd(r.years[y]))),
+    h("td", { class: "l" }, r.eligible ? "yes" : "no")));
+  t2.append(tb2);
+}
+
+// method
+{
+  const add = (id, items) => { const ul = document.getElementById(id); for (const x of items) ul.append(h("li", {}, x)); };
+  add("m-data", [
+    "Binance Vision USDT-M perpetual 1-minute candles and funding prints for BTC, ETH, SOL, XRP, DOGE and BNB, 1 January 2021 to 31 October 2026, " + D.data.minutes.toLocaleString("en-US") + " minutes per coin, every archive SHA-256 checked.",
+    "Days not traded: " + (D.data.bad_days.length ? D.data.bad_days.join(", ") : "none") + " (missing or rebuilt exchange data).",
+  ]);
+  add("m-fill", [
+    "Signals read only closed bars. Market orders fill at the next 1-minute open. Stop orders fill at their level, or at the open if price gaps past it.",
+    "Limit orders fill only when price trades 1 bp through them, to allow for the queue, and pay the maker fee.",
+    "If an order fills inside a minute and that minute also reaches the stop, the stop is taken. Within a minute the stop is checked before the target. Everything is flat by 00:00 UTC.",
+    "Delta India fees: maker 0.02% and taker 0.05%, both plus 18% GST. Takers also pay 2 bp (BTC, ETH) or 4 bp (alts) of slippage. Binance funding prints are charged signed.",
+  ]);
+  const V = D.verify;
+  add("m-checks", [
+    "The grid, the selection rule and the pass test were fingerprinted (" + D.fingerprint + ") before the first run" + (D.amendments.length ? "; amendments: " + D.amendments.map(a => a.why).join(" ") : "; no amendments") + ".",
+    "Hold-out results exist only for the finalists, so no other variant could be picked after the fact.",
+    "Fills: " + V.fill_trades_checked.toLocaleString("en-US") + " finalist trades re-filled by a separately written engine, " + V.fill_mismatches.length + " mismatches.",
+    (D.verify_sample ? "Engine: " + D.verify_sample.trades_checked.toLocaleString("en-US") + " trades from " + D.verify_sample.sample_variants.length + " variants covering every entry type were re-filled the same way, " + D.verify_sample.mismatches.length + " mismatches." : ""),
+    "No look-ahead: a re-run on data cut at " + V.truncation_cut + " reproduced " + V.truncation_trades.toLocaleString("en-US") + " earlier trades, " + V.truncation_mismatches.length + " mismatches.",
+  ]);
+  add("m-limits", [
+    "Binance prices stand in for Delta. Delta's books are thinner, so real slippage on the alts may be higher.",
+    "A limit order that is filled in a backtest may sit unfilled in reality when the queue ahead of it is long. The 1 bp rule only partly covers this.",
+    "Passing a hold-out lowers the odds of a fluke but does not remove them. A survivor still needs a live paper test before any real money.",
+  ]);
+  document.getElementById("foot").textContent = "Generated " + D.generated + ". Code and results: engine/research/session_lab_2026_11 (sl_fetch.py, sl_core.py, sl_families.py, sl_run.py, sl_verify.py, sl_report.py, REPORT.md, results/). Market data stays in the git-ignored engine/data/historical/session_lab.";
+}
+</script>

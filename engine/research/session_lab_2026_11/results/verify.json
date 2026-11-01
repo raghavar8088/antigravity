@@ -1,0 +1,10 @@
+{
+ "finalists": [
+  "A|US|60|stop|far|1.5|nr4"
+ ],
+ "fill_trades_checked": 1664,
+ "fill_mismatches": [],
+ "truncation_cut": "2024-07-01",
+ "truncation_trades": 1028,
+ "truncation_mismatches": []
+}
