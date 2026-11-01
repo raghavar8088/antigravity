@@ -21,7 +21,7 @@ from sl_core import DAY, H
 
 TFS = (15, 30, 45, 60, 90, 120, 180, 240)
 VF = ("none", "high", "low")
-FAMS = ("BZX", "RZX", "KZX", "ZEX", "HZX", "MXX")
+FAMS = ("BZX", "RZX", "KZX", "ZEX", "HZX", "MXX", "STX", "WRX", "CCX", "MFX", "FSX", "DOX", "PCX", "ORX")
 
 
 def r1(rng, lo, hi, step):
@@ -45,9 +45,26 @@ def sample(rng):
         hh = rng.randrange(0, 24)
         p = (hh, rng.randrange(1, min(12, 24 - hh) + 1), rng.choice(("short", "long")),
              rng.choice(("none", "vwap", "rsi1h", "day", "trend10", "highvol", "lowvol")), rng.choice(("all", "wkday", "wkend")))
-    else:
+    elif fam == "MXX":
         p = (r1(rng, 1.4, 2.4, 0.1), rng.choice((15, 30, 60)), rng.randrange(10, 29), rng.randrange(20, 41), rng.randrange(0, 24, 2),
              rng.choice((6, 8, 12, 24)), r1(rng, 1.0, 3.0, 0.5), rng.choice((4, 6, 8, 12)))
+    elif fam == "STX":
+        p = (rng.choice(TFS), rng.randrange(5, 31), rng.randrange(5, 31), r1(rng, 1.0, 4.0, 0.5), rng.choice(hold), rng.choice(SESS))
+    elif fam == "WRX":
+        p = (rng.choice(TFS), rng.randrange(5, 31), rng.randrange(3, 26), r1(rng, 1.0, 4.0, 0.5), rng.choice(hold), rng.choice(SESS))
+    elif fam == "CCX":
+        p = (rng.choice(TFS), rng.randrange(10, 31), rng.randrange(80, 260, 10), rng.choice(("fade", "follow")), rng.choice(hold), rng.choice(SESS))
+    elif fam == "MFX":
+        p = (rng.choice(TFS), rng.randrange(7, 29), rng.randrange(5, 36), r1(rng, 1.0, 4.0, 0.5), rng.choice(hold), rng.choice(SESS))
+    elif fam == "FSX":
+        p = (rng.choice(TFS), rng.randrange(5, 21), r1(rng, 1.0, 3.0, 0.1), r1(rng, 1.0, 4.0, 0.5), rng.choice(hold), rng.choice(SESS))
+    elif fam in ("DOX", "PCX"):
+        p = (r1(rng, 0.3, 2.0, 0.05), rng.choice((15, 30, 60)), rng.choice(("anchor", "half")), r1(rng, 0.25, 1.5, 0.25),
+             rng.choice((2, 4, 6, 8, 12, 0)), rng.choice(("all", "us", "eu", "asia")))
+    else:  # ORX
+        p = (rng.choice(("asia0", "hk", "lon", "nypre", "nyse", "uscl")), rng.choice((5, 10, 15, 20, 30, 45, 60, 90)),
+             rng.choice(("close", "stop", "retest")), rng.choice(("far", "mid")), rng.choice((0.0, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0)),
+             rng.choice(("none", "trend", "nr4")))
     return fam, p
 
 
@@ -115,12 +132,24 @@ def f_hzx(cx, hh, dur, side, filt, days):
     return [o for o in f_hz(cx, hh, dur, side, filt, "all") if cx.f.weekday[cx.kday[o["ts"] // DAY * DAY]] >= 5]
 
 
-FN7 = {"BZX": f_bzx, "RZX": f_rzx, "KZX": f_kzx, "ZEX": f_zex, "HZX": f_hzx, "MXX": f_mxx}
+import os_library as _L  # noqa: E402
+import os_library2 as _L2  # noqa: E402
+import os_library6 as _L6  # noqa: E402
+
+FN7 = {"BZX": f_bzx, "RZX": f_rzx, "KZX": f_kzx, "ZEX": f_zex, "HZX": f_hzx, "MXX": f_mxx,
+       "STX": _L.f_sto, "WRX": _L2.f_wpr, "CCX": _L2.f_cci, "MFX": _L6.f_mfi, "FSX": _L6.f_fsh, "DOX": _L6.f_dof,
+       "PCX": _L6.f_pcf, "ORX": _L.f_orb}
+BASE = {"STX": ("STO", _L.describe), "WRX": ("WPR", _L2.describe2), "CCX": ("CCI", _L2.describe2), "MFX": ("MFI", _L6.describe6),
+        "FSX": ("FSH", _L6.describe6), "DOX": ("DOF", _L6.describe6), "PCX": ("PCF", _L6.describe6), "ORX": ("ORB", _L.describe)}
 NAMES7 = {"BZX": "Bollinger fade", "RZX": "RSI fade", "KZX": "Keltner channel", "ZEX": "EMA z-score fade", "HZX": "Hour-of-day",
-          "MXX": "4h band + fast RSI"}
+          "MXX": "4h band + fast RSI", "STX": "Stochastic extreme", "WRX": "Williams %R", "CCX": "CCI extreme", "MFX": "Money Flow Index",
+          "FSX": "Fisher transform", "DOX": "Fade from the day's open", "PCX": "Fade from yesterday's close", "ORX": "Session-open breakout"}
 
 
 def describe7(fam, p):
+    if fam in BASE:
+        code, desc = BASE[fam]
+        return desc(code, p)
     S = {"all": "all day", "us": "US hours", "asia": "Asian hours", "eu": "European hours"}
     V = {"none": "", "high": ", high-volume bars only", "low": ", low-volume bars only"}
     if fam == "BZX":
