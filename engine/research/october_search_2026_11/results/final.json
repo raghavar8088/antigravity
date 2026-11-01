@@ -1,14 +1,103 @@
 {
  "generated": "2026-11-01",
  "funnel": {
-  "pool": 900,
-  "profitable": 157,
-  "consistent": 52,
-  "confirmed": 30
+  "pool": 1232,
+  "profitable": 241,
+  "consistent": 83,
+  "confirmed": 39
  },
  "rows": [
   {
+   "id": "N9|25|none",
+   "round": "Round 3",
+   "title": "1h RSI(14) under 25 / over 75",
+   "rules": "Fade hourly RSI extremes until RSI crosses 50 or 6 h pass; stop 1.5 ATR.",
+   "trades": 188,
+   "pnl": 10226.08,
+   "capital": 160000.0,
+   "return_pct": 6.39,
+   "coins_up": 14,
+   "orig_return_pct": 4.48,
+   "orig_pnl": 2685.58,
+   "orig_win": 50.0,
+   "new_return_pct": 7.54,
+   "new_pnl": 7540.5,
+   "new_win": 57.4,
+   "max_dd_pct": 2.84,
+   "halves": [
+    989.93,
+    1695.65
+   ]
+  },
+  {
+   "id": "N7f|1|none|all",
+   "round": "Round 3",
+   "title": "Pivot fade at R1/S1, all day",
+   "rules": "Rest limit orders at the pivot levels; target the pivot (or R1/S1), stop one level further.",
+   "trades": 343,
+   "pnl": 8853.05,
+   "capital": 160000.0,
+   "return_pct": 5.53,
+   "coins_up": 11,
+   "orig_return_pct": 3.78,
+   "orig_pnl": 2269.86,
+   "orig_win": 53.1,
+   "new_return_pct": 6.58,
+   "new_pnl": 6583.19,
+   "new_win": 55.8,
+   "max_dd_pct": 6.45,
+   "halves": [
+    1.08,
+    2268.77
+   ]
+  },
+  {
+   "id": "N11|short_below|15|3",
+   "round": "Round 3",
+   "title": "15:00 UTC for 3 h, short if below VWAP",
+   "rules": "Every day at 15:00 UTC take the position (short if below VWAP) and close 3 hours later.",
+   "trades": 251,
+   "pnl": 7971.87,
+   "capital": 160000.0,
+   "return_pct": 4.98,
+   "coins_up": 13,
+   "orig_return_pct": 5.16,
+   "orig_pnl": 3097.26,
+   "orig_win": 53.8,
+   "new_return_pct": 4.87,
+   "new_pnl": 4874.61,
+   "new_win": 45.0,
+   "max_dd_pct": 1.92,
+   "halves": [
+    2281.88,
+    815.37
+   ]
+  },
+  {
+   "id": "N11|short_below|15|4",
+   "round": "Round 3",
+   "title": "15:00 UTC for 4 h, short if below VWAP",
+   "rules": "Every day at 15:00 UTC take the position (short if below VWAP) and close 4 hours later.",
+   "trades": 251,
+   "pnl": 7259.42,
+   "capital": 160000.0,
+   "return_pct": 4.54,
+   "coins_up": 14,
+   "orig_return_pct": 4.8,
+   "orig_pnl": 2880.99,
+   "orig_win": 50.5,
+   "new_return_pct": 4.38,
+   "new_pnl": 4378.43,
+   "new_win": 44.4,
+   "max_dd_pct": 2.2,
+   "halves": [
+    2405.51,
+    475.47
+   ]
+  },
+  {
    "id": "G|15|4|short",
+   "round": "Rounds 1-2",
    "title": "Short 15:00-19:00 UTC",
    "rules": "Every day, sell at 15:00 UTC and close at 19:00 UTC. No stop.",
    "trades": 480,
@@ -29,7 +118,30 @@
    ]
   },
   {
+   "id": "N11|short_below|15|2",
+   "round": "Round 3",
+   "title": "15:00 UTC for 2 h, short if below VWAP",
+   "rules": "Every day at 15:00 UTC take the position (short if below VWAP) and close 2 hours later.",
+   "trades": 251,
+   "pnl": 6665.46,
+   "capital": 160000.0,
+   "return_pct": 4.17,
+   "coins_up": 14,
+   "orig_return_pct": 4.17,
+   "orig_pnl": 2500.79,
+   "orig_win": 54.9,
+   "new_return_pct": 4.16,
+   "new_pnl": 4164.67,
+   "new_win": 46.2,
+   "max_dd_pct": 1.5,
+   "halves": [
+    1870.83,
+    629.96
+   ]
+  },
+  {
    "id": "A|US|60|stop|far|3.0|trend",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, stop entry, stop at far side, 3R target, with 10-day trend",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
    "trades": 128,
@@ -51,6 +163,7 @@
   },
   {
    "id": "A|US|60|close|far|3.0|trend",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, market entry, stop at far side, 3R target, with 10-day trend",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
    "trades": 130,
@@ -72,6 +185,7 @@
   },
   {
    "id": "A|US|30|stop|far|none|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 30-min breakout, stop entry, stop at far side, no target, after a narrow-range day",
    "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -92,7 +206,30 @@
    ]
   },
   {
+   "id": "N11|short_below|13|4",
+   "round": "Round 3",
+   "title": "13:00 UTC for 4 h, short if below VWAP",
+   "rules": "Every day at 13:00 UTC take the position (short if below VWAP) and close 4 hours later.",
+   "trades": 250,
+   "pnl": 4979.88,
+   "capital": 160000.0,
+   "return_pct": 3.11,
+   "coins_up": 11,
+   "orig_return_pct": 2.66,
+   "orig_pnl": 1594.65,
+   "orig_win": 61.3,
+   "new_return_pct": 3.39,
+   "new_pnl": 3385.23,
+   "new_win": 57.3,
+   "max_dd_pct": 5.23,
+   "halves": [
+    1091.34,
+    503.31
+   ]
+  },
+  {
    "id": "A|US|15|retest|far|none|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 15-min breakout, limit retest, stop at far side, no target, after a narrow-range day",
    "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 79,
@@ -114,6 +251,7 @@
   },
   {
    "id": "A|US|15|retest|mid|none|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 15-min breakout, limit retest, stop at middle, no target, after a narrow-range day",
    "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 79,
@@ -135,6 +273,7 @@
   },
   {
    "id": "A|US|30|stop|far|3.0|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 30-min breakout, stop entry, stop at far side, 3R target, after a narrow-range day",
    "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -156,6 +295,7 @@
   },
   {
    "id": "A|US|60|close|far|1.5|trend",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, market entry, stop at far side, 1.5R target, with 10-day trend",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
    "trades": 130,
@@ -177,6 +317,7 @@
   },
   {
    "id": "A|US|60|close|far|1.5|none",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, market entry, stop at far side, 1.5R target",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close.",
    "trades": 303,
@@ -198,6 +339,7 @@
   },
   {
    "id": "A|US|60|retest|far|3.0|trend",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, limit retest, stop at far side, 3R target, with 10-day trend",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
    "trades": 106,
@@ -219,6 +361,7 @@
   },
   {
    "id": "A|US|60|stop|far|1.5|trend",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, stop entry, stop at far side, 1.5R target, with 10-day trend",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
    "trades": 128,
@@ -240,6 +383,7 @@
   },
   {
    "id": "A|US|60|close|far|none|trend",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, market entry, stop at far side, no target, with 10-day trend",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only in the direction of the last 10 days' move.",
    "trades": 130,
@@ -260,7 +404,30 @@
    ]
   },
   {
+   "id": "N11|short_below|13|3",
+   "round": "Round 3",
+   "title": "13:00 UTC for 3 h, short if below VWAP",
+   "rules": "Every day at 13:00 UTC take the position (short if below VWAP) and close 3 hours later.",
+   "trades": 250,
+   "pnl": 3930.27,
+   "capital": 160000.0,
+   "return_pct": 2.46,
+   "coins_up": 9,
+   "orig_return_pct": 1.59,
+   "orig_pnl": 952.19,
+   "orig_win": 49.5,
+   "new_return_pct": 2.98,
+   "new_pnl": 2978.08,
+   "new_win": 56.1,
+   "max_dd_pct": 5.77,
+   "halves": [
+    389.98,
+    562.21
+   ]
+  },
+  {
    "id": "A|US|60|stop|far|none|trend",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, stop entry, stop at far side, no target, with 10-day trend",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only in the direction of the last 10 days' move.",
    "trades": 128,
@@ -282,6 +449,7 @@
   },
   {
    "id": "A|US|60|stop|far|3.0|tight",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, stop entry, stop at far side, 3R target, tight opening range",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only when the opening range is narrower than its 20-day median.",
    "trades": 212,
@@ -303,6 +471,7 @@
   },
   {
    "id": "A|US|15|close|far|none|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 15-min breakout, market entry, stop at far side, no target, after a narrow-range day",
    "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -324,6 +493,7 @@
   },
   {
    "id": "A|US|15|close|mid|none|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 15-min breakout, market entry, stop at middle, no target, after a narrow-range day",
    "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -345,6 +515,7 @@
   },
   {
    "id": "A|US|30|retest|far|none|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 30-min breakout, limit retest, stop at far side, no target, after a narrow-range day",
    "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 75,
@@ -366,6 +537,7 @@
   },
   {
    "id": "A|US|15|retest|far|3.0|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 15-min breakout, limit retest, stop at far side, 3R target, after a narrow-range day",
    "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 79,
@@ -387,6 +559,7 @@
   },
   {
    "id": "A|US|30|retest|far|3.0|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 30-min breakout, limit retest, stop at far side, 3R target, after a narrow-range day",
    "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 75,
@@ -408,6 +581,7 @@
   },
   {
    "id": "A|US|60|retest|far|none|trend",
+   "round": "Rounds 1-2",
    "title": "US-open 60-min breakout, limit retest, stop at far side, no target, with 10-day trend",
    "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only in the direction of the last 10 days' move.",
    "trades": 106,
@@ -429,6 +603,7 @@
   },
   {
    "id": "A|US|15|close|far|3.0|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 15-min breakout, market entry, stop at far side, 3R target, after a narrow-range day",
    "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -449,7 +624,30 @@
    ]
   },
   {
+   "id": "N10|retest|far|3R|none",
+   "round": "Round 3",
+   "title": "US pre-market breakout, retest entry, stop far, target 3R",
+   "rules": "Range = 08:00-08:30 New York; trade the break from 08:30 for 2.5 h; exit at the NYSE close.",
+   "trades": 310,
+   "pnl": 2724.72,
+   "capital": 160000.0,
+   "return_pct": 1.7,
+   "coins_up": 12,
+   "orig_return_pct": 1.18,
+   "orig_pnl": 708.73,
+   "orig_win": 35.6,
+   "new_return_pct": 2.02,
+   "new_pnl": 2015.99,
+   "new_win": 35.4,
+   "max_dd_pct": 2.95,
+   "halves": [
+    461.13,
+    247.6
+   ]
+  },
+  {
    "id": "A|US|15|stop|far|3.0|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 15-min breakout, stop entry, stop at far side, 3R target, after a narrow-range day",
    "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -471,6 +669,7 @@
   },
   {
    "id": "A|US|30|close|far|1.5|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 30-min breakout, market entry, stop at far side, 1.5R target, after a narrow-range day",
    "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -492,6 +691,7 @@
   },
   {
    "id": "A|US|30|stop|far|1.5|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 30-min breakout, stop entry, stop at far side, 1.5R target, after a narrow-range day",
    "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -513,6 +713,7 @@
   },
   {
    "id": "G|15|2|short",
+   "round": "Rounds 1-2",
    "title": "Short 15:00-17:00 UTC",
    "rules": "Every day, sell at 15:00 UTC and close at 17:00 UTC. No stop.",
    "trades": 480,
@@ -534,6 +735,7 @@
   },
   {
    "id": "A|US|30|close|mid|3.0|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 30-min breakout, market entry, stop at middle, 3R target, after a narrow-range day",
    "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -555,6 +757,7 @@
   },
   {
    "id": "A|US|30|stop|mid|3.0|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 30-min breakout, stop entry, stop at middle, 3R target, after a narrow-range day",
    "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 80,
@@ -575,7 +778,30 @@
    ]
   },
   {
+   "id": "N10|stop|far|3R|trend",
+   "round": "Round 3",
+   "title": "US pre-market breakout, stop entry, stop far, target 3R, with 10-day trend",
+   "rules": "Range = 08:00-08:30 New York; trade the break from 08:30 for 2.5 h; exit at the NYSE close.",
+   "trades": 177,
+   "pnl": 1299.71,
+   "capital": 160000.0,
+   "return_pct": 0.81,
+   "coins_up": 9,
+   "orig_return_pct": 2.15,
+   "orig_pnl": 1288.12,
+   "orig_win": 44.6,
+   "new_return_pct": 0.01,
+   "new_pnl": 11.59,
+   "new_win": 33.0,
+   "max_dd_pct": 2.65,
+   "halves": [
+    1275.24,
+    12.88
+   ]
+  },
+  {
    "id": "B|US1h|0.5|trend|open",
+   "round": "Rounds 1-2",
    "title": "Follow a 0.5 ATR move 1 h after the US open, with 10-day trend, stop at day open",
    "rules": "At 1 h after the NYSE open (weekdays), if price has moved at least 0.5 x the 14-day ATR from the 00:00 UTC open, follow the move at market until 00:00 UTC. Stop at the day open. Only in the direction of the last 10 days' move.",
    "trades": 39,
@@ -597,6 +823,7 @@
   },
   {
    "id": "A|US|30|retest|far|1.5|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 30-min breakout, limit retest, stop at far side, 1.5R target, after a narrow-range day",
    "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 75,
@@ -618,6 +845,7 @@
   },
   {
    "id": "A|US|15|retest|mid|3.0|nr4",
+   "round": "Rounds 1-2",
    "title": "US-open 15-min breakout, limit retest, stop at middle, 3R target, after a narrow-range day",
    "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
    "trades": 79,

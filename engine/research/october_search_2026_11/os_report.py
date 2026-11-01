@@ -29,8 +29,11 @@ def title(vid, fallback):
 def main():
     r1 = json.load(open(os.path.join(RES, "round1.json"), encoding="utf-8"))
     r2 = json.load(open(os.path.join(RES, "round2.json"), encoding="utf-8"))
+    r3p = os.path.join(RES, "round3.json")
+    r3 = json.load(open(r3p, encoding="utf-8")) if os.path.exists(r3p) else None
+    pool = [(x, "Rounds 1-2") for x in r2["results"]] + ([(x, "Round 3") for x in r3["results"]] if r3 else [])
     rows = []
-    for x in r2["results"]:
+    for x, rnd in pool:
         if not x["confirmed"]:
             continue
         a, b = x["original6"], x["new10"]
@@ -38,13 +41,14 @@ def main():
         cap = a["capital"] + b.get("capital", 0)
         trades = a["trades"] + b["trades"]
         coins_up = a["coins_positive"] + b["coins_positive"]
-        rows.append({"id": x["id"], "title": title(x["id"], x["title"]), "rules": x["rules"], "trades": trades, "pnl": round(pnl, 2),
+        rows.append({"id": x["id"], "round": rnd, "title": title(x["id"], x["title"]), "rules": x["rules"], "trades": trades, "pnl": round(pnl, 2),
                      "capital": cap, "return_pct": round(pnl / cap * 100, 2), "coins_up": coins_up,
                      "orig_return_pct": a["return_pct"], "orig_pnl": a["pnl"], "orig_win": a["win_rate"],
                      "new_return_pct": b["return_pct"], "new_pnl": b["pnl"], "new_win": b.get("win_rate"),
                      "max_dd_pct": max(a["max_dd_pct"], b.get("max_dd_pct", 0)), "halves": a["halves"]})
     rows.sort(key=lambda r: -r["return_pct"])
-    funnel = {"pool": r1["pool"], "profitable": r1["profitable"], "consistent": r1["consistent"], "confirmed": len(rows)}
+    funnel = {"pool": r1["pool"] + (r3["pool"] if r3 else 0), "profitable": r1["profitable"] + (r3["profitable"] if r3 else 0),
+              "consistent": r1["consistent"] + (r3["consistent"] if r3 else 0), "confirmed": len(rows)}
     data = {"generated": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d"), "funnel": funnel, "rows": rows}
     json.dump(data, open(os.path.join(RES, "final.json"), "w", encoding="utf-8"), indent=1)
     tpl = open(os.path.join(HERE, "report_template.html"), encoding="utf-8").read()

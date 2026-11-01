@@ -86,9 +86,9 @@ const pct = v => (v < 0 ? MINUS : "+") + fmt(v, 2) + "%";
 const usd = v => (v < 0 ? MINUS : "+") + "$" + fmt(v, 0);
 const R = D.rows, f = D.funnel;
 document.getElementById("lede").textContent =
-  R.length + " intraday strategies made money in October 2026 on the coins they were found on and again on 10 coins they were not. The best returned " +
+  R.length + " intraday strategies made money in October 2026 on the coins they were found on and again on 10 coins they were not, out of " + f.pool.toLocaleString("en-US") + " tested. The best returned " +
   pct(R[0].return_pct) + " for the month across 16 coins without leverage.";
-const steps = [["Strategies tested on October (6 coins)", f.pool], ["Profitable in October", f.profitable], ["Consistent through the month", f.consistent], ["Confirmed on 10 more coins", f.confirmed]];
+const steps = [["Strategies tested on October (6 coins), 3 rounds", f.pool], ["Profitable in October", f.profitable], ["Consistent through the month", f.consistent], ["Confirmed on 10 more coins", f.confirmed]];
 for (const [l, n] of steps) document.getElementById("funnel").append(h("div", { class: "frow" }, h("div", { class: "lab" }, l),
   h("div", {}, h("div", { class: "bar", style: "width:" + (100 * n / f.pool).toFixed(1) + "%" })), h("div", { class: "val" }, n)));
 const t = document.getElementById("t");
