@@ -1,0 +1,155 @@
+<title>Walk-Forward Swing Test</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,600..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one study read top to bottom. Verdict figures, the finalists table, the two survivors month by month, then rules and method. */
+:root {
+  --paper: #f3f5f3; --panel: #ffffff; --ink: #141816; --ink-2: #47514c; --ink-3: #75807a; --rule: #dce1de; --grid: #ebefec;
+  --gain: #1f7a4f; --loss: #d23f3e; --bar: #2a78d6; --test: #e8f0fb; --pill-pass: #dcefe4; --pill-fail: #f6e1e0;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --paper: #0f1211; --panel: #161b19; --ink: #e7ecea; --ink-2: #b1bbb6; --ink-3: #86918c; --rule: #2a322e; --grid: #212824;
+    --gain: #5cc48f; --loss: #e66767; --bar: #3987e5; --test: #16233a; --pill-pass: #173527; --pill-fail: #3a1f1f; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --paper: #0f1211; --panel: #161b19; --ink: #e7ecea; --ink-2: #b1bbb6; --ink-3: #86918c; --rule: #2a322e; --grid: #212824;
+  --gain: #5cc48f; --loss: #e66767; --bar: #3987e5; --test: #16233a; --pill-pass: #173527; --pill-fail: #3a1f1f; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.6; }
+.page { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: grid; gap: 48px; }
+section, header { display: grid; gap: 16px; min-width: 0; }
+h1, h2 { font-family: var(--font-display); font-stretch: 85%; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.04; }
+h2 { font-size: clamp(1.4rem, 3vw, 1.85rem); font-weight: 750; }
+p { margin: 0; max-width: 70ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 1.1rem; color: var(--ink-2); }
+.note { font-size: 0.86rem; color: var(--ink-3); }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.fig { display: grid; gap: 4px; align-content: start; }
+.fig .n { font-family: var(--font-display); font-stretch: 85%; font-weight: 750; font-size: 2rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.fig .l { font-size: 0.88rem; color: var(--ink-2); }
+.table-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.75rem; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th.l, td.l { text-align: left; }
+td.strat { white-space: normal; min-width: 240px; text-align: left; }
+td.strat b { font-weight: 600; }
+td.strat span, td .sub { display: block; color: var(--ink-3); font-size: 0.76rem; font-family: var(--font-mono); font-weight: 400; }
+tr.testrow td { background: var(--test); }
+tr.sum td { font-weight: 600; border-top: 1px solid var(--rule); }
+.pos { color: var(--gain); }
+.neg { color: var(--loss); }
+.pill { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 0.76rem; font-weight: 600; letter-spacing: 0.03em; }
+.pill.pass { background: var(--pill-pass); color: var(--gain); }
+.pill.fail { background: var(--pill-fail); color: var(--loss); }
+.prose { display: grid; gap: 12px; }
+ol.rules { margin: 0; padding-left: 1.5em; display: grid; gap: 10px; max-width: 90ch; }
+ol.rules b { font-weight: 600; }
+.key { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 2px; background: var(--test); border: 1px solid var(--rule); vertical-align: -0.1em; margin-right: 6px; }
+</style>
+
+<main class="page">
+  <header>
+    <p class="eyebrow">Chosen on Jan–Jun 2026 · tested unchanged on Jul–Oct 2026 · 16 crypto perpetuals · daily decisions · Delta India fees</p>
+    <h1>Walk-Forward Swing Test</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+  <section>
+    <div class="figs" id="figs"></div>
+  </section>
+  <section>
+    <h2>The finalists</h2>
+    <p>The best strategy of each family on January–June, by consistency of daily returns, then run with the same rules on July–October. Pass = a profit over July–October and profit in at least 3 of its 4 months.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-fin"></table></div></div>
+    <p class="note">Return % is on each strategy's own capital: $10,000 per coin on 16 coins ($160,000), or $10,000 per position for the cross-coin strategies (2 × positions per side). No leverage.</p>
+  </section>
+  <section>
+    <h2>The two that passed, month by month</h2>
+    <p><span class="key"></span>Shaded months are the test: the strategies had never seen them when they were chosen.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-month"></table></div></div>
+  </section>
+  <section>
+    <h2>What this means</h2>
+    <div class="prose" id="prose"></div>
+  </section>
+  <section>
+    <h2>Rules of the two</h2>
+    <ol class="rules" id="rules"></ol>
+  </section>
+  <section>
+    <h2>How the test was run</h2>
+    <div class="prose">
+      <p>Every position is decided at the daily close (00:00 UTC) from finished days only and held for the next day. Each change of position pays Delta India's taker fee (0.05% + 18% GST) plus slippage of 2 bp (BTC, ETH), 4 bp (SOL, XRP, DOGE, BNB) or 5 bp (the other ten), and every open position pays or earns that day's real funding. Indicators warm up on July 2024 to December 2025.</p>
+      <p>Chosen = a profit over January–June, profit in at least 4 of the 6 months, at least 6 entries and a worst drawdown of at most 25%. These rules, the windows and every strategy were written into the code and fingerprinted before the first run; each finalist was rebuilt on data cut at 1 September with identical results before the cut.</p>
+    </div>
+  </section>
+  <p class="note" id="foot"></p>
+</main>
+
+<script>
+const D = {"fingerprint":"82a2d915f67f3a5c","registered":"2026-11-01T17:15:10+00:00","families":{"T1 Price vs moving average":{"variants":30,"chosen":4},"T2 Moving-average crossover":{"variants":24,"chosen":3},"T3 EMA crossover":{"variants":12,"chosen":0},"T4 Donchian breakout":{"variants":15,"chosen":3},"T5 Time-series momentum":{"variants":54,"chosen":9},"M1 RSI dip-buying":{"variants":40,"chosen":10},"M2 Bollinger mean reversion":{"variants":24,"chosen":0},"M3 N-day low/high reversal":{"variants":32,"chosen":1},"X1 Cross-coin momentum":{"variants":40,"chosen":6},"X2 Cross-coin reversal":{"variants":40,"chosen":2},"X3 Funding carry":{"variants":32,"chosen":2},"S1 One-day momentum / reversal":{"variants":10,"chosen":1},"B1 BTC trend steers all coins":{"variants":15,"chosen":5},"V1 Trend with a volatility filter":{"variants":8,"chosen":1},"D1 Day of the week":{"variants":14,"chosen":3}},"finalists":[{"id":"X3|7|2|weekly","family":"Funding carry","title":"Funding carry, 7-day average, 2 each side, weekly","rules":"Every Monday sell the 2 coins with the highest average funding rate over the last 7 days and buy the 2 with the lowest; hold until the next rebalance. The shorts collect funding from crowded longs.","capital":40000.0,"choose":{"pnl":4469.53,"return_pct":11.17,"months_up":5,"t_daily":0.66,"max_dd_pct":11.99,"entries":59,"months":{"2026-01":115.49,"2026-02":2794.17,"2026-03":144.42,"2026-04":-13.07,"2026-05":114.41,"2026-06":1314.11}},"test":{"pnl":11281.45,"return_pct":28.2,"months_up":3,"max_dd_pct":9.16,"entries":48,"months":{"2026-07":1996.98,"2026-08":5407.46,"2026-09":4149.27,"2026-10":-272.25}},"pass":true},{"id":"X2|5|1|weekly","family":"Cross-coin reversal","title":"Cross-coin 5-day reversal, 1 each side, weekly","rules":"Every Monday buy the 1 coin that fell most over the last 5 days and sell the 1 that rose most; hold until the next rebalance.","capital":20000.0,"choose":{"pnl":4591.34,"return_pct":22.96,"months_up":4,"t_daily":0.83,"max_dd_pct":19.89,"entries":47,"months":{"2026-01":1041.17,"2026-02":-160.26,"2026-03":595.98,"2026-04":-967.23,"2026-05":2675.06,"2026-06":1406.62}},"test":{"pnl":2009.62,"return_pct":10.05,"months_up":3,"max_dd_pct":21.31,"entries":33,"months":{"2026-07":1875.55,"2026-08":1126.25,"2026-09":-1541.82,"2026-10":549.64}},"pass":true},{"id":"X1|56|1|daily","family":"Cross-coin momentum","title":"Cross-coin 56-day momentum, 1 each side, daily","rules":"Buy the 1 coins that rose most over the last 56 days and sell the 1 that fell most; rebalance daily.","capital":20000.0,"choose":{"pnl":7236.7,"return_pct":36.18,"months_up":5,"t_daily":1.0,"max_dd_pct":16.44,"entries":40,"months":{"2026-01":-328.37,"2026-02":403.4,"2026-03":382.94,"2026-04":1377.79,"2026-05":3650.03,"2026-06":1750.9}},"test":{"pnl":-339.89,"return_pct":-1.7,"months_up":1,"max_dd_pct":20.59,"entries":40,"months":{"2026-07":-1515.29,"2026-08":-521.8,"2026-09":2573.16,"2026-10":-875.96}},"pass":false},{"id":"V1|20|LS|low","family":"Trend with a volatility filter","title":"20-day trend (long and short) only when volatility is low","rules":"Price vs 20-day average, traded only while 20-day volatility is below its 180-day median.","capital":160000.0,"choose":{"pnl":47141.82,"return_pct":29.46,"months_up":4,"t_daily":1.29,"max_dd_pct":22.74,"entries":275,"months":{"2026-01":22233.48,"2026-02":17668.44,"2026-03":-15031.18,"2026-04":-15221.4,"2026-05":8161.69,"2026-06":29330.81}},"test":{"pnl":-3784.45,"return_pct":-2.37,"months_up":2,"max_dd_pct":12.27,"entries":187,"months":{"2026-07":-15572.97,"2026-08":11377.11,"2026-09":-3873.9,"2026-10":4285.32}},"pass":false},{"id":"M3|5|3|LS","family":"N-day low/high reversal","title":"5-day low reversal, hold 3 days (long and short)","rules":"Buy a coin whose close is its lowest of the last 5 days (sell a 5-day high); hold 3 days.","capital":160000.0,"choose":{"pnl":19007.27,"return_pct":11.88,"months_up":4,"t_daily":0.4,"max_dd_pct":24.73,"entries":533,"months":{"2026-01":1427.38,"2026-02":19688.21,"2026-03":24647.67,"2026-04":9871.18,"2026-05":-16735.37,"2026-06":-19891.79}},"test":{"pnl":-7331.84,"return_pct":-4.58,"months_up":1,"max_dd_pct":21.32,"entries":358,"months":{"2026-07":-201.69,"2026-08":-9848.65,"2026-09":-20662.72,"2026-10":23381.22}},"pass":false},{"id":"S1|0.5|mom","family":"One-day momentum / reversal","title":"One-day momentum after a 0.5-sd day","rules":"After a day that moved more than 0.5 standard deviations, hold each coin with that move for one day.","capital":160000.0,"choose":{"pnl":24879.66,"return_pct":15.55,"months_up":5,"t_daily":0.6,"max_dd_pct":23.52,"entries":1103,"months":{"2026-01":14500.2,"2026-02":2320.26,"2026-03":1315.88,"2026-04":-18562.58,"2026-05":4321.03,"2026-06":20984.87}},"test":{"pnl":-9920.38,"return_pct":-6.2,"months_up":2,"max_dd_pct":15.92,"entries":780,"months":{"2026-07":-5083.03,"2026-08":11237.51,"2026-09":4364.29,"2026-10":-20439.15}},"pass":false},{"id":"D1|0|long","family":"Day of the week","title":"Monday long","rules":"Buy all 16 coins at Monday's 00:00 UTC open and close 24 hours later.","capital":160000.0,"choose":{"pnl":36628.17,"return_pct":22.89,"months_up":5,"t_daily":1.78,"max_dd_pct":4.96,"entries":416,"months":{"2026-01":2794.05,"2026-02":-2993.67,"2026-03":25408.07,"2026-04":6333.84,"2026-05":563.43,"2026-06":4522.45}},"test":{"pnl":-11301.18,"return_pct":-7.06,"months_up":2,"max_dd_pct":9.34,"entries":272,"months":{"2026-07":-9189.05,"2026-08":817.39,"2026-09":7173.44,"2026-10":-10102.96}},"pass":false},{"id":"B1|20|SO","family":"BTC trend steers all coins","title":"BTC 20-day trend steers all coins (short only)","rules":"When BTC closed below its 20-day average, hold all 16 coins short; otherwise stay out.","capital":160000.0,"choose":{"pnl":66345.16,"return_pct":41.47,"months_up":5,"t_daily":1.2,"max_dd_pct":18.27,"entries":144,"months":{"2026-01":16396.9,"2026-02":13845.57,"2026-03":-7904.78,"2026-04":212.14,"2026-05":9188.2,"2026-06":34607.14}},"test":{"pnl":-22404.87,"return_pct":-14.0,"months_up":1,"max_dd_pct":25.49,"entries":128,"months":{"2026-07":-20170.73,"2026-08":-4566.87,"2026-09":-13457.44,"2026-10":15790.17}},"pass":false},{"id":"T4|30/15|SO","family":"Donchian breakout","title":"Donchian 30/15 breakout (short only)","rules":"Trade a close beyond the last 30 days' high or low (short only); exit on a close beyond the last 15 days' opposite extreme.","capital":160000.0,"choose":{"pnl":34741.23,"return_pct":21.71,"months_up":4,"t_daily":0.69,"max_dd_pct":21.98,"entries":34,"months":{"2026-01":3669.71,"2026-02":12091.88,"2026-03":-9807.73,"2026-04":-4063.51,"2026-05":2347.68,"2026-06":30503.19}},"test":{"pnl":-22660.6,"return_pct":-14.16,"months_up":0,"max_dd_pct":14.37,"entries":16,"months":{"2026-07":-9052.64,"2026-08":-9505.82,"2026-09":-616.91,"2026-10":-3485.23}},"pass":false},{"id":"M1|2|20|70|sma200|LS","family":"RSI dip-buying","title":"RSI(2) dip-buying under 20, exit above 70, above the 200-day average (long and short)","rules":"Buy a coin when its daily RSI(2) closes under 20 (sell over 80 if long and short); exit when RSI crosses 70 or after 5 days.","capital":160000.0,"choose":{"pnl":29123.28,"return_pct":18.2,"months_up":4,"t_daily":1.29,"max_dd_pct":7.96,"entries":213,"months":{"2026-01":-180.56,"2026-02":10667.34,"2026-03":8666.1,"2026-04":7906.95,"2026-05":-3328.93,"2026-06":5392.38}},"test":{"pnl":-32818.09,"return_pct":-20.51,"months_up":1,"max_dd_pct":24.95,"entries":164,"months":{"2026-07":-1932.4,"2026-08":-23227.7,"2026-09":-9956.23,"2026-10":2298.24}},"pass":false},{"id":"T1|100|SO","family":"Price vs moving average","title":"Price vs 100-day average (short only)","rules":"Every day, hold each coin short when yesterday's close is below its 100-day average, otherwise stay out.","capital":160000.0,"choose":{"pnl":61702.33,"return_pct":38.56,"months_up":4,"t_daily":1.01,"max_dd_pct":23.31,"entries":43,"months":{"2026-01":20285.09,"2026-02":12067.13,"2026-03":1242.99,"2026-04":-8014.95,"2026-05":-629.83,"2026-06":36751.9}},"test":{"pnl":-36172.56,"return_pct":-22.61,"months_up":0,"max_dd_pct":23.58,"entries":30,"months":{"2026-07":-6912.59,"2026-08":-21806.67,"2026-09":-6349.32,"2026-10":-1103.98}},"pass":false},{"id":"T2|20/100|SO","family":"Moving-average crossover","title":"20/100-day moving-average crossover (short only)","rules":"Hold each coin in the direction of the 20-day moving-average against the 100-day one (short only).","capital":160000.0,"choose":{"pnl":49783.62,"return_pct":31.11,"months_up":4,"t_daily":0.83,"max_dd_pct":23.03,"entries":15,"months":{"2026-01":20149.86,"2026-02":12638.16,"2026-03":1597.95,"2026-04":-8082.85,"2026-05":-6342.93,"2026-06":29823.41}},"test":{"pnl":-37651.14,"return_pct":-23.53,"months_up":1,"max_dd_pct":24.41,"entries":3,"months":{"2026-07":-6847.25,"2026-08":-23259.06,"2026-09":-8537.52,"2026-10":992.68}},"pass":false},{"id":"T5|90|daily|SO","family":"Time-series momentum","title":"90-day momentum, daily (short only)","rules":"Hold each coin in the direction of its 90-day price change (short only), decided daily.","capital":160000.0,"choose":{"pnl":59003.4,"return_pct":36.88,"months_up":4,"t_daily":0.97,"max_dd_pct":22.29,"entries":45,"months":{"2026-01":20870.65,"2026-02":12119.64,"2026-03":2335.43,"2026-04":-7343.11,"2026-05":-4187.24,"2026-06":35208.04}},"test":{"pnl":-43810.76,"return_pct":-27.38,"months_up":0,"max_dd_pct":27.38,"entries":21,"months":{"2026-07":-6345.63,"2026-08":-25936.73,"2026-09":-11434.12,"2026-10":-94.28}},"pass":false}],"selection":{"chosen":50,"not_chosen":340,"chosen_test_profitable_pct":18.0,"not_chosen_test_profitable_pct":45.0,"chosen_test_median_pct":-12.81,"not_chosen_test_median_pct":-2.4,"rank_corr_choose_vs_test":-0.429},"bench":{"Buy and hold all 16 coins":{"choose":-43.94,"test":34.59,"months":{"2026-01":-14.02,"2026-02":-8.65,"2026-03":-0.86,"2026-04":4.88,"2026-05":1.12,"2026-06":-26.4,"2026-07":3.75,"2026-08":17.77,"2026-09":29.55,"2026-10":-16.48}},"Buy and hold BTC":{"choose":-34.76,"test":28.18,"months":{"2026-01":-10.38,"2026-02":-13.61,"2026-03":3.04,"2026-04":11.9,"2026-05":-3.5,"2026-06":-22.21,"2026-07":6.86,"2026-08":22.46,"2026-09":6.44,"2026-10":-7.58}}},"variants":390};
+const MINUS = "−";
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null) continue; if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+const fmt = (v, d) => Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = v => (v < 0 ? MINUS : "+") + fmt(v, 2) + "%";
+const usd = v => (v < 0 ? MINUS : "+") + "$" + fmt(v, 0);
+const sign = v => v < 0 ? "neg" : "pos";
+const F = D.finalists, P = F.filter(r => r.pass), sel = D.selection, BH = D.bench["Buy and hold all 16 coins"];
+const nChosen = sel.chosen;
+document.getElementById("lede").textContent = D.variants + " multi-day strategies were judged on January to June 2026 only. " + nChosen +
+  " cleared the bar, the best of each family went forward, and they were then run unchanged on July to October. " + P.length + " of " + F.length +
+  " made money in the test, and both of those bet on coins against each other rather than on the market's direction.";
+const figs = [[P.length + " of " + F.length, "finalists passed the July–October test"],
+  [fmt(sel.chosen_test_profitable_pct, 0) + "%", "of the " + nChosen + " chosen strategies made money in the test, against " + fmt(sel.not_chosen_test_profitable_pct, 0) + "% of the " + sel.not_chosen + " that were not chosen"],
+  [pct(BH.choose) + " → " + pct(BH.test), "buying and holding all 16 coins, January–June then July–October"]];
+for (const [n, l] of figs) document.getElementById("figs").append(h("div", { class: "fig" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l)));
+const tf = document.getElementById("t-fin");
+tf.append(h("thead", {}, h("tr", {}, ["Strategy", "Capital", "Jan–Jun", "Months up", "Jul–Oct (test)", "Months up", "Result"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+const tb = h("tbody");
+F.forEach(r => tb.append(h("tr", {}, h("td", { class: "strat" }, h("b", {}, r.title), h("span", {}, r.family + " · " + r.id)),
+  h("td", {}, "$" + fmt(r.capital, 0)), h("td", { class: sign(r.choose.return_pct) }, pct(r.choose.return_pct)), h("td", {}, r.choose.months_up + " of 6"),
+  h("td", { class: sign(r.test.return_pct) }, pct(r.test.return_pct)), h("td", {}, r.test.months_up + " of 4"),
+  h("td", {}, h("span", { class: "pill " + (r.pass ? "pass" : "fail") }, r.pass ? "PASS" : "fail")))));
+tf.append(tb);
+const MONTHS = ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"];
+const MN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"];
+const tm = document.getElementById("t-month");
+const BTC = D.bench["Buy and hold BTC"];
+tm.append(h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Month 2026"), P.map(r => h("th", {}, r.title.split(",")[0])), h("th", {}, "Hold all 16 coins"), h("th", {}, "Hold BTC"))));
+const mb = h("tbody");
+MONTHS.forEach((m, i) => {
+  const cells = P.map(r => { const v = (r.choose.months[m] ?? r.test.months[m]); return h("td", { class: sign(v) }, pct(v / r.capital * 100), h("span", { class: "sub" }, usd(v))); });
+  mb.append(h("tr", { class: i >= 6 ? "testrow" : null }, h("td", { class: "l" }, MN[i] + (i >= 6 ? " (test)" : "")), cells,
+    h("td", { class: sign(BH.months[m]) }, pct(BH.months[m])), h("td", { class: sign(BTC.months[m]) }, pct(BTC.months[m]))));
+});
+mb.append(h("tr", { class: "sum" }, h("td", { class: "l" }, "Jan–Jun (chosen on)"), P.map(r => h("td", { class: sign(r.choose.pnl) }, pct(r.choose.return_pct), h("span", { class: "sub" }, usd(r.choose.pnl)))),
+  h("td", { class: sign(BH.choose) }, pct(BH.choose)), h("td", { class: sign(BTC.choose) }, pct(BTC.choose))));
+mb.append(h("tr", { class: "sum" }, h("td", { class: "l" }, "Jul–Oct (test)"), P.map(r => h("td", { class: sign(r.test.pnl) }, pct(r.test.return_pct), h("span", { class: "sub" }, usd(r.test.pnl)))),
+  h("td", { class: sign(BH.test) }, pct(BH.test)), h("td", { class: sign(BTC.test) }, pct(BTC.test))));
+tm.append(mb);
+const prose = document.getElementById("prose");
+[
+  "Choosing on January–June did not pick July–October winners. The strategies that cleared the bar did worse in the test than the ones that did not (median " +
+    pct(sel.chosen_test_median_pct) + " against " + pct(sel.not_chosen_test_median_pct) + "), and the rank correlation between the two periods was " +
+    sel.rank_corr_choose_vs_test.toFixed(2) + ". The market turned: the 16 coins fell " + fmt(-BH.choose, 1) + "% in the first half and rose " + fmt(BH.test, 1) +
+    "% in the second, so the strategies that profited from the fall by selling lost when prices rose.",
+  "The two that passed hold the same amount long and short, so a rising or falling market moves both sides together. One collects funding from the most crowded coins, the other buys last week's biggest losers and sells the biggest winners.",
+  "Two passes out of thirteen is close to what chance alone would give: a strategy with no edge makes money in 3 of 4 months about one time in four. Treat both as candidates for a forward test in November with these exact rules, not as proven.",
+].forEach(t => prose.append(h("p", {}, t)));
+const ol = document.getElementById("rules");
+P.forEach(r => ol.append(h("li", {}, h("b", {}, r.title + ": "), r.rules + " Capital $" + fmt(r.capital, 0) + "; " + r.test.entries + " entries in the test.")));
+document.getElementById("foot").textContent = "Protocol fingerprint " + D.fingerprint + ", registered " + D.registered.replace("T", " ") +
+  ". Code and results: engine/research/walkforward_2026_11 (wf_fetch.py, wf_lab.py, wf_report.py, results/).";
+</script>

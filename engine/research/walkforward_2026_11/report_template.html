@@ -1,0 +1,155 @@
+<title>Walk-Forward Swing Test</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,600..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one study read top to bottom. Verdict figures, the finalists table, the two survivors month by month, then rules and method. */
+:root {
+  --paper: #f3f5f3; --panel: #ffffff; --ink: #141816; --ink-2: #47514c; --ink-3: #75807a; --rule: #dce1de; --grid: #ebefec;
+  --gain: #1f7a4f; --loss: #d23f3e; --bar: #2a78d6; --test: #e8f0fb; --pill-pass: #dcefe4; --pill-fail: #f6e1e0;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --paper: #0f1211; --panel: #161b19; --ink: #e7ecea; --ink-2: #b1bbb6; --ink-3: #86918c; --rule: #2a322e; --grid: #212824;
+    --gain: #5cc48f; --loss: #e66767; --bar: #3987e5; --test: #16233a; --pill-pass: #173527; --pill-fail: #3a1f1f; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --paper: #0f1211; --panel: #161b19; --ink: #e7ecea; --ink-2: #b1bbb6; --ink-3: #86918c; --rule: #2a322e; --grid: #212824;
+  --gain: #5cc48f; --loss: #e66767; --bar: #3987e5; --test: #16233a; --pill-pass: #173527; --pill-fail: #3a1f1f; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.6; }
+.page { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: grid; gap: 48px; }
+section, header { display: grid; gap: 16px; min-width: 0; }
+h1, h2 { font-family: var(--font-display); font-stretch: 85%; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.04; }
+h2 { font-size: clamp(1.4rem, 3vw, 1.85rem); font-weight: 750; }
+p { margin: 0; max-width: 70ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 1.1rem; color: var(--ink-2); }
+.note { font-size: 0.86rem; color: var(--ink-3); }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.fig { display: grid; gap: 4px; align-content: start; }
+.fig .n { font-family: var(--font-display); font-stretch: 85%; font-weight: 750; font-size: 2rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.fig .l { font-size: 0.88rem; color: var(--ink-2); }
+.table-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.75rem; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th.l, td.l { text-align: left; }
+td.strat { white-space: normal; min-width: 240px; text-align: left; }
+td.strat b { font-weight: 600; }
+td.strat span, td .sub { display: block; color: var(--ink-3); font-size: 0.76rem; font-family: var(--font-mono); font-weight: 400; }
+tr.testrow td { background: var(--test); }
+tr.sum td { font-weight: 600; border-top: 1px solid var(--rule); }
+.pos { color: var(--gain); }
+.neg { color: var(--loss); }
+.pill { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 0.76rem; font-weight: 600; letter-spacing: 0.03em; }
+.pill.pass { background: var(--pill-pass); color: var(--gain); }
+.pill.fail { background: var(--pill-fail); color: var(--loss); }
+.prose { display: grid; gap: 12px; }
+ol.rules { margin: 0; padding-left: 1.5em; display: grid; gap: 10px; max-width: 90ch; }
+ol.rules b { font-weight: 600; }
+.key { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 2px; background: var(--test); border: 1px solid var(--rule); vertical-align: -0.1em; margin-right: 6px; }
+</style>
+
+<main class="page">
+  <header>
+    <p class="eyebrow">Chosen on Jan–Jun 2026 · tested unchanged on Jul–Oct 2026 · 16 crypto perpetuals · daily decisions · Delta India fees</p>
+    <h1>Walk-Forward Swing Test</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+  <section>
+    <div class="figs" id="figs"></div>
+  </section>
+  <section>
+    <h2>The finalists</h2>
+    <p>The best strategy of each family on January–June, by consistency of daily returns, then run with the same rules on July–October. Pass = a profit over July–October and profit in at least 3 of its 4 months.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-fin"></table></div></div>
+    <p class="note">Return % is on each strategy's own capital: $10,000 per coin on 16 coins ($160,000), or $10,000 per position for the cross-coin strategies (2 × positions per side). No leverage.</p>
+  </section>
+  <section>
+    <h2>The two that passed, month by month</h2>
+    <p><span class="key"></span>Shaded months are the test: the strategies had never seen them when they were chosen.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-month"></table></div></div>
+  </section>
+  <section>
+    <h2>What this means</h2>
+    <div class="prose" id="prose"></div>
+  </section>
+  <section>
+    <h2>Rules of the two</h2>
+    <ol class="rules" id="rules"></ol>
+  </section>
+  <section>
+    <h2>How the test was run</h2>
+    <div class="prose">
+      <p>Every position is decided at the daily close (00:00 UTC) from finished days only and held for the next day. Each change of position pays Delta India's taker fee (0.05% + 18% GST) plus slippage of 2 bp (BTC, ETH), 4 bp (SOL, XRP, DOGE, BNB) or 5 bp (the other ten), and every open position pays or earns that day's real funding. Indicators warm up on July 2024 to December 2025.</p>
+      <p>Chosen = a profit over January–June, profit in at least 4 of the 6 months, at least 6 entries and a worst drawdown of at most 25%. These rules, the windows and every strategy were written into the code and fingerprinted before the first run; each finalist was rebuilt on data cut at 1 September with identical results before the cut.</p>
+    </div>
+  </section>
+  <p class="note" id="foot"></p>
+</main>
+
+<script>
+const D = /*DATA*/null;
+const MINUS = "−";
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null) continue; if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+const fmt = (v, d) => Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = v => (v < 0 ? MINUS : "+") + fmt(v, 2) + "%";
+const usd = v => (v < 0 ? MINUS : "+") + "$" + fmt(v, 0);
+const sign = v => v < 0 ? "neg" : "pos";
+const F = D.finalists, P = F.filter(r => r.pass), sel = D.selection, BH = D.bench["Buy and hold all 16 coins"];
+const nChosen = sel.chosen;
+document.getElementById("lede").textContent = D.variants + " multi-day strategies were judged on January to June 2026 only. " + nChosen +
+  " cleared the bar, the best of each family went forward, and they were then run unchanged on July to October. " + P.length + " of " + F.length +
+  " made money in the test, and both of those bet on coins against each other rather than on the market's direction.";
+const figs = [[P.length + " of " + F.length, "finalists passed the July–October test"],
+  [fmt(sel.chosen_test_profitable_pct, 0) + "%", "of the " + nChosen + " chosen strategies made money in the test, against " + fmt(sel.not_chosen_test_profitable_pct, 0) + "% of the " + sel.not_chosen + " that were not chosen"],
+  [pct(BH.choose) + " → " + pct(BH.test), "buying and holding all 16 coins, January–June then July–October"]];
+for (const [n, l] of figs) document.getElementById("figs").append(h("div", { class: "fig" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l)));
+const tf = document.getElementById("t-fin");
+tf.append(h("thead", {}, h("tr", {}, ["Strategy", "Capital", "Jan–Jun", "Months up", "Jul–Oct (test)", "Months up", "Result"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+const tb = h("tbody");
+F.forEach(r => tb.append(h("tr", {}, h("td", { class: "strat" }, h("b", {}, r.title), h("span", {}, r.family + " · " + r.id)),
+  h("td", {}, "$" + fmt(r.capital, 0)), h("td", { class: sign(r.choose.return_pct) }, pct(r.choose.return_pct)), h("td", {}, r.choose.months_up + " of 6"),
+  h("td", { class: sign(r.test.return_pct) }, pct(r.test.return_pct)), h("td", {}, r.test.months_up + " of 4"),
+  h("td", {}, h("span", { class: "pill " + (r.pass ? "pass" : "fail") }, r.pass ? "PASS" : "fail")))));
+tf.append(tb);
+const MONTHS = ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"];
+const MN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"];
+const tm = document.getElementById("t-month");
+const BTC = D.bench["Buy and hold BTC"];
+tm.append(h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Month 2026"), P.map(r => h("th", {}, r.title.split(",")[0])), h("th", {}, "Hold all 16 coins"), h("th", {}, "Hold BTC"))));
+const mb = h("tbody");
+MONTHS.forEach((m, i) => {
+  const cells = P.map(r => { const v = (r.choose.months[m] ?? r.test.months[m]); return h("td", { class: sign(v) }, pct(v / r.capital * 100), h("span", { class: "sub" }, usd(v))); });
+  mb.append(h("tr", { class: i >= 6 ? "testrow" : null }, h("td", { class: "l" }, MN[i] + (i >= 6 ? " (test)" : "")), cells,
+    h("td", { class: sign(BH.months[m]) }, pct(BH.months[m])), h("td", { class: sign(BTC.months[m]) }, pct(BTC.months[m]))));
+});
+mb.append(h("tr", { class: "sum" }, h("td", { class: "l" }, "Jan–Jun (chosen on)"), P.map(r => h("td", { class: sign(r.choose.pnl) }, pct(r.choose.return_pct), h("span", { class: "sub" }, usd(r.choose.pnl)))),
+  h("td", { class: sign(BH.choose) }, pct(BH.choose)), h("td", { class: sign(BTC.choose) }, pct(BTC.choose))));
+mb.append(h("tr", { class: "sum" }, h("td", { class: "l" }, "Jul–Oct (test)"), P.map(r => h("td", { class: sign(r.test.pnl) }, pct(r.test.return_pct), h("span", { class: "sub" }, usd(r.test.pnl)))),
+  h("td", { class: sign(BH.test) }, pct(BH.test)), h("td", { class: sign(BTC.test) }, pct(BTC.test))));
+tm.append(mb);
+const prose = document.getElementById("prose");
+[
+  "Choosing on January–June did not pick July–October winners. The strategies that cleared the bar did worse in the test than the ones that did not (median " +
+    pct(sel.chosen_test_median_pct) + " against " + pct(sel.not_chosen_test_median_pct) + "), and the rank correlation between the two periods was " +
+    sel.rank_corr_choose_vs_test.toFixed(2) + ". The market turned: the 16 coins fell " + fmt(-BH.choose, 1) + "% in the first half and rose " + fmt(BH.test, 1) +
+    "% in the second, so the strategies that profited from the fall by selling lost when prices rose.",
+  "The two that passed hold the same amount long and short, so a rising or falling market moves both sides together. One collects funding from the most crowded coins, the other buys last week's biggest losers and sells the biggest winners.",
+  "Two passes out of thirteen is close to what chance alone would give: a strategy with no edge makes money in 3 of 4 months about one time in four. Treat both as candidates for a forward test in November with these exact rules, not as proven.",
+].forEach(t => prose.append(h("p", {}, t)));
+const ol = document.getElementById("rules");
+P.forEach(r => ol.append(h("li", {}, h("b", {}, r.title + ": "), r.rules + " Capital $" + fmt(r.capital, 0) + "; " + r.test.entries + " entries in the test.")));
+document.getElementById("foot").textContent = "Protocol fingerprint " + D.fingerprint + ", registered " + D.registered.replace("T", " ") +
+  ". Code and results: engine/research/walkforward_2026_11 (wf_fetch.py, wf_lab.py, wf_report.py, results/).";
+</script>
