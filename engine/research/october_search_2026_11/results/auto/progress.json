@@ -1,0 +1,11 @@
+{
+ "rounds": 116,
+ "evaluated": 56200,
+ "profitable": 13948,
+ "consistent": 3579,
+ "confirmed": 2828,
+ "library": 66221,
+ "remaining": 10021,
+ "last_round_seconds": 11.4,
+ "updated_utc": "2026-11-01 15:41:27"
+}

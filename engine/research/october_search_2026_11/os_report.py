@@ -1,6 +1,7 @@
-"""Write REPORT.md and report/october-profitable-strategies.html for the October search.
+"""Write REPORT.md and report/october-profitable-strategies.html for the October search
+(rounds 1-3 plus every automatic round in results/auto/evaluated.jsonl).
 
-Usage: python -I os_report.py   (after os_search.py and os_round2.py)
+Usage: python -I os_report.py
 """
 import json
 import os
@@ -10,10 +11,19 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RES = os.path.join(HERE, "results")
+FAM = {"A": "Session-open breakout", "B": "Trend-day follow", "C": "Cross-coin", "F": "Volatility breakout", "G": "Hour-of-day",
+       "N1": "EMA crossover", "N2": "Supertrend", "N3": "MACD", "N4": "VWAP pullback", "N5": "VWAP fade", "N6": "Previous-day breakout",
+       "N7b": "CPR breakout", "N7f": "Pivot fade", "N8": "Volume candle", "N9": "RSI fade", "N10": "US pre-market breakout",
+       "N11": "Hour-of-day", "N12": "Heikin-Ashi", "RSI": "RSI fade", "BBF": "Bollinger fade", "BBB": "Bollinger breakout",
+       "STO": "Stochastic extreme", "DON": "Donchian breakout", "ROC": "Sharp-move momentum/reversal", "STK": "Candle-streak fade",
+       "PIV": "Pivot levels", "TOD": "Hour-of-day", "ORB": "Session-open breakout", "CDL": "Candle pattern", "EMA": "EMA pullback",
+       "KEL": "Keltner channel", "WPR": "Williams %R", "CCI": "CCI extreme", "ZEM": "EMA z-score fade", "MTF": "4h Bollinger + 1h RSI",
+       "TD2": "Hour-of-day", "RS2": "RSI fade", "BB2": "Bollinger fade", "DOW": "Day-of-week window", "XS": "Cross-coin intraday",
+       "ATX": "Range-expansion bar", "ICH": "Ichimoku", "SAR": "Parabolic SAR", "DMI": "DMI cross", "CMB": "RSI fade by hour and VWAP",
+       "RZ": "RSI fade", "BZ": "Bollinger fade", "HZ": "Hour-of-day"}
 
 
-def title(vid, fallback):
-    """Name that carries the settings that tell close variants apart."""
+def title_a(vid, fallback):
     p = vid.split("|")
     if p[0] == "A":
         sess = {"US": "US-open", "LDN": "London-open", "UTC": "UTC-day"}[p[1]]
@@ -21,62 +31,85 @@ def title(vid, fallback):
                 "stop at far side" if p[4] == "far" else "stop at middle", "no target" if p[5] == "none" else f"{p[5].rstrip('0').rstrip('.')}R target"]
         bits += [{"trend": "with 10-day trend", "nr4": "after a narrow-range day", "tight": "tight opening range", "none": ""}[p[6]]]
         return ", ".join(b for b in bits if b)
-    if p[0] == "B":
-        return f"Follow a {p[2]} ATR move 1 h after the US open" + (", with 10-day trend" if p[3] == "trend" else "") +             (", stop at day open" if p[4] == "open" else ", stop halfway back")
     return fallback
+
+
+def row(x, o, n, rnd, fam):
+    pnl = o["pnl"] + n["pnl"]
+    cap = o["capital"] + n["capital"]
+    return {"id": x["id"], "round": rnd, "family": FAM.get(fam, fam), "title": title_a(x["id"], x["title"]), "rules": x["rules"],
+            "trades": o["trades"] + n["trades"], "pnl": round(pnl, 2), "capital": cap, "return_pct": round(pnl / cap * 100, 2),
+            "coins_up": o["coins_positive"] + n["coins_positive"], "orig_return_pct": o["return_pct"], "new_return_pct": n["return_pct"],
+            "max_dd_pct": max(o["max_dd_pct"], n.get("max_dd_pct", 0)), "win": o.get("win_rate")}
 
 
 def main():
     r1 = json.load(open(os.path.join(RES, "round1.json"), encoding="utf-8"))
     r2 = json.load(open(os.path.join(RES, "round2.json"), encoding="utf-8"))
     r3p = os.path.join(RES, "round3.json")
-    r3 = json.load(open(r3p, encoding="utf-8")) if os.path.exists(r3p) else None
-    pool = [(x, "Rounds 1-2") for x in r2["results"]] + ([(x, "Round 3") for x in r3["results"]] if r3 else [])
+    r3 = json.load(open(r3p, encoding="utf-8")) if os.path.exists(r3p) else {"pool": 0, "profitable": 0, "consistent": 0, "results": []}
     rows = []
-    for x, rnd in pool:
-        if not x["confirmed"]:
-            continue
-        a, b = x["original6"], x["new10"]
-        pnl = a["pnl"] + b["pnl"]
-        cap = a["capital"] + b.get("capital", 0)
-        trades = a["trades"] + b["trades"]
-        coins_up = a["coins_positive"] + b["coins_positive"]
-        rows.append({"id": x["id"], "round": rnd, "title": title(x["id"], x["title"]), "rules": x["rules"], "trades": trades, "pnl": round(pnl, 2),
-                     "capital": cap, "return_pct": round(pnl / cap * 100, 2), "coins_up": coins_up,
-                     "orig_return_pct": a["return_pct"], "orig_pnl": a["pnl"], "orig_win": a["win_rate"],
-                     "new_return_pct": b["return_pct"], "new_pnl": b["pnl"], "new_win": b.get("win_rate"),
-                     "max_dd_pct": max(a["max_dd_pct"], b.get("max_dd_pct", 0)), "halves": a["halves"]})
+    for x in r2["results"]:
+        if x["confirmed"]:
+            o, n = dict(x["original6"]), dict(x["new10"])
+            n.setdefault("capital", 100_000.0)
+            rows.append(row(x, o, n, "1-2", x["id"].split("|")[0]))
+    for x in r3["results"]:
+        if x["confirmed"]:
+            o, n = dict(x["original6"]), dict(x["new10"])
+            n.setdefault("capital", 100_000.0)
+            rows.append(row(x, o, n, "3", x["id"].split("|")[0]))
+    auto = {"evaluated": 0, "profitable": 0, "consistent": 0, "rounds": 0}
+    ev = os.path.join(RES, "auto", "evaluated.jsonl")
+    if os.path.exists(ev):
+        with open(ev, encoding="utf-8") as fh:
+            for line in fh:
+                x = json.loads(line)
+                auto["evaluated"] += 1
+                o = x.get("original6")
+                if not o:
+                    continue
+                auto["profitable"] += bool(o["profitable"])
+                auto["consistent"] += bool(o["consistent"])
+                auto["rounds"] = max(auto["rounds"], x.get("round", 0))
+                if x.get("confirmed"):
+                    rows.append(row(x, o, x["new10"], str(x["round"]), x["family"]))
     rows.sort(key=lambda r: -r["return_pct"])
-    funnel = {"pool": r1["pool"] + (r3["pool"] if r3 else 0), "profitable": r1["profitable"] + (r3["profitable"] if r3 else 0),
-              "consistent": r1["consistent"] + (r3["consistent"] if r3 else 0), "confirmed": len(rows)}
-    data = {"generated": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d"), "funnel": funnel, "rows": rows}
-    json.dump(data, open(os.path.join(RES, "final.json"), "w", encoding="utf-8"), indent=1)
+    best = {}
+    for r in rows:
+        best.setdefault(r["family"], r)
+    funnel = {"pool": r1["pool"] + r3["pool"] + auto["evaluated"], "profitable": r1["profitable"] + r3["profitable"] + auto["profitable"],
+              "consistent": r1["consistent"] + r3["consistent"] + auto["consistent"], "confirmed": len(rows),
+              "rounds": max(3, auto["rounds"])}
+    data = {"generated": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d %H:%M UTC"), "funnel": funnel, "rows": rows[:60],
+            "family_best": sorted(best.values(), key=lambda r: -r["return_pct"]), "total_rows": len(rows)}
+    json.dump({**data, "rows": rows}, open(os.path.join(RES, "final.json"), "w", encoding="utf-8"), indent=1)
     tpl = open(os.path.join(HERE, "report_template.html"), encoding="utf-8").read()
     blob = json.dumps(data, separators=(",", ":")).replace("<", chr(92) + "u003c")
     os.makedirs(os.path.join(HERE, "report"), exist_ok=True)
     open(os.path.join(HERE, "report", "october-profitable-strategies.html"), "w", encoding="utf-8", newline="\n").write(
         tpl.replace("/*DATA*/null", blob))
     L = ["# Profitable intraday crypto strategies, October 2026\n",
-         f"Generated {data['generated']}. October 2026 only (1-31 Oct, no trading on the 28th). Delta India fees, slippage and funding; "
+         f"Generated {data['generated']}. October 2026 only (no trading on the 28th). Delta India fees, slippage and funding; "
          "$10,000 per trade, no leverage, flat by 00:00 UTC.\n",
-         f"- Round 1: {funnel['pool']} strategies on BTC ETH SOL XRP DOGE BNB; {funnel['profitable']} profitable, "
-         f"{funnel['consistent']} consistent (both halves of October, at least 3 of 6 coins, 10+ trades).",
-         f"- Round 2: the consistent ones run unchanged on 10 other coins (ADA LINK AVAX LTC DOT TRX BCH NEAR SUI APT), October only; "
-         f"**{funnel['confirmed']} made money there too** (5+ of 10 coins).\n",
-         "| # | Strategy | Trades | October return, 16 coins | Original 6 | New 10 | Coins up (of 16) | Worst drawdown |",
-         "|---|---|---:|---:|---:|---:|---:|---:|"]
-    for i, r in enumerate(rows, 1):
+         f"- Tested {funnel['pool']:,} strategies over {funnel['rounds']} rounds on BTC ETH SOL XRP DOGE BNB: {funnel['profitable']:,} profitable, "
+         f"{funnel['consistent']:,} consistent (both halves of October, 3+ of 6 coins, 10+ trades).",
+         f"- **{funnel['confirmed']:,} also made money on 10 other coins** (ADA LINK AVAX LTC DOT TRX BCH NEAR SUI APT; 5+ of 10).\n",
+         "## Best per family\n", "| Family | Strategy | October return, 16 coins |", "|---|---|---:|"]
+    for r in data["family_best"]:
+        L.append(f"| {r['family']} | {r['title']} (`{r['id']}`) | {r['return_pct']:+.2f}% |")
+    L += ["\n## Top 100\n", "| # | Strategy | Trades | October, 16 coins | 6 coins | 10 new coins | Coins up | Worst DD |",
+          "|---|---|---:|---:|---:|---:|---:|---:|"]
+    for i, r in enumerate(rows[:100], 1):
         L.append(f"| {i} | {r['title']} (`{r['id']}`) | {r['trades']} | **{r['return_pct']:+.2f}%** (${r['pnl']:,.0f}) | "
-                 f"{r['orig_return_pct']:+.2f}% | {r['new_return_pct']:+.2f}% | {r['coins_up']} | {r['max_dd_pct']:.2f}% |")
-    L.append("\n## Rules\n")
-    for i, r in enumerate(rows, 1):
+                 f"{r['orig_return_pct']:+.2f}% | {r['new_return_pct']:+.2f}% | {r['coins_up']}/16 | {r['max_dd_pct']:.2f}% |")
+    L.append("\n## Rules (top 30)\n")
+    for i, r in enumerate(rows[:30], 1):
         L.append(f"{i}. **{r['title']}**: {r['rules']}")
-    L.append("\nReproduce: `python -I os_search.py && python -I os_fetch_extra.py && python -I os_round2.py && python -I os_report.py`")
     open(os.path.join(HERE, "REPORT.md"), "w", encoding="utf-8", newline="\n").write("\n".join(L) + "\n")
-    print(len(rows), "confirmed strategies written")
-    for i, r in enumerate(rows[:12], 1):
-        print(f"{i:2d} {r['id']:<34} n={r['trades']:4d} 16-coin {r['return_pct']:+.2f}% (${r['pnl']:,.0f}) | 6: {r['orig_return_pct']:+.2f}% "
-              f"| 10: {r['new_return_pct']:+.2f}% | coins up {r['coins_up']}/16 | DD {r['max_dd_pct']}%")
+    print(f"report: {len(rows)} confirmed of {funnel['pool']} tested")
+    for i, r in enumerate(rows[:10], 1):
+        print(f"{i:2d} {r['id']:<44} {r['return_pct']:+.2f}% | 6: {r['orig_return_pct']:+.2f}% | 10: {r['new_return_pct']:+.2f}% | {r['coins_up']}/16 | DD {r['max_dd_pct']}%")
 
 
 if __name__ == "__main__":

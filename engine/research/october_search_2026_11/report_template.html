@@ -60,7 +60,12 @@ ol.rules b { font-weight: 600; }
     <p class="note">Consistent = made money in both halves of October (1–15 and 16–31), on at least 3 of the 6 coins, with 10+ trades. Confirmed = then made money on the 10 new coins too, on at least 5 of them.</p>
   </section>
   <section>
-    <h2>The confirmed strategies</h2>
+    <h2>Best of each family</h2>
+    <p>The top confirmed strategy in each family, so one idea does not fill the whole list.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-fam"></table></div></div>
+  </section>
+  <section>
+    <h2 id="conf-h">The confirmed strategies</h2>
     <p>October return on all 16 coins together ($10,000 per coin, no leverage), and separately on the 6 coins they were found on and the 10 they were checked on.</p>
     <div class="panel"><div class="table-wrap"><table id="t"></table></div></div>
     <p class="note">Returns are after Delta India's taker fee (0.05% + 18% GST) or maker fee (0.02% + GST) for limit orders, slippage of 2–5 bp a side, and funding. 28 October is excluded. At 3x leverage, returns and drawdowns triple.</p>
@@ -86,9 +91,9 @@ const pct = v => (v < 0 ? MINUS : "+") + fmt(v, 2) + "%";
 const usd = v => (v < 0 ? MINUS : "+") + "$" + fmt(v, 0);
 const R = D.rows, f = D.funnel;
 document.getElementById("lede").textContent =
-  R.length + " intraday strategies made money in October 2026 on the coins they were found on and again on 10 coins they were not, out of " + f.pool.toLocaleString("en-US") + " tested. The best returned " +
+  D.total_rows.toLocaleString("en-US") + " intraday strategies made money in October 2026 on the coins they were found on and again on 10 coins they were not, out of " + f.pool.toLocaleString("en-US") + " tested so far. The best returned " +
   pct(R[0].return_pct) + " for the month across 16 coins without leverage.";
-const steps = [["Strategies tested on October (6 coins), 3 rounds", f.pool], ["Profitable in October", f.profitable], ["Consistent through the month", f.consistent], ["Confirmed on 10 more coins", f.confirmed]];
+const steps = [["Strategies tested on October (6 coins), " + f.rounds + " rounds", f.pool], ["Profitable in October", f.profitable], ["Consistent through the month", f.consistent], ["Confirmed on 10 more coins", f.confirmed]];
 for (const [l, n] of steps) document.getElementById("funnel").append(h("div", { class: "frow" }, h("div", { class: "lab" }, l),
   h("div", {}, h("div", { class: "bar", style: "width:" + (100 * n / f.pool).toFixed(1) + "%" })), h("div", { class: "val" }, n)));
 const t = document.getElementById("t");
@@ -100,6 +105,13 @@ R.forEach((r, i) => tb.append(h("tr", {}, h("td", { class: "l" }, i + 1), h("td"
   h("td", {}, r.coins_up + " of 16"), h("td", {}, fmt(r.max_dd_pct, 2) + "%"))));
 t.append(tb);
 const ol = document.getElementById("rules");
-R.forEach(r => ol.append(h("li", {}, h("b", {}, r.title + ": "), r.rules)));
+R.slice(0, 30).forEach(r => ol.append(h("li", {}, h("b", {}, r.title + ": "), r.rules)));
+document.getElementById("conf-h").textContent = "The confirmed strategies" + (D.total_rows > R.length ? " (top " + R.length + " of " + D.total_rows.toLocaleString("en-US") + ")" : "");
+const tf = document.getElementById("t-fam");
+tf.append(h("thead", {}, h("tr", {}, ["Family", "Best strategy", "October, 16 coins", "Coins up", "Worst drawdown"].map((x, i) => h("th", { class: i < 2 ? "l" : null }, x)))));
+const tfb = h("tbody");
+D.family_best.forEach(r => tfb.append(h("tr", {}, h("td", { class: "l" }, r.family), h("td", { class: "strat" }, h("b", {}, r.title), h("span", {}, r.id)),
+  h("td", { class: "big" }, pct(r.return_pct)), h("td", {}, r.coins_up + " of 16"), h("td", {}, fmt(r.max_dd_pct, 2) + "%"))));
+tf.append(tfb);
 document.getElementById("foot").textContent = "Generated " + D.generated + ". Code and results: engine/research/october_search_2026_11 (os_search.py, os_fetch_extra.py, os_round2.py, os_report.py, REPORT.md, results/).";
 </script>
