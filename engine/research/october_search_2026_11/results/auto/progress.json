@@ -1,11 +1,13 @@
 {
- "rounds": 146,
- "evaluated": 70351,
- "profitable": 23067,
- "consistent": 8486,
- "confirmed": 7560,
+ "rounds": 208,
+ "evaluated": 101351,
+ "profitable": 33189,
+ "consistent": 13028,
+ "confirmed": 11596,
  "library": 70351,
  "remaining": 0,
- "last_round_seconds": 4.2,
- "updated_utc": "2026-11-01 15:53:40"
+ "last_round_seconds": 28.2,
+ "updated_utc": "2026-11-01 16:21:57",
+ "remaining_fixed": 0,
+ "mode": "endless"
 }

@@ -25,7 +25,13 @@ FAM = {"A": "Session-open breakout", "B": "Trend-day follow", "C": "Cross-coin",
        "DOF": "Fade from the day's open", "PCF": "Fade from yesterday's close", "KZH": "Keltner channel",
        "BZX": "Bollinger fade", "RZX": "RSI fade", "KZX": "Keltner channel", "ZEX": "EMA z-score fade", "HZX": "Hour-of-day",
        "MXX": "4h band + fast RSI", "STX": "Stochastic extreme", "WRX": "Williams %R", "CCX": "CCI extreme", "MFX": "Money Flow Index",
-       "FSX": "Fisher transform", "DOX": "Fade from the day's open", "PCX": "Fade from yesterday's close", "ORX": "Session-open breakout"}
+       "FSX": "Fisher transform", "DOX": "Fade from the day's open", "PCX": "Fade from yesterday's close", "ORX": "Session-open breakout",
+       "BBY": "Bollinger breakout", "DNX": "Donchian breakout", "RCX": "Sharp-move momentum/reversal", "SKX": "Candle-streak fade",
+       "CDX": "Candle pattern", "EPX": "EMA pullback", "KLX": "Keltner channel", "ATY": "Range-expansion bar", "SRX": "Parabolic SAR",
+       "DMX": "DMI cross", "DWX": "Day-of-week window", "CZX": "RSI fade by hour and VWAP", "E1X": "EMA crossover", "STR": "Supertrend",
+       "VBO": "Volatility breakout from the open", "TSP": "Turtle soup (failed breakout)", "SQZ": "Bollinger squeeze breakout",
+       "VSP": "Volume spike", "LLG": "BTC lead-lag", "FND": "Funding-rate tilt", "PDF": "Previous-day high/low failure",
+       "RNG": "Asian-range limit fade", "BLX": "Band limit fade (maker)"}
 
 
 def title_a(vid, fallback):

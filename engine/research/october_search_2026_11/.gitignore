@@ -1,3 +1,5 @@
 results/auto/evaluated.jsonl
 results/auto/STOP
 __pycache__/
+results/auto/os_auto.log
+results/auto/run_endless.cmd

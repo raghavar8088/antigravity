@@ -1,0 +1,151 @@
+{
+ "cut": "2026-10-20",
+ "coins": [
+  "BTCUSDT",
+  "ETHUSDT",
+  "SOLUSDT",
+  "ADAUSDT"
+ ],
+ "families": {
+  "BBY": {
+   "variants": 8,
+   "trades": 592,
+   "checked_before_cut": 362,
+   "seconds_per_variant_4_coins": 0.029
+  },
+  "DNX": {
+   "variants": 8,
+   "trades": 580,
+   "checked_before_cut": 355,
+   "seconds_per_variant_4_coins": 0.012
+  },
+  "RCX": {
+   "variants": 8,
+   "trades": 843,
+   "checked_before_cut": 568,
+   "seconds_per_variant_4_coins": 0.009
+  },
+  "SKX": {
+   "variants": 8,
+   "trades": 1157,
+   "checked_before_cut": 709,
+   "seconds_per_variant_4_coins": 0.014
+  },
+  "CDX": {
+   "variants": 8,
+   "trades": 3970,
+   "checked_before_cut": 2488,
+   "seconds_per_variant_4_coins": 0.039
+  },
+  "EPX": {
+   "variants": 8,
+   "trades": 781,
+   "checked_before_cut": 522,
+   "seconds_per_variant_4_coins": 0.08
+  },
+  "KLX": {
+   "variants": 8,
+   "trades": 403,
+   "checked_before_cut": 247,
+   "seconds_per_variant_4_coins": 0.009
+  },
+  "ATY": {
+   "variants": 8,
+   "trades": 1096,
+   "checked_before_cut": 724,
+   "seconds_per_variant_4_coins": 0.009
+  },
+  "SRX": {
+   "variants": 8,
+   "trades": 1514,
+   "checked_before_cut": 915,
+   "seconds_per_variant_4_coins": 0.013
+  },
+  "DMX": {
+   "variants": 8,
+   "trades": 1053,
+   "checked_before_cut": 643,
+   "seconds_per_variant_4_coins": 0.021
+  },
+  "DWX": {
+   "variants": 8,
+   "trades": 140,
+   "checked_before_cut": 88,
+   "seconds_per_variant_4_coins": 0.001
+  },
+  "CZX": {
+   "variants": 8,
+   "trades": 41,
+   "checked_before_cut": 34,
+   "seconds_per_variant_4_coins": 0.009
+  },
+  "E1X": {
+   "variants": 8,
+   "trades": 1689,
+   "checked_before_cut": 1051,
+   "seconds_per_variant_4_coins": 0.015
+  },
+  "STR": {
+   "variants": 8,
+   "trades": 1461,
+   "checked_before_cut": 902,
+   "seconds_per_variant_4_coins": 0.136
+  },
+  "VBO": {
+   "variants": 8,
+   "trades": 213,
+   "checked_before_cut": 132,
+   "seconds_per_variant_4_coins": 0.004
+  },
+  "TSP": {
+   "variants": 8,
+   "trades": 1024,
+   "checked_before_cut": 645,
+   "seconds_per_variant_4_coins": 0.026
+  },
+  "SQZ": {
+   "variants": 8,
+   "trades": 331,
+   "checked_before_cut": 206,
+   "seconds_per_variant_4_coins": 0.02
+  },
+  "VSP": {
+   "variants": 8,
+   "trades": 363,
+   "checked_before_cut": 230,
+   "seconds_per_variant_4_coins": 0.013
+  },
+  "LLG": {
+   "variants": 8,
+   "trades": 221,
+   "checked_before_cut": 164,
+   "seconds_per_variant_4_coins": 0.019
+  },
+  "FND": {
+   "variants": 8,
+   "trades": 404,
+   "checked_before_cut": 220,
+   "seconds_per_variant_4_coins": 0.001
+  },
+  "PDF": {
+   "variants": 8,
+   "trades": 546,
+   "checked_before_cut": 323,
+   "seconds_per_variant_4_coins": 0.013
+  },
+  "RNG": {
+   "variants": 8,
+   "trades": 569,
+   "checked_before_cut": 374,
+   "seconds_per_variant_4_coins": 0.004
+  },
+  "BLX": {
+   "variants": 8,
+   "trades": 1895,
+   "checked_before_cut": 1158,
+   "seconds_per_variant_4_coins": 0.154
+  }
+ },
+ "problems": [],
+ "n_problems": 0
+}
