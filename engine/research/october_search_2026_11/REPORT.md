@@ -1,9 +1,9 @@
 # Profitable intraday crypto strategies, October 2026
 
-Generated 2026-11-01 16:52 UTC. October 2026 only (no trading on the 28th). Delta India fees, slippage and funding; $10,000 per trade, no leverage, flat by 00:00 UTC.
+Generated 2026-11-01 17:03 UTC. October 2026 only (no trading on the 28th). Delta India fees, slippage and funding; $10,000 per trade, no leverage, flat by 00:00 UTC.
 
-- Tested 134,083 strategies over 274 rounds on BTC ETH SOL XRP DOGE BNB: 40,413 profitable, 15,656 consistent (both halves of October, 3+ of 6 coins, 10+ trades).
-- **13,617 also made money on 10 other coins** (ADA LINK AVAX LTC DOT TRX BCH NEAR SUI APT; 5+ of 10).
+- Tested 146,083 strategies over 298 rounds on BTC ETH SOL XRP DOGE BNB: 43,072 profitable, 16,568 consistent (both halves of October, 3+ of 6 coins, 10+ trades).
+- **14,311 also made money on 10 other coins** (ADA LINK AVAX LTC DOT TRX BCH NEAR SUI APT; 5+ of 10).
 
 ## Best per family
 
@@ -19,15 +19,17 @@ Generated 2026-11-01 16:52 UTC. October 2026 only (no trading on the 28th). Delt
 | Keltner channel | Keltner(EMA20, 1.75 ATR) fade on 240m, stop 3.0 ATR, 8 h (`KZ|240|20|1.75|3.0|8|none`) | +12.10% |
 | RSI fade by hour and VWAP | RSI(32) 1h fade 38/62 from 18:00 UTC for 10 h, VWAP any, exit 50 (`CZX|18|10|any|32|38|50`) | +11.14% |
 | Fade from the weekly open | Fade 1.75 ATR from the weekly open (30m check), target the open, all day (`WOF|1.75|30|anchor|1.5|0|all`) | +9.77% |
+| Relative value vs BTC | Relative value vs BTC: fade a 2.25-sd move of coin/BTC (72 x 60m), exit at 0.5 sd, stop 3.5 ATR, 16 h, all day (`RVF|60|72|2.25|0.5|3.5|16|all`) | +9.44% |
 | 4h Bollinger + 1h RSI | 4h Bollinger(2.0) extreme + 1h RSI(21) 35 (`MTF|2.0|35|21|1.0|6`) | +9.42% |
 | Day-of-week window | Friday 01:00 UTC for 8 h, long (`DWX|4|1|8|long`) | +8.93% |
-| Relative value vs BTC | Relative value vs BTC: fade a 2.5-sd move of coin/BTC (96 x 60m), exit at 0.5 sd, stop 2.5 ATR, 6 h, all day (`RVF|60|96|2.5|0.5|2.5|6|all`) | +8.89% |
+| Williams %R | Williams %R(28) 240m beyond -75/-25, all day (`WRX|240|28|25|3.0|8|all`) | +8.25% |
+| Sharp-move momentum/reversal | Fade a 2.5 ATR move over 10 x 180m (`RCX|180|10|2.5|4|rev|none`) | +7.47% |
+| Volume spike | Fade a 120m volume spike (1.75x volume, 0.75 ATR range), stop 3.0 ATR, 6 h, all day (`VSP|120|1.75|0.75|fade|3.0|6|all`) | +7.20% |
+| Asian-range limit fade | Asian range 00:00-06:00 UTC limit fade until 11:00, edge +0.0, stop 1.0, target far edge (`RNG|6|11|0.0|1.0|far`) | +7.05% |
 | Fisher transform | Fisher(13) 180m fade beyond 1.4, all day (`FSX|180|13|1.4|1.0|12|all`) | +7.00% |
 | Candle pattern | Pin 180m, 4.0R target, with trend (`CDX|180|pin|trend|4.0|10`) | +6.98% |
-| Volume spike | Fade a 120m volume spike (1.75x volume, 0.75 ATR range), stop 2.5 ATR, 8 h, all day (`VSP|120|1.75|0.75|fade|2.5|8|all`) | +6.90% |
 | Candle-streak fade | Fade 4 same-colour 120m candles, all day (`SKX|120|4|12|3.0|all`) | +6.83% |
-| Asian-range limit fade | Asian range 00:00-06:00 UTC limit fade until 11:00, edge +0.0, stop 1.0, target middle (`RNG|6|11|0.0|1.0|mid`) | +6.81% |
-| Williams %R | Williams %R(17) 240m beyond -94/-6, all day (`WRX|240|17|6|2.0|8|all`) | +6.80% |
+| Previous-day high/low failure | Previous-day high/low failure 60m, stop 0.5 ATR beyond, target 2.0R, 20 h, all day (`PDF|60|0.5|2.0|20|all`) | +6.83% |
 | Bollinger fade + regime filter | Bollinger(34,2.4) 90m fade, only against the 10-day trend, stop 2.5 ATR, 20 h, all day (`BZR|90|34|2.4|2.5|20|none|against|all`) | +6.79% |
 | RSI divergence | RSI(10) divergence 240m (37-bar extreme, 4 pts), exit 50, stop 2.5 ATR, 16 h, all day (`DIV|240|37|10|4|50|2.5|16|all`) | +6.41% |
 | CCI extreme | CCI(15) 60m fade at 150, all day (`CCX|60|15|150|fade|12|all`) | +6.35% |
@@ -37,18 +39,16 @@ Generated 2026-11-01 16:52 UTC. October 2026 only (no trading on the 28th). Delt
 | Fade from the day's open | Fade 0.5 ATR from the 00:00 UTC open (60m check), target the anchor, all day (`DOF|0.5|60|anchor|0.5|0|all`) | +5.99% |
 | Pivot fade | Pivot fade at R1/S1, all day (`N7f|1|none|all`) | +5.53% |
 | Pivot levels | Classic pivot fade at level 1, all day (`PIV|classic|1|fade|all`) | +5.53% |
-| Previous-day high/low failure | Previous-day high/low failure 60m, stop 0.75 ATR beyond, target 3.0R, 20 h, all day (`PDF|60|0.75|3.0|20|all`) | +5.15% |
 | Session-open breakout | Hong Kong (01:30 UTC) 10-min breakout, retest entry, 4.0R target (`ORX|hk|10|retest|far|4.0|none`) | +4.96% |
-| Sharp-move momentum/reversal | Fade a 3.0 ATR move over 9 x 60m, with trend (`RCX|60|9|3.0|8|rev|trend`) | +4.83% |
+| Turtle soup (failed breakout) | Turtle soup 27-bar 180m, stop 0.75 ATR beyond, target 2.0R, 20 h, high-volume bars only, all day (`TSP|180|27|0.75|2.0|20|high|all`) | +4.82% |
 | Funding-rate tilt | 01:00 UTC for 3 h against the last funding print (|rate| >= 0.005%) (`FND|1|3|5e-05|fade|0.0`) | +4.45% |
-| Turtle soup (failed breakout) | Turtle soup 29-bar 180m, stop 0.0 ATR beyond, target 2.0R, 4 h, high-volume bars only, all day (`TSP|180|29|0.0|2.0|4|high|all`) | +3.91% |
 | Session-range breakout | 00:00-08:00 UTC range breakout until 21:00, edge +0.25, stop far side, 1.5R target, with the 10-day trend (`RBX|8|21|0.25|far|1.5|trend`) | +3.75% |
 | Connors RSI | Connors RSI 240m <15/>85, exit 50, all day (`CRS|240|15|50|2.0|4|all`) | +3.68% |
 | DMI cross | DMI(18) cross 60m, ADX>26, European hours (`DMX|60|18|26|eu|none`) | +3.61% |
 | VWAP band limit fade (maker) | VWAP 2.25-sd band limit fade on 60m (from 4 h into the day), stop 2.0 sd, 6 h, European hours (`VWB|60|2.25|4|2|2.0|6|eu`) | +3.12% |
+| Flush reversal | Flush reversal: fade a 1.5 ATR move over 5 x 30m on 3.0x volume, target 1.0 retrace, 4 h, Asian hours (`FLX|30|5|1.5|3.0|0.0|1.0|4|asia`) | +3.05% |
 | Volatility breakout from the open | Volatility breakout 0.4 x range from the NYSE open, 1.5R target, after a narrow-range day (`VBO|us|0.4|range|0|atr|1.5|nr4`) | +2.95% |
 | Parabolic SAR | Parabolic SAR(0.05) 60m, US hours (`SRX|60|0.05|us|none`) | +2.65% |
-| Flush reversal | Flush reversal: fade a 5.5 ATR move over 5 x 30m on 1.5x volume, target 0.5 retrace, 4 h, all day (`FLX|30|5|5.5|1.5|0.25|0.5|4|all`) | +2.31% |
 | Bollinger breakout | Bollinger(20,2.0) 30m breakout, US hours, with trend (`BBB|30|20|2.0|atr|1.5|trend|us`) | +2.18% |
 | Range-expansion bar | Fade a 2.9 ATR 180m bar (`ATY|180|2.9|fade|2|none`) | +2.16% |
 | Bollinger squeeze breakout | Bollinger(18,1.75) squeeze breakout 120m (width in lowest 20% of 100 bars), 1.0R target, Asian hours (`SQZ|120|18|1.75|20|100|5|3.0|1.0|16|asia`) | +2.15% |
@@ -134,35 +134,35 @@ Generated 2026-11-01 16:52 UTC. October 2026 only (no trading on the 28th). Delt
 | 69 | 4h Bollinger(1.9) extreme + 60m RSI(15) 40, 18:00 UTC +12 h (`MXX|1.9|60|15|40|18|12|2.5|12`) | 218 | **+11.89%** ($19,030) | +6.60% | +15.07% | 15/16 | 2.03% |
 | 70 | Bollinger(16,1.6) 240m fade, stop 3.0 ATR, 12 h, high-volume bars only (`BZ|240|16|1.6|3.0|12|high`) | 282 | **+11.88%** ($19,014) | +7.18% | +14.71% | 13/16 | 4.31% |
 | 71 | Bollinger(24,1.8) 180m fade, stop 2.0 ATR, 12 h (`BZ|180|24|1.8|2.0|12|none`) | 328 | **+11.88%** ($19,006) | +5.50% | +15.70% | 14/16 | 3.22% |
-| 72 | Bollinger(16,2.0) 240m fade, stop 3.0 ATR, 12 h, high-volume bars only (`BZ|240|16|2.0|3.0|12|high`) | 183 | **+11.85%** ($18,961) | +9.19% | +13.45% | 15/16 | 2.46% |
-| 73 | RSI(28) 30m fade <30/>70, exit 50, stop 1.5 ATR, 6 h, high-volume bars only (`RZ|30|28|30|50|1.5|6|high`) | 181 | **+11.85%** ($18,953) | +8.90% | +13.61% | 15/16 | 3.47% |
-| 74 | Keltner(EMA20, 1.5 ATR) fade on 240m, stop 2.0 ATR, 8 h (`KZ|240|20|1.5|2.0|8|none`) | 342 | **+11.84%** ($18,948) | +4.52% | +16.23% | 14/16 | 5.56% |
-| 75 | 4h Bollinger(1.7) extreme + 30m RSI(12) 34, 12:00 UTC +24 h (`MXX|1.7|30|12|34|12|24|3.0|12`) | 315 | **+11.84%** ($18,942) | +6.85% | +14.83% | 16/16 | 4.76% |
-| 76 | Bollinger(26,1.9) 240m fade, stop 4.5 ATR, 12 h, high-volume bars only, all day (`BZX|240|26|1.9|4.5|12|high|all`) | 202 | **+11.84%** ($18,951) | +7.46% | +14.47% | 15/16 | 3.70% |
-| 77 | RSI(28) 30m fade <32/>68, exit 60, stop 1.5 ATR, 6 h, high-volume bars only (`RZ|30|28|32|60|1.5|6|high`) | 286 | **+11.76%** ($18,818) | +7.71% | +14.19% | 15/16 | 4.01% |
-| 78 | RSI(24) 30m fade <30/>70, exit 60, stop 1.5 ATR, 6 h (`RZ|30|24|30|60|1.5|6|none`) | 284 | **+11.76%** ($18,822) | +8.80% | +13.54% | 15/16 | 4.03% |
-| 79 | 4h Bollinger(1.5) extreme + 30m RSI(24) 30, 02:00 UTC +24 h (`MXX|1.5|30|24|30|2|24|2.5|6`) | 156 | **+11.76%** ($18,812) | +8.95% | +13.44% | 15/16 | 3.80% |
-| 80 | Bollinger(16,2.0) 240m fade, stop 4.0 ATR, 12 h, high-volume bars only (`BZ|240|16|2.0|4.0|12|high`) | 183 | **+11.75%** ($18,808) | +8.93% | +13.45% | 15/16 | 2.72% |
-| 81 | RSI(24) 30m fade <30/>70, exit 55, stop 2.0 ATR, 6 h, high-volume bars only (`RZ|30|24|30|55|2.0|6|high`) | 250 | **+11.75%** ($18,808) | +9.32% | +13.22% | 15/16 | 3.77% |
-| 82 | RSI(24) 30m fade <30/>70, exit 55, stop 1.5 ATR, 6 h, high-volume bars only (`RZ|30|24|30|55|1.5|6|high`) | 276 | **+11.75%** ($18,797) | +8.40% | +13.76% | 15/16 | 3.68% |
-| 83 | RSI(28) 30m fade <30/>70, exit 50, stop 1.5 ATR, 6 h (`RZ|30|28|30|50|1.5|6|none`) | 185 | **+11.74%** ($18,776) | +8.87% | +13.45% | 15/16 | 3.50% |
-| 84 | RSI(28) 30m fade <32/>68, exit 55, stop 1.5 ATR, 6 h, high-volume bars only (`RZ|30|28|32|55|1.5|6|high`) | 286 | **+11.71%** ($18,732) | +7.56% | +14.20% | 15/16 | 4.01% |
-| 85 | RSI(28) 30m fade <30/>70, exit 50, stop 2.0 ATR, 6 h, high-volume bars only (`RZ|30|28|30|50|2.0|6|high`) | 164 | **+11.70%** ($18,718) | +9.35% | +13.11% | 15/16 | 2.80% |
-| 86 | RSI(28) 30m fade <30/>70, exit 50, stop 2.0 ATR, 6 h (`RZ|30|28|30|50|2.0|6|none`) | 168 | **+11.70%** ($18,727) | +9.30% | +13.15% | 15/16 | 2.85% |
-| 87 | RSI(21) 30m fade <28/>72, exit 60, stop 2.0 ATR, 6 h, high-volume bars only (`RZ|30|21|28|60|2.0|6|high`) | 242 | **+11.69%** ($18,708) | +9.87% | +12.78% | 15/16 | 3.77% |
-| 88 | RSI(24) 30m fade <30/>70, exit 55, stop 2.0 ATR, 6 h (`RZ|30|24|30|55|2.0|6|none`) | 258 | **+11.68%** ($18,695) | +9.38% | +13.07% | 15/16 | 4.15% |
-| 89 | RSI(24) 30m fade <30/>70, exit 50, stop 2.5 ATR, 6 h, high-volume bars only (`RZ|30|24|30|50|2.5|6|high`) | 237 | **+11.67%** ($18,678) | +8.43% | +13.62% | 15/16 | 3.49% |
-| 90 | 4h Bollinger(1.4) extreme + 30m RSI(24) 34, 20:00 UTC +8 h (`MXX|1.4|30|24|34|20|8|1.0|6`) | 174 | **+11.65%** ($18,635) | +8.63% | +13.46% | 16/16 | 3.36% |
-| 91 | Keltner(EMA20, 1.75 ATR) fade on 240m, stop 2.0 ATR, 8 h (`KZ|240|20|1.75|2.0|8|none`) | 223 | **+11.63%** ($18,612) | +5.40% | +15.37% | 15/16 | 4.79% |
-| 92 | 4h Bollinger(1.5) extreme + 30m RSI(10) 22, 16:00 UTC +24 h (`MXX|1.5|30|10|22|16|24|2.0|6`) | 229 | **+11.62%** ($18,593) | +9.55% | +12.86% | 15/16 | 3.25% |
-| 93 | Bollinger(24,1.8) 180m fade, stop 4.0 ATR, 8 h (`BZ|180|24|1.8|4.0|8|none`) | 343 | **+11.61%** ($18,574) | +5.70% | +15.15% | 16/16 | 3.94% |
-| 94 | 4h Bollinger(1.9) extreme + 15m RSI(17) 40, 22:00 UTC +24 h (`MXX|1.9|15|17|40|22|24|3.0|12`) | 279 | **+11.61%** ($18,579) | +5.71% | +15.15% | 15/16 | 4.02% |
-| 95 | RSI(20) 30m fade <27/>73, exit 60, stop 4.0 ATR, 20 h, high-volume bars only, all day (`RZX|30|20|27|60|4.0|20|high|all`) | 183 | **+11.59%** ($18,541) | +9.06% | +13.11% | 15/16 | 3.08% |
-| 96 | 4h Bollinger(1.8) extreme + 30m RSI(19) 39, 10:00 UTC +24 h (`MXX|1.8|30|19|39|10|24|3.0|12`) | 312 | **+11.56%** ($18,497) | +5.89% | +14.96% | 16/16 | 5.28% |
-| 97 | RSI(24) 30m fade <28/>72, exit 60, stop 2.5 ATR, 6 h (`RZ|30|24|28|60|2.5|6|none`) | 161 | **+11.55%** ($18,486) | +9.54% | +12.76% | 15/16 | 3.12% |
-| 98 | RSI(24) 30m fade <30/>70, exit 55, stop 1.5 ATR, 6 h (`RZ|30|24|30|55|1.5|6|none`) | 284 | **+11.54%** ($18,463) | +8.48% | +13.37% | 15/16 | 4.03% |
-| 99 | RSI(21) 30m fade <28/>72, exit 60, stop 2.0 ATR, 6 h (`RZ|30|21|28|60|2.0|6|none`) | 248 | **+11.52%** ($18,438) | +9.69% | +12.62% | 15/16 | 4.04% |
-| 100 | RSI(28) 30m fade <32/>68, exit 60, stop 2.0 ATR, 6 h, high-volume bars only (`RZ|30|28|32|60|2.0|6|high`) | 261 | **+11.51%** ($18,419) | +8.29% | +13.45% | 15/16 | 3.53% |
+| 72 | 4h Bollinger(2.0) extreme + 60m RSI(19) 40, 12:00 UTC +24 h (`MXX|2.0|60|19|40|12|24|2.5|12`) | 223 | **+11.86%** ($18,982) | +8.32% | +13.99% | 15/16 | 2.77% |
+| 73 | Bollinger(16,2.0) 240m fade, stop 3.0 ATR, 12 h, high-volume bars only (`BZ|240|16|2.0|3.0|12|high`) | 183 | **+11.85%** ($18,961) | +9.19% | +13.45% | 15/16 | 2.46% |
+| 74 | RSI(28) 30m fade <30/>70, exit 50, stop 1.5 ATR, 6 h, high-volume bars only (`RZ|30|28|30|50|1.5|6|high`) | 181 | **+11.85%** ($18,953) | +8.90% | +13.61% | 15/16 | 3.47% |
+| 75 | Keltner(EMA20, 1.5 ATR) fade on 240m, stop 2.0 ATR, 8 h (`KZ|240|20|1.5|2.0|8|none`) | 342 | **+11.84%** ($18,948) | +4.52% | +16.23% | 14/16 | 5.56% |
+| 76 | 4h Bollinger(1.7) extreme + 30m RSI(12) 34, 12:00 UTC +24 h (`MXX|1.7|30|12|34|12|24|3.0|12`) | 315 | **+11.84%** ($18,942) | +6.85% | +14.83% | 16/16 | 4.76% |
+| 77 | Bollinger(26,1.9) 240m fade, stop 4.5 ATR, 12 h, high-volume bars only, all day (`BZX|240|26|1.9|4.5|12|high|all`) | 202 | **+11.84%** ($18,951) | +7.46% | +14.47% | 15/16 | 3.70% |
+| 78 | RSI(28) 30m fade <32/>68, exit 60, stop 1.5 ATR, 6 h, high-volume bars only (`RZ|30|28|32|60|1.5|6|high`) | 286 | **+11.76%** ($18,818) | +7.71% | +14.19% | 15/16 | 4.01% |
+| 79 | RSI(24) 30m fade <30/>70, exit 60, stop 1.5 ATR, 6 h (`RZ|30|24|30|60|1.5|6|none`) | 284 | **+11.76%** ($18,822) | +8.80% | +13.54% | 15/16 | 4.03% |
+| 80 | 4h Bollinger(1.5) extreme + 30m RSI(24) 30, 02:00 UTC +24 h (`MXX|1.5|30|24|30|2|24|2.5|6`) | 156 | **+11.76%** ($18,812) | +8.95% | +13.44% | 15/16 | 3.80% |
+| 81 | Bollinger(16,2.0) 240m fade, stop 4.0 ATR, 12 h, high-volume bars only (`BZ|240|16|2.0|4.0|12|high`) | 183 | **+11.75%** ($18,808) | +8.93% | +13.45% | 15/16 | 2.72% |
+| 82 | RSI(24) 30m fade <30/>70, exit 55, stop 2.0 ATR, 6 h, high-volume bars only (`RZ|30|24|30|55|2.0|6|high`) | 250 | **+11.75%** ($18,808) | +9.32% | +13.22% | 15/16 | 3.77% |
+| 83 | RSI(24) 30m fade <30/>70, exit 55, stop 1.5 ATR, 6 h, high-volume bars only (`RZ|30|24|30|55|1.5|6|high`) | 276 | **+11.75%** ($18,797) | +8.40% | +13.76% | 15/16 | 3.68% |
+| 84 | RSI(28) 30m fade <30/>70, exit 50, stop 1.5 ATR, 6 h (`RZ|30|28|30|50|1.5|6|none`) | 185 | **+11.74%** ($18,776) | +8.87% | +13.45% | 15/16 | 3.50% |
+| 85 | RSI(28) 30m fade <32/>68, exit 55, stop 1.5 ATR, 6 h, high-volume bars only (`RZ|30|28|32|55|1.5|6|high`) | 286 | **+11.71%** ($18,732) | +7.56% | +14.20% | 15/16 | 4.01% |
+| 86 | RSI(28) 30m fade <30/>70, exit 50, stop 2.0 ATR, 6 h, high-volume bars only (`RZ|30|28|30|50|2.0|6|high`) | 164 | **+11.70%** ($18,718) | +9.35% | +13.11% | 15/16 | 2.80% |
+| 87 | RSI(28) 30m fade <30/>70, exit 50, stop 2.0 ATR, 6 h (`RZ|30|28|30|50|2.0|6|none`) | 168 | **+11.70%** ($18,727) | +9.30% | +13.15% | 15/16 | 2.85% |
+| 88 | RSI(21) 30m fade <28/>72, exit 60, stop 2.0 ATR, 6 h, high-volume bars only (`RZ|30|21|28|60|2.0|6|high`) | 242 | **+11.69%** ($18,708) | +9.87% | +12.78% | 15/16 | 3.77% |
+| 89 | RSI(24) 30m fade <30/>70, exit 55, stop 2.0 ATR, 6 h (`RZ|30|24|30|55|2.0|6|none`) | 258 | **+11.68%** ($18,695) | +9.38% | +13.07% | 15/16 | 4.15% |
+| 90 | RSI(24) 30m fade <30/>70, exit 50, stop 2.5 ATR, 6 h, high-volume bars only (`RZ|30|24|30|50|2.5|6|high`) | 237 | **+11.67%** ($18,678) | +8.43% | +13.62% | 15/16 | 3.49% |
+| 91 | 4h Bollinger(1.4) extreme + 30m RSI(24) 34, 20:00 UTC +8 h (`MXX|1.4|30|24|34|20|8|1.0|6`) | 174 | **+11.65%** ($18,635) | +8.63% | +13.46% | 16/16 | 3.36% |
+| 92 | Keltner(EMA20, 1.75 ATR) fade on 240m, stop 2.0 ATR, 8 h (`KZ|240|20|1.75|2.0|8|none`) | 223 | **+11.63%** ($18,612) | +5.40% | +15.37% | 15/16 | 4.79% |
+| 93 | 4h Bollinger(1.5) extreme + 30m RSI(10) 22, 16:00 UTC +24 h (`MXX|1.5|30|10|22|16|24|2.0|6`) | 229 | **+11.62%** ($18,593) | +9.55% | +12.86% | 15/16 | 3.25% |
+| 94 | Bollinger(24,1.8) 180m fade, stop 4.0 ATR, 8 h (`BZ|180|24|1.8|4.0|8|none`) | 343 | **+11.61%** ($18,574) | +5.70% | +15.15% | 16/16 | 3.94% |
+| 95 | 4h Bollinger(1.9) extreme + 15m RSI(17) 40, 22:00 UTC +24 h (`MXX|1.9|15|17|40|22|24|3.0|12`) | 279 | **+11.61%** ($18,579) | +5.71% | +15.15% | 15/16 | 4.02% |
+| 96 | RSI(20) 30m fade <27/>73, exit 60, stop 4.0 ATR, 20 h, high-volume bars only, all day (`RZX|30|20|27|60|4.0|20|high|all`) | 183 | **+11.59%** ($18,541) | +9.06% | +13.11% | 15/16 | 3.08% |
+| 97 | 4h Bollinger(1.8) extreme + 30m RSI(19) 39, 10:00 UTC +24 h (`MXX|1.8|30|19|39|10|24|3.0|12`) | 312 | **+11.56%** ($18,497) | +5.89% | +14.96% | 16/16 | 5.28% |
+| 98 | RSI(24) 30m fade <28/>72, exit 60, stop 2.5 ATR, 6 h (`RZ|30|24|28|60|2.5|6|none`) | 161 | **+11.55%** ($18,486) | +9.54% | +12.76% | 15/16 | 3.12% |
+| 99 | RSI(24) 30m fade <30/>70, exit 55, stop 1.5 ATR, 6 h (`RZ|30|24|30|55|1.5|6|none`) | 284 | **+11.54%** ($18,463) | +8.48% | +13.37% | 15/16 | 4.03% |
+| 100 | RSI(21) 30m fade <28/>72, exit 60, stop 2.0 ATR, 6 h (`RZ|30|21|28|60|2.0|6|none`) | 248 | **+11.52%** ($18,438) | +9.69% | +12.62% | 15/16 | 4.04% |
 
 ## Rules (top 30)
 
