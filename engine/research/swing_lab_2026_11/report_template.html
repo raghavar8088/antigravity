@@ -1,0 +1,263 @@
+<title>Swing Strategy Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,600..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one research protocol: verdict, finalists with annual returns, each finalist's equity curve, benchmarks, method. */
+:root {
+  --paper: #f3f4f2;
+  --panel: #ffffff;
+  --ink: #14171a;
+  --ink-2: #485058;
+  --ink-3: #767e86;
+  --rule: #dcdfe2;
+  --grid: #eceef0;
+  --gain: #2a78d6;
+  --loss: #e34948;
+  --s1: #2a78d6;
+  --disc: #edf0f4;
+  --hold: #fbf1e2;
+  --good: #0ca30c;
+  --accent: #b5521b;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --measure: 1120px;
+  --prose: 68ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1113; --panel: #171a1d; --ink: #e8eaec; --ink-2: #b3b9bf; --ink-3: #878e95; --rule: #2b2f33; --grid: #22262a;
+    --gain: #3987e5; --loss: #e66767; --s1: #3987e5; --disc: #1e2227; --hold: #2e2617; --accent: #f08a50; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1113; --panel: #171a1d; --ink: #e8eaec; --ink-2: #b3b9bf; --ink-3: #878e95; --rule: #2b2f33; --grid: #22262a;
+  --gain: #3987e5; --loss: #e66767; --s1: #3987e5; --disc: #1e2227; --hold: #2e2617; --accent: #f08a50; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.6; }
+.page { max-width: var(--measure); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: grid; gap: 56px; }
+section, header, footer { display: grid; gap: 18px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); font-stretch: 85%; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 800; line-height: 1.02; }
+h2 { font-size: clamp(1.45rem, 3vw, 1.9rem); font-weight: 750; line-height: 1.12; }
+h3 { font-size: 1.06rem; font-weight: 700; font-stretch: 90%; }
+p { margin: 0; max-width: var(--prose); }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 1.12rem; color: var(--ink-2); }
+.note { font-size: 0.86rem; color: var(--ink-3); }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.fig { background: var(--panel); padding: 18px 20px 20px; display: grid; gap: 6px; align-content: start; }
+.fig .label { font-size: 0.84rem; font-weight: 600; color: var(--ink-2); }
+.fig .value { font-weight: 600; font-size: 2.3rem; line-height: 1.05; letter-spacing: -0.02em; }
+.fig .sub { font-size: 0.84rem; color: var(--ink-3); }
+.verdict { font-size: 1.05rem; max-width: 76ch; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.table-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.76rem; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th.l, td.l { text-align: left; }
+td.strat { white-space: normal; min-width: 210px; text-align: left; }
+td.strat .n { font-weight: 600; }
+td.strat .d { display: block; color: var(--ink-3); font-size: 0.76rem; font-family: var(--font-mono); }
+.neg { color: var(--loss); }
+.pill { display: inline-flex; gap: 6px; font-size: 0.78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-2); }
+.pill.pass { border-color: var(--good); color: var(--good); }
+.pill.pass::before { content: "✓"; }
+.pill.fail::before { content: "×"; color: var(--loss); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.card .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.card .fam { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+.card .rules { font-size: 0.86rem; color: var(--ink-2); }
+.card svg { width: 100%; height: auto; display: block; }
+.card svg text { fill: var(--ink-3); font-family: var(--font-body); font-size: 11px; font-variant-numeric: tabular-nums; }
+.card .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 0.8rem; }
+.card .nums div { display: grid; }
+.card .nums b { font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+.card .nums span { color: var(--ink-3); }
+.keys { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--ink-2); }
+.keys span { display: inline-flex; gap: 6px; align-items: center; }
+.keys i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; border: 1px solid var(--rule); }
+details { border-top: 1px solid var(--rule); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; color: var(--ink-2); }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+details[open] summary { margin-bottom: 10px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+ul.facts { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; max-width: var(--prose); }
+footer { border-top: 1px solid var(--rule); padding-top: 18px; color: var(--ink-3); font-size: 0.84rem; }
+@media (max-width: 560px) { body { font-size: 15px; } .fig .value { font-size: 2rem; } .page { gap: 44px; padding-block: 28px 48px; } }
+</style>
+
+<main class="page">
+  <header>
+    <p class="eyebrow">Multi-day crypto strategies · 12 coins · Jan 2018 to Oct 2026 · Delta India costs and real funding</p>
+    <h1>Swing Strategy Lab</h1>
+    <p class="lede" id="lede"></p>
+    <div class="figures" id="figures"></div>
+    <p class="verdict" id="verdict"></p>
+  </header>
+  <section>
+    <h2>The finalists</h2>
+    <p>The best variant of each family in 2018 to 2022, then judged on 2023 to October 2026. Returns are a share of the capital each strategy uses, per year, after Delta taker fees, slippage and funding.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-fin"></table></div></div>
+    <p class="note" id="fin-note"></p>
+  </section>
+  <section>
+    <h2>Each finalist's equity curve</h2>
+    <p>Cumulative net profit in dollars, with discovery and hold-out shaded.</p>
+    <div class="keys" id="keys"></div>
+    <div class="cards" id="cards"></div>
+  </section>
+  <section>
+    <h2>Against simply holding</h2>
+    <p>The same cost and funding model applied to holding BTC, or all six main coins, long the whole time.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-bench"></table></div></div>
+  </section>
+  <section>
+    <h2>All families</h2>
+    <div class="panel"><div class="table-wrap"><table id="t-fam"></table></div></div>
+    <details class="panel"><summary>The 30 best variants in discovery</summary><div class="table-wrap"><table id="t-top"></table></div></details>
+  </section>
+  <section>
+    <h2>Method and checks</h2>
+    <div class="two">
+      <div class="panel"><h3>How it was tested</h3><ul class="facts" id="m-how"></ul></div>
+      <div class="panel"><h3>Checks and limits</h3><ul class="facts" id="m-checks"></ul></div>
+    </div>
+  </section>
+  <footer><p id="foot"></p></footer>
+</main>
+
+<script>
+const D = /*DATA*/null;
+const MINUS = "−";
+const SVGNS = "http://www.w3.org/2000/svg";
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null) continue; if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function sv(tag, attrs, ...kids) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) if (v != null) e.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+const fmt = (v, d) => Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const usd = v => v == null ? "–" : (v < -0.5 ? MINUS : v > 0.5 ? "+" : "") + "$" + fmt(v, 0);
+const pct = (v, d = 1) => v == null ? "–" : (v < 0 ? MINUS : v > 0 ? "+" : "") + fmt(v, d) + "%";
+const num = (v, d = 2) => v == null ? "–" : (v < 0 ? MINUS : "") + fmt(v, d);
+const F = D.finalists, passed = F.filter(f => f.pass);
+const T0 = Date.UTC(2018, 0, 1), T1 = Date.UTC(2023, 0, 1), T2 = Date.UTC(2026, 10, 1);
+
+document.getElementById("lede").textContent =
+  D.variants + " multi-day strategies drawn from the trend-following, momentum, reversal and carry research, run on BTC, ETH, SOL, XRP, DOGE and BNB (12 coins for the cross-coin families). Chosen on 2018 to 2022, judged on 2023 to October 2026.";
+const best = [...F].sort((a, b) => (b.holdout.t_daily || -9) - (a.holdout.t_daily || -9))[0];
+const figs = [
+  ["Variants tested", String(D.variants), Object.keys(D.families).length + " families"],
+  ["Passed the hold-out", passed.length + " of " + F.length, "Profit, t ≥ 2, both halves positive, 4 of 6 coins"],
+  passed.length ? ["Best survivor, hold-out", pct(passed.sort((a, b) => b.holdout.t_daily - a.holdout.t_daily)[0].holdout.annual_pct) + " a year", passed[0].title]
+                : ["Closest finalist, hold-out", best ? pct(best.holdout.annual_pct) + " a year" : "–", best ? best.title + ", t " + num(best.holdout.t_daily) : ""],
+];
+for (const [l, v, s] of figs) document.getElementById("figures").append(h("div", { class: "fig" }, h("div", { class: "label" }, l), h("div", { class: "value" }, v), h("div", { class: "sub" }, s)));
+document.getElementById("verdict").textContent = passed.length
+  ? passed.length + " of " + F.length + " finalists made money on the 3.8 years they had not been chosen on: " +
+    passed.map(f => f.title + " (" + pct(f.holdout.annual_pct) + " a year, worst drawdown " + pct(f.holdout.max_dd_pct, 1).replace("+", "") + ")").join("; ") +
+    ". Passing makes a fluke less likely but does not rule it out; a paper test on Delta comes before real money."
+  : (() => {
+      const up = F.filter(f => f.holdout.pnl > 0);
+      const top = [...F].sort((a, b) => b.holdout.annual_pct - a.holdout.annual_pct)[0];
+      const btc = D.benchmarks["BTC buy and hold"].holdout;
+      return up.length + " of the " + F.length + " finalists made money in 2023 to October 2026, the best being the " + top.title + " at " +
+        pct(top.holdout.annual_pct) + " a year. None cleared the bar: each had a t-statistic under 2 or a losing half. Most of their profit came in the 2020–2021 bull market. " +
+        "Over 2023–2026, simply holding BTC made " + pct(btc.annual_pct) + " a year, with a worst drawdown of " + pct(btc.max_dd_pct).replace("+", "") + ".";
+    })();
+
+{
+  const t = document.getElementById("t-fin");
+  t.append(h("thead", {}, h("tr", {}, ["Strategy", "2018–22 a year", "t", "2023–26 a year", "t", "Halves", "Worst drawdown", "Result"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const f of F) tb.append(h("tr", {},
+    h("td", { class: "strat" }, h("span", { class: "n" }, f.title), h("span", { class: "d" }, f.variant + " · capital $" + fmt(f.capital, 0))),
+    h("td", { class: f.discovery.annual_pct < 0 ? "neg" : null }, pct(f.discovery.annual_pct)), h("td", {}, num(f.discovery.t_daily)),
+    h("td", { class: f.holdout.annual_pct < 0 ? "neg" : null }, pct(f.holdout.annual_pct)), h("td", {}, num(f.holdout.t_daily)),
+    h("td", { style: "white-space:normal" }, f.holdout_halves.map((v, i) => [i ? " / " : "", h("span", { style: "white-space:nowrap" }, usd(v))])),
+    h("td", {}, pct(f.holdout.max_dd_pct, 1).replace("+", "")),
+    h("td", { class: "l" }, h("span", { class: "pill " + (f.pass ? "pass" : "fail") }, f.pass ? "Passed" : "Failed"))));
+  t.append(tb);
+  document.getElementById("fin-note").textContent =
+    "Capital is $10,000 per coin for single-coin families ($60,000) and $10,000 per position for cross-coin families. No leverage: at 2x, returns and drawdowns double. t is computed on daily profit.";
+}
+{
+  const keys = document.getElementById("keys");
+  for (const [c, l] of [["var(--disc)", "Discovery 2018–2022"], ["var(--hold)", "Hold-out 2023–Oct 2026"]]) keys.append(h("span", {}, h("i", { style: "background:" + c }), l));
+  const box = document.getElementById("cards");
+  for (const f of F) {
+    const pts = Object.entries(f.equity).map(([d, v]) => [Date.parse(d + "T00:00:00Z"), v]);
+    const W = 330, Hh = 130, L = 50, R = 8, T = 8, B = 18;
+    const x = t => L + (t - T0) / (T2 - T0) * (W - L - R);
+    const ys = pts.map(p => p[1]);
+    const lo = Math.min(0, ...ys), hi = Math.max(0, ...ys), span = (hi - lo) || 1;
+    const y = v => T + (1 - (v - lo) / span) * (Hh - T - B);
+    const svg = sv("svg", { viewBox: "0 0 " + W + " " + Hh, role: "img", "aria-label": f.title + " cumulative profit" });
+    svg.append(sv("rect", { x: x(T0), y: T, width: x(T1) - x(T0), height: Hh - T - B, fill: "var(--disc)" }));
+    svg.append(sv("rect", { x: x(T1), y: T, width: x(T2) - x(T1), height: Hh - T - B, fill: "var(--hold)" }));
+    svg.append(sv("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--ink-3)" }));
+    for (const yr of [2018, 2020, 2022, 2024, 2026]) svg.append(sv("text", { x: x(Date.UTC(yr, 6, 1)), y: Hh - 4, "text-anchor": "middle" }, String(yr)));
+    for (const v of [lo, hi]) svg.append(sv("text", { x: L - 4, y: y(v) + 4, "text-anchor": "end" }, usd(v).replace("+", "")));
+    if (pts.length) svg.append(sv("path", { d: pts.map((p, i) => (i ? "L" : "M") + x(p[0]).toFixed(1) + " " + y(p[1]).toFixed(1)).join(" "), fill: "none", stroke: "var(--s1)", "stroke-width": 1.6, "stroke-linejoin": "round" }));
+    box.append(h("article", { class: "card" },
+      h("div", { class: "top" }, h("span", { class: "fam" }, f.family), h("span", { class: "pill " + (f.pass ? "pass" : "fail") }, f.pass ? "Passed" : "Failed")),
+      h("h3", {}, f.title), h("p", { class: "rules" }, f.rules), svg,
+      h("div", { class: "nums" },
+        h("div", {}, h("span", {}, "2018–22 a year"), h("b", {}, pct(f.discovery.annual_pct))),
+        h("div", {}, h("span", {}, "2023–26 a year"), h("b", { class: f.holdout.annual_pct < 0 ? "neg" : null }, pct(f.holdout.annual_pct))),
+        h("div", {}, h("span", {}, "Worst drawdown"), h("b", {}, pct(f.holdout.max_dd_pct).replace("+", ""))))));
+  }
+}
+{
+  const t = document.getElementById("t-bench");
+  t.append(h("thead", {}, h("tr", {}, ["Holding", "2018–22 a year", "Worst drawdown", "2023–26 a year", "Worst drawdown"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const [k, v] of Object.entries(D.benchmarks)) tb.append(h("tr", {}, h("td", { class: "l" }, k),
+    h("td", {}, pct(v.discovery.annual_pct)), h("td", {}, pct(v.discovery.max_dd_pct).replace("+", "")),
+    h("td", {}, pct(v.holdout.annual_pct)), h("td", {}, pct(v.holdout.max_dd_pct).replace("+", ""))));
+  t.append(tb);
+}
+{
+  const t = document.getElementById("t-fam");
+  t.append(h("thead", {}, h("tr", {}, ["Family", "Variants", "Profitable 2018–22", "Eligible"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const [k, x] of Object.entries(D.families)) tb.append(h("tr", {}, h("td", { class: "l" }, k), h("td", {}, x.variants), h("td", {}, x.disc_positive), h("td", {}, x.eligible)));
+  t.append(tb);
+  const t2 = document.getElementById("t-top");
+  t2.append(h("thead", {}, h("tr", {}, ["Variant", "Entries", "A year", "t", "Worst drawdown", "Eligible"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb2 = h("tbody");
+  for (const r of D.top) tb2.append(h("tr", {}, h("td", { class: "strat" }, h("span", { class: "n" }, r.title), h("span", { class: "d" }, r.variant)),
+    h("td", {}, r.entries), h("td", {}, pct(r.annual_pct)), h("td", {}, num(r.t_daily)), h("td", {}, pct(r.max_dd_pct).replace("+", "")), h("td", { class: "l" }, r.eligible ? "yes" : "no")));
+  t2.append(tb2);
+}
+{
+  const add = (id, items) => { const ul = document.getElementById(id); for (const x of items) if (x) ul.append(h("li", {}, x)); };
+  add("m-how", [
+    "Binance spot daily candles for 12 coins from their listing (BTC and ETH: August 2017) to 31 October 2026, every archive SHA-256 checked.",
+    "Each position is decided at the daily close from finished days only and traded at the next open, 00:00 UTC.",
+    "Every change of position pays Delta India's taker fee (0.05% + 18% GST) plus 2 to 5 bp of slippage. Every day held pays or earns the real Binance perpetual funding. Before a coin's perpetual existed, 0.01% per 8 hours is used.",
+    "Rules locked before the first run: eligible = at least 30 entries, profit, daily t ≥ 2 and profit in all but one discovery year; the best eligible variant per family is the finalist; pass = profit, t ≥ 2 and both halves positive in 2023 to October 2026, and 4 of 6 coins for single-coin families.",
+  ]);
+  const V = D.verify;
+  add("m-checks", [
+    "Fingerprint " + D.fingerprint + " recorded before the first run" + (D.amendments.length ? "; amendments: " + D.amendments.map(a => a.why).join(" ") : "") + ".",
+    "Positions and P&L of every finalist recomputed by separately written day-by-day loops: " + V.position_mismatches.length + " position and " + V.pnl_mismatches.length + " P&L mismatches.",
+    "No look-ahead: re-run on data cut at " + V.truncation_cut + ", " + V.truncation_mismatches.length + " mismatches.",
+    "Synthetic funding covers " + Math.round(D.synthetic_share * 100) + "% of coin-days in discovery (mostly 2018–2019); real funding everywhere in the hold-out.",
+    "The hold-out includes October 2025 to October 2026, a period earlier studies looked at. Spot prices stand in for the perpetual.",
+  ]);
+  document.getElementById("foot").textContent = "Generated " + D.generated + ". Code and results: engine/research/swing_lab_2026_11 (sw_fetch.py, sw_lab.py, sw_verify.py, sw_report.py, REPORT.md, results/).";
+}
+</script>

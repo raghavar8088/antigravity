@@ -1,0 +1,14 @@
+{
+ "finalists": [
+  "T1|20|LO",
+  "T2|10/50|LS",
+  "T3|20/10|LS",
+  "T4|28|daily|LS",
+  "X1|28|1",
+  "X3|7|2|daily"
+ ],
+ "position_mismatches": [],
+ "pnl_mismatches": [],
+ "truncation_cut": "2024-07-01",
+ "truncation_mismatches": []
+}

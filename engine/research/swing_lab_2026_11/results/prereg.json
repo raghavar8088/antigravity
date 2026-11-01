@@ -1,0 +1,124 @@
+{
+ "fingerprint": "9690f7acd1cf4342",
+ "registered_utc": "2026-11-01T14:37:01+00:00",
+ "protocol": "Swing-strategy lab: multi-day crypto strategies under a locked protocol.\n\nPositions are decided at the daily close (00:00 UTC) from finished days only and\nheld from that day's open to the next: P&L_d = $10,000 x [pos_d x (open_{d+1} /\nopen_d - 1) - |pos_d - pos_{d-1}| x cost_side - pos_d x funding_d].\ncost_side = Delta India taker 0.05% + 18% GST (5.9 bp) plus slippage 2 bp (BTC,\nETH), 4 bp (SOL XRP DOGE BNB) or 5 bp (ADA LTC LINK TRX XLM EOS).\nfunding_d = the real Binance perpetual funding prints of that day (signed: a\nlong pays positive funding); before a coin's perpetual existed, 0.01% per 8 h.\nPrices: Binance spot daily candles (longest consistent history).\n\nProtocol (fixed before the first run; fingerprint in results/prereg.json):\n  discovery 2018-01-01 .. 2022-12-31, every variant\n  eligible  >= 30 entries, net profit, daily t >= 2.0, and profit in all but\n            at most one of the discovery years in which it held positions\n  finalist  the eligible variant with the highest discovery t in each family\n  hold-out  2023-01-01 .. 2026-10-31, finalists only. PASS = net profit, daily\n            t >= 2.0, profit in both halves (Jan 2023-Nov 2024, Dec 2024-Oct\n            2026) and, for single-coin families, profit on >= 4 of 6 coins.\nThe hold-out includes Oct 2025 - Oct 2026, whose BTC prices earlier studies saw.",
+ "variants": {
+  "T1 Price vs moving average": [
+   "T1|20|LO",
+   "T1|20|LS",
+   "T1|50|LO",
+   "T1|50|LS",
+   "T1|100|LO",
+   "T1|100|LS",
+   "T1|200|LO",
+   "T1|200|LS"
+  ],
+  "T2 Moving-average crossover": [
+   "T2|10/50|LO",
+   "T2|10/50|LS",
+   "T2|20/100|LO",
+   "T2|20/100|LS",
+   "T2|50/200|LO",
+   "T2|50/200|LS"
+  ],
+  "T3 Donchian breakout": [
+   "T3|20/10|LO",
+   "T3|20/10|LS",
+   "T3|55/20|LO",
+   "T3|55/20|LS",
+   "T3|100/50|LO",
+   "T3|100/50|LS"
+  ],
+  "T4 Time-series momentum": [
+   "T4|7|daily|LO",
+   "T4|7|daily|LS",
+   "T4|7|weekly|LO",
+   "T4|7|weekly|LS",
+   "T4|14|daily|LO",
+   "T4|14|daily|LS",
+   "T4|14|weekly|LO",
+   "T4|14|weekly|LS",
+   "T4|28|daily|LO",
+   "T4|28|daily|LS",
+   "T4|28|weekly|LO",
+   "T4|28|weekly|LS",
+   "T4|56|daily|LO",
+   "T4|56|daily|LS",
+   "T4|56|weekly|LO",
+   "T4|56|weekly|LS",
+   "T4|112|daily|LO",
+   "T4|112|daily|LS",
+   "T4|112|weekly|LO",
+   "T4|112|weekly|LS"
+  ],
+  "X1 Cross-coin momentum": [
+   "X1|7|1",
+   "X1|7|2",
+   "X1|7|3",
+   "X1|14|1",
+   "X1|14|2",
+   "X1|14|3",
+   "X1|28|1",
+   "X1|28|2",
+   "X1|28|3",
+   "X1|56|1",
+   "X1|56|2",
+   "X1|56|3"
+  ],
+  "X2 Cross-coin reversal": [
+   "X2|1|1",
+   "X2|1|2",
+   "X2|1|3",
+   "X2|3|1",
+   "X2|3|2",
+   "X2|3|3",
+   "X2|7|1",
+   "X2|7|2",
+   "X2|7|3"
+  ],
+  "X3 Funding carry": [
+   "X3|1|1|daily",
+   "X3|1|1|weekly",
+   "X3|1|2|daily",
+   "X3|1|2|weekly",
+   "X3|7|1|daily",
+   "X3|7|1|weekly",
+   "X3|7|2|daily",
+   "X3|7|2|weekly"
+  ],
+  "M1 Daily RSI(2) dip-buying": [
+   "M1|5|sma200|LO",
+   "M1|5|sma200|LS",
+   "M1|5|none|LO",
+   "M1|5|none|LS",
+   "M1|10|sma200|LO",
+   "M1|10|sma200|LS",
+   "M1|10|none|LO",
+   "M1|10|none|LS"
+  ],
+  "S1 One-day momentum / reversal": [
+   "S1|0.0|mom",
+   "S1|0.0|rev",
+   "S1|0.5|mom",
+   "S1|0.5|rev",
+   "S1|1.0|mom",
+   "S1|1.0|rev"
+  ]
+ },
+ "amendments": [
+  {
+   "from": "9690f7acd1cf4342",
+   "to": "2e57b6e050025801",
+   "rules_changed": false,
+   "logged_utc": "2026-11-01T14:37:18+00:00",
+   "why": "The first run crashed in the weekly time-series-momentum rule (pandas would not apply a one-dimensional weekday mask to the position table). The mask is now applied by row. No rule or parameter changed; the crash happened before any hold-out result existed."
+  },
+  {
+   "from": "2e57b6e050025801",
+   "to": "237c53981b3e5ef3",
+   "rules_changed": false,
+   "logged_utc": "2026-11-01T14:38:24+00:00",
+   "why": "Found by the independent check after the second run: cross-coin rankings broke exact ties (common in funding carry, where many coins sit at the default 0.01% rate) in an arbitrary order. Ties now keep coin order, as the checker does. No rule or parameter changed; all variants were re-run."
+  }
+ ]
+}
