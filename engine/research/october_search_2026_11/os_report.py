@@ -31,7 +31,9 @@ FAM = {"A": "Session-open breakout", "B": "Trend-day follow", "C": "Cross-coin",
        "DMX": "DMI cross", "DWX": "Day-of-week window", "CZX": "RSI fade by hour and VWAP", "E1X": "EMA crossover", "STR": "Supertrend",
        "VBO": "Volatility breakout from the open", "TSP": "Turtle soup (failed breakout)", "SQZ": "Bollinger squeeze breakout",
        "VSP": "Volume spike", "LLG": "BTC lead-lag", "FND": "Funding-rate tilt", "PDF": "Previous-day high/low failure",
-       "RNG": "Asian-range limit fade", "BLX": "Band limit fade (maker)"}
+       "RNG": "Asian-range limit fade", "BLX": "Band limit fade (maker)", "XSX": "Cross-coin intraday", "RBX": "Session-range breakout",
+       "VWB": "VWAP band limit fade (maker)", "ORF": "Opening-range failure", "FLX": "Flush reversal", "RVF": "Relative value vs BTC",
+       "WOF": "Fade from the weekly open", "DIV": "RSI divergence", "BZR": "Bollinger fade + regime filter"}
 
 
 def title_a(vid, fallback):

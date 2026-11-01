@@ -1,0 +1,67 @@
+{
+ "cut": "2026-10-20",
+ "coins": [
+  "BTCUSDT",
+  "ETHUSDT",
+  "SOLUSDT",
+  "ADAUSDT"
+ ],
+ "families": {
+  "XSX": {
+   "variants": 10,
+   "trades": 600,
+   "checked_before_cut": 378,
+   "seconds_per_variant_4_coins": 0.002
+  },
+  "RBX": {
+   "variants": 10,
+   "trades": 591,
+   "checked_before_cut": 358,
+   "seconds_per_variant_4_coins": 0.004
+  },
+  "VWB": {
+   "variants": 10,
+   "trades": 2132,
+   "checked_before_cut": 1421,
+   "seconds_per_variant_4_coins": 0.026
+  },
+  "ORF": {
+   "variants": 10,
+   "trades": 505,
+   "checked_before_cut": 324,
+   "seconds_per_variant_4_coins": 0.009
+  },
+  "FLX": {
+   "variants": 10,
+   "trades": 1251,
+   "checked_before_cut": 800,
+   "seconds_per_variant_4_coins": 0.038
+  },
+  "RVF": {
+   "variants": 10,
+   "trades": 341,
+   "checked_before_cut": 266,
+   "seconds_per_variant_4_coins": 0.027
+  },
+  "WOF": {
+   "variants": 10,
+   "trades": 458,
+   "checked_before_cut": 327,
+   "seconds_per_variant_4_coins": 0.043
+  },
+  "DIV": {
+   "variants": 10,
+   "trades": 151,
+   "checked_before_cut": 108,
+   "seconds_per_variant_4_coins": 0.015
+  },
+  "BZR": {
+   "variants": 10,
+   "trades": 146,
+   "checked_before_cut": 104,
+   "seconds_per_variant_4_coins": 0.01
+  }
+ },
+ "problems": [],
+ "n_problems": 0
+}

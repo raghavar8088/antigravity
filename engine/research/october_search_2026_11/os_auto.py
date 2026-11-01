@@ -2,8 +2,8 @@
 
 Draws untested variants from the fixed libraries (os_library .. os_library6,
 families interleaved); once those are used up it keeps drawing new random
-combinations from os_library7 and os_library8 (37 families), so it never runs
-dry. Each variant is scored on
+combinations from os_library7, os_library8 and os_library9 (46 families), so it
+never runs dry. Each variant is scored on
 October 2026 only: PROFITABLE / CONSISTENT on the 6 main coins, then CONFIRMED
 on the 10 extra coins (same rules as rounds 1-3). Every result is appended to
 results/auto/evaluated.jsonl, so a restart continues where it stopped, and the
@@ -34,6 +34,7 @@ import os_library5 as L5  # noqa: E402
 import os_library6 as L6  # noqa: E402
 import os_library7 as L7  # noqa: E402
 import os_library8 as L8  # noqa: E402
+import os_library9 as L9  # noqa: E402
 from os_search import score  # noqa: E402
 
 MAIN = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT"]
@@ -42,7 +43,8 @@ AUTO = os.path.join(HERE, "results", "auto")
 EVAL = os.path.join(AUTO, "evaluated.jsonl")
 PROG = os.path.join(AUTO, "progress.json")
 STOP = os.path.join(AUTO, "STOP")
-LIBS = [(L8.FN8, L8.describe8), (L7.FN7, L7.describe7), (L6.FN6, L6.describe6), (L5.FN5, L5.describe5), (L4.FN4, L4.describe4),
+CROSS = {"XS": L3.xs_orders, **L9.CROSS9}  # families ranked across the coin set
+LIBS = [(L9.FN9, L9.describe9), (L8.FN8, L8.describe8), (L7.FN7, L7.describe7), (L6.FN6, L6.describe6), (L5.FN5, L5.describe5), (L4.FN4, L4.describe4),
         (L3.FN3, L3.describe3), (L2.FN2, L2.describe2)]
 
 
@@ -82,7 +84,7 @@ def describe(fam, p):
 
 def run(ctx, coins, fam, p):
     by = {}
-    per = L3.xs_orders({s: ctx[s] for s in coins}, *p) if fam == "XS" else None
+    per = CROSS[fam]({s: ctx[s] for s in coins}, *p) if fam in CROSS else None
     for s in coins:
         ords = per[s] if per is not None else orders_for(ctx, s, fam, p)
         tr = sl_core.run_orders(ctx[s].mk, ords)
@@ -148,7 +150,7 @@ def main():
         else:
             batch, tries = [], 0
             while len(batch) < size and tries < size * 100:
-                fam, p = L8.sample(rng)
+                fam, p = L9.sample(rng)
                 tries += 1
                 v = L.vid(fam, p)
                 if v not in done:
