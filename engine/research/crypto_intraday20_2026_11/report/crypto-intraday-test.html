@@ -1,0 +1,380 @@
+<title>Crypto Intraday Strategy Test</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,600..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a lab notebook for one test month. Prose holds ~68ch; tables and charts take the full 1120px. */
+:root {
+  --paper: #f3f5f4;
+  --panel: #ffffff;
+  --ink: #131816;
+  --ink-2: #47514d;
+  --ink-3: #74807b;
+  --rule: #dce1de;
+  --grid: #ebefed;
+  --gain: #2a78d6;
+  --loss: #e34948;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --band: #f6e3c8;
+  --accent: #0f6b5c;
+  --accent-soft: #dff0eb;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --measure: 1120px;
+  --prose: 68ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1211; --panel: #161b19; --ink: #e7ecea; --ink-2: #b1bbb7; --ink-3: #87928e;
+    --rule: #2a322f; --grid: #212825; --gain: #3987e5; --loss: #e66767; --s1: #3987e5; --s2: #d95926;
+    --band: #3d2f1c; --accent: #5cc4ae; --accent-soft: #173029; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1211; --panel: #161b19; --ink: #e7ecea; --ink-2: #b1bbb7; --ink-3: #87928e;
+  --rule: #2a322f; --grid: #212825; --gain: #3987e5; --loss: #e66767; --s1: #3987e5; --s2: #d95926;
+  --band: #3d2f1c; --accent: #5cc4ae; --accent-soft: #173029; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.6; }
+.page { max-width: var(--measure); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: grid; gap: 56px; }
+section, header, footer { display: grid; gap: 18px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); font-stretch: 85%; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 800; line-height: 1.02; }
+h2 { font-size: clamp(1.45rem, 3vw, 1.9rem); font-weight: 750; line-height: 1.12; }
+h3 { font-size: 1.08rem; font-weight: 700; font-stretch: 90%; }
+p { margin: 0; max-width: var(--prose); }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 1.12rem; color: var(--ink-2); }
+.note { font-size: 0.86rem; color: var(--ink-3); }
+.mono { font-family: var(--font-mono); font-size: 0.86em; }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.fig { background: var(--panel); padding: 18px 20px 20px; display: grid; gap: 6px; align-content: start; }
+.fig .label { font-size: 0.84rem; font-weight: 600; color: var(--ink-2); }
+.fig .value { font-weight: 600; font-size: 2.3rem; line-height: 1.05; letter-spacing: -0.02em; }
+.fig .value.neg { color: var(--loss); }
+.fig .sub { font-size: 0.84rem; color: var(--ink-3); }
+.verdict { font-size: 1.05rem; max-width: 74ch; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.table-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.76rem; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th.l, td.l { text-align: left; }
+td.strat { white-space: normal; min-width: 230px; text-align: left; }
+td.strat .n { font-weight: 600; }
+td.strat .d { display: block; color: var(--ink-3); font-size: 0.78rem; line-height: 1.35; }
+td.heat { min-width: 66px; }
+tr.total td { font-weight: 600; border-top: 1px solid var(--rule); }
+.neg { color: var(--loss); }
+.chart-wrap { overflow-x: auto; min-width: 0; position: relative; }
+.chart-wrap svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.chart-wrap svg text { fill: var(--ink-2); font-family: var(--font-body); font-size: 12px; font-variant-numeric: tabular-nums; }
+.chart-wrap svg text.muted { fill: var(--ink-3); }
+.chart-wrap svg text.strong { fill: var(--ink); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.84rem; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+.legend i.dot { width: 9px; height: 9px; border-radius: 50%; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; font-size: 0.8rem; line-height: 1.45; box-shadow: 0 4px 14px rgba(0,0,0,0.12); min-width: 190px; z-index: 2; }
+.tip .t { color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+.tip .r { display: flex; gap: 12px; justify-content: space-between; color: var(--ink-2); }
+.tip .r b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.book { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.card .top { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+.card .id { font-family: var(--font-mono); font-size: 0.78rem; color: var(--accent); font-weight: 500; }
+.card .fam { font-size: 0.74rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.card h3 { font-size: 1.02rem; }
+.card .idea { font-size: 0.9rem; }
+.card .rules { font-size: 0.84rem; color: var(--ink-2); }
+.card .src { font-size: 0.78rem; color: var(--ink-3); font-style: italic; }
+.card .res { font-size: 0.8rem; font-variant-numeric: tabular-nums; color: var(--ink-2); border-top: 1px solid var(--grid); padding-top: 6px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+ul.facts { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; max-width: var(--prose); }
+ul.facts li::marker { color: var(--ink-3); }
+footer { border-top: 1px solid var(--rule); padding-top: 18px; color: var(--ink-3); font-size: 0.84rem; }
+svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 560px) {
+  body { font-size: 15px; }
+  .fig .value { font-size: 2rem; }
+  .page { gap: 44px; padding-block: 28px 48px; }
+}
+</style>
+
+<main class="page">
+  <header>
+    <p class="eyebrow">Binance USDT-M perpetuals · BTC ETH SOL XRP DOGE BNB · 1–31 October 2026 · Delta India costs</p>
+    <h1>Crypto Intraday Strategy Test</h1>
+    <p class="lede" id="lede"></p>
+    <div class="figures" id="figures"></div>
+    <p class="verdict" id="verdict"></p>
+  </header>
+
+  <section id="october">
+    <h2>October 2026, all 20 strategies</h2>
+    <p id="oct-intro"></p>
+    <div class="panel"><div class="table-wrap"><table id="t-oct"></table></div></div>
+    <p class="note" id="oct-note"></p>
+  </section>
+
+  <section id="coins">
+    <h2>October by coin</h2>
+    <p>Net result of each strategy on each coin, in dollars on that coin's $10,000. Blue cells made money, red cells lost it.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-coin"></table></div></div>
+  </section>
+
+  <section id="edge">
+    <h2>Edge before costs against the cost of a trade</h2>
+    <p id="edge-intro"></p>
+    <div class="panel">
+      <div class="legend" id="edge-legend"></div>
+      <div class="chart-wrap" id="edge-wrap"></div>
+      <p class="note" id="edge-note"></p>
+    </div>
+  </section>
+
+  <section id="months">
+    <h2>Twelve months, same rules</h2>
+    <p>The same 20 strategies, untouched, from November 2025 to October 2026. Net dollars per month on each strategy's capital.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-month"></table></div></div>
+  </section>
+
+  <section id="persist">
+    <h2>Does last month's top 5 win next month?</h2>
+    <p id="persist-intro"></p>
+    <div class="panel"><div class="table-wrap"><table id="t-persist"></table></div></div>
+    <p class="note" id="persist-note"></p>
+  </section>
+
+  <section id="strategies">
+    <h2>The 20 strategies and where they come from</h2>
+    <p>Each rule follows a published finding or a documented trading method, adapted to crypto's 24-hour UTC day. Every parameter was fixed before the first backtest and none was changed after.</p>
+    <div class="book" id="book"></div>
+  </section>
+
+  <section id="method">
+    <h2>Data, method and checks</h2>
+    <div class="two">
+      <div class="panel"><h3>Data</h3><ul class="facts" id="m-data"></ul></div>
+      <div class="panel"><h3>How a trade is simulated</h3><ul class="facts" id="m-sim"></ul></div>
+      <div class="panel"><h3>Checks</h3><ul class="facts" id="m-checks"></ul></div>
+      <div class="panel"><h3>Limits</h3><ul class="facts" id="m-limits"></ul></div>
+    </div>
+  </section>
+
+  <footer><p id="foot"></p></footer>
+</main>
+
+<script>
+const D = {"generated":"2026-11-01","costs":{"rt_low":15.8,"rt_high":19.8},"strategies":[{"id":"S01","name":"First-half-hour momentum","family":"Time-series momentum","source":"Shen, Urquhart & Wang (2022), 'Bitcoin intraday time series momentum', Financial Review; Gao, Han, Li & Zhou (2018), 'Market intraday momentum', Journal of Financial Economics","idea":"The return of the first half-hour of the UTC day predicts the return of the last half-hour.","rules":"Take the 00:00-00:30 UTC return. At 23:30 UTC trade in its direction; exit at 00:00. No stop. One trade a day.","capital":60000.0,"october":{"trades":177,"pnl":-3730.99,"return_pct":-6.22,"gross_pnl":-466.39,"win_rate":13.6,"avg_gross_bp":-2.63,"avg_net_bp":-21.08,"profit_factor":0.12,"t_stat":-10.05,"max_dd":3730.99,"long_share":48.0,"avg_hold_min":30.0},"context":{"trades":1993,"pnl":-41121.68,"return_pct":-68.54,"gross_pnl":-4332.28,"win_rate":19.7,"avg_gross_bp":-2.17,"avg_net_bp":-20.63,"profit_factor":0.13,"t_stat":-27.86,"max_dd":41121.68,"long_share":49.2,"avg_hold_min":30.0},"by_coin":{"BTCUSDT":{"pnl":-520.52,"trades":30},"ETHUSDT":{"pnl":-562.93,"trades":30},"SOLUSDT":{"pnl":-502.84,"trades":29},"XRPUSDT":{"pnl":-466.66,"trades":29},"DOGEUSDT":{"pnl":-906.16,"trades":29},"BNBUSDT":{"pnl":-771.88,"trades":30}},"monthly":{"2025-11":-4460.22,"2025-12":-2663.67,"2026-01":-4339.41,"2026-02":-4270.15,"2026-03":-5546.98,"2026-04":-3512.97,"2026-05":-3500.89,"2026-06":-3690.52,"2026-07":-2771.5,"2026-08":-3618.52,"2026-09":-2746.84,"2026-10":-3730.99},"total12":-44852.66,"gross_ctx_bp":-2.17,"gross_ctx_t":-2.94,"gross_oct_bp":-2.63},{"id":"S02","name":"Williams volatility breakout","family":"Volatility breakout","source":"Williams (1999), 'Long-Term Secrets to Short-Term Trading'; widely run on Bitcoin as the k = 0.5 volatility breakout","idea":"A move of half of yesterday's range away from today's open signals a directional day.","rules":"Long when a 1m close is above the 00:00 open + 0.5 x yesterday's range; short below the open - 0.5 x range. First trigger only; exit at 00:00. No stop.","capital":60000.0,"october":{"trades":120,"pnl":-5630.12,"return_pct":-9.38,"gross_pnl":-3414.34,"win_rate":31.7,"avg_gross_bp":-28.45,"avg_net_bp":-46.92,"profit_factor":0.57,"t_stat":-2.38,"max_dd":9087.6,"long_share":36.7,"avg_hold_min":873.6},"context":{"trades":1407,"pnl":-17234.94,"return_pct":-28.72,"gross_pnl":9160.82,"win_rate":43.9,"avg_gross_bp":6.51,"avg_net_bp":-12.25,"profit_factor":0.87,"t_stat":-1.71,"max_dd":28152.31,"long_share":48.0,"avg_hold_min":818.1},"by_coin":{"BTCUSDT":{"pnl":-208.37,"trades":21},"ETHUSDT":{"pnl":-1431.35,"trades":20},"SOLUSDT":{"pnl":-1951.85,"trades":18},"XRPUSDT":{"pnl":-995.75,"trades":20},"DOGEUSDT":{"pnl":-489.98,"trades":19},"BNBUSDT":{"pnl":-552.82,"trades":22}},"monthly":{"2025-11":-10035.34,"2025-12":-6353.28,"2026-01":9802.1,"2026-02":-796.01,"2026-03":804.0,"2026-04":-5850.47,"2026-05":-5826.56,"2026-06":1808.03,"2026-07":-3877.81,"2026-08":-1630.41,"2026-09":4720.82,"2026-10":-5630.12},"total12":-22865.05,"gross_ctx_bp":6.51,"gross_ctx_t":0.91,"gross_oct_bp":-28.45},{"id":"S03","name":"Dual Thrust","family":"Volatility breakout","source":"Michael Chalek's Dual Thrust system, a standard intraday breakout in futures and crypto trading","idea":"Breakouts beyond a range built from the last four days continue within the day.","rules":"Range = max(HH - LC, HC - LL) over the prior 4 days. Long above open + 0.5 x range, short below open - 0.5 x range, reversing on the opposite line; exit at 00:00.","capital":60000.0,"october":{"trades":72,"pnl":-3110.56,"return_pct":-5.18,"gross_pnl":-1794.24,"win_rate":36.1,"avg_gross_bp":-24.92,"avg_net_bp":-43.2,"profit_factor":0.6,"t_stat":-1.61,"max_dd":5169.5,"long_share":33.3,"avg_hold_min":729.4},"context":{"trades":764,"pnl":-8741.06,"return_pct":-14.57,"gross_pnl":5582.23,"win_rate":40.3,"avg_gross_bp":7.31,"avg_net_bp":-11.44,"profit_factor":0.87,"t_stat":-1.27,"max_dd":17653.33,"long_share":49.1,"avg_hold_min":637.6},"by_coin":{"BTCUSDT":{"pnl":-417.53,"trades":15},"ETHUSDT":{"pnl":-1466.96,"trades":15},"SOLUSDT":{"pnl":85.09,"trades":9},"XRPUSDT":{"pnl":-577.03,"trades":11},"DOGEUSDT":{"pnl":-801.89,"trades":12},"BNBUSDT":{"pnl":67.75,"trades":10}},"monthly":{"2025-11":-721.6,"2025-12":-5052.83,"2026-01":3975.22,"2026-02":6235.29,"2026-03":-3674.29,"2026-04":-1422.99,"2026-05":-6054.08,"2026-06":-2406.73,"2026-07":-1145.11,"2026-08":2325.6,"2026-09":-799.54,"2026-10":-3110.56},"total12":-11851.62,"gross_ctx_bp":7.31,"gross_ctx_t":0.81,"gross_oct_bp":-24.92},{"id":"S04","name":"First 5-minute direction","family":"Opening range","source":"Zarattini, Barbon & Aziz (2024), 'A Profitable Day Trading Strategy for the U.S. Equity Market' (5-minute opening-range rule)","idea":"The direction of the first 5-minute candle, on days with heavy early volume, carries through the session.","rules":"If the 00:00-00:05 candle is up (down) and its volume is at least its 14-day average, buy (sell) at 00:05. Stop 10% of the 14-day ATR; exit at 00:00.","capital":60000.0,"october":{"trades":65,"pnl":-2755.13,"return_pct":-4.59,"gross_pnl":-1559.4,"win_rate":10.8,"avg_gross_bp":-23.99,"avg_net_bp":-42.39,"profit_factor":0.15,"t_stat":-7.56,"max_dd":2755.13,"long_share":30.8,"avg_hold_min":278.9},"context":{"trades":656,"pnl":-13342.31,"return_pct":-22.24,"gross_pnl":-1176.64,"win_rate":13.3,"avg_gross_bp":-1.79,"avg_net_bp":-20.34,"profit_factor":0.64,"t_stat":-3.36,"max_dd":14023.13,"long_share":49.4,"avg_hold_min":357.1},"by_coin":{"BTCUSDT":{"pnl":-252.63,"trades":13},"ETHUSDT":{"pnl":-414.7,"trades":9},"SOLUSDT":{"pnl":-495.45,"trades":11},"XRPUSDT":{"pnl":-732.26,"trades":11},"DOGEUSDT":{"pnl":-247.98,"trades":6},"BNBUSDT":{"pnl":-612.12,"trades":15}},"monthly":{"2025-11":-3308.64,"2025-12":379.02,"2026-01":453.92,"2026-02":752.93,"2026-03":-1354.37,"2026-04":-901.72,"2026-05":-40.99,"2026-06":-1675.07,"2026-07":-3427.96,"2026-08":-2490.35,"2026-09":-1729.07,"2026-10":-2755.13},"total12":-16097.43,"gross_ctx_bp":-1.79,"gross_ctx_t":-0.3,"gross_oct_bp":-23.99},{"id":"S05","name":"US-open range breakout","family":"Opening range","source":"Crabel (1990), 'Day Trading with Short Term Price Patterns and Opening Range Breakout'; Eross, McGroarty, Urquhart & Wolfe (2019), 'The intraday dynamics of bitcoin', Research in International Business and Finance (activity peaks in US hours)","idea":"Crypto volume and volatility peak when US equities open; the first 30 minutes set a range whose break carries on.","rules":"Range = first 30 min after the NYSE open (13:30 or 14:30 UTC). Weekdays only. Trade the first 1m close outside it within 4 h; stop at the other side, target 2x the range, exit at the NYSE close.","capital":60000.0,"october":{"trades":126,"pnl":-770.13,"return_pct":-1.28,"gross_pnl":1562.18,"win_rate":41.3,"avg_gross_bp":12.4,"avg_net_bp":-6.11,"profit_factor":0.89,"t_stat":-0.58,"max_dd":2557.53,"long_share":57.9,"avg_hold_min":169.7},"context":{"trades":1390,"pnl":-7381.14,"return_pct":-12.3,"gross_pnl":18334.69,"win_rate":44.0,"avg_gross_bp":13.19,"avg_net_bp":-5.31,"profit_factor":0.91,"t_stat":-1.32,"max_dd":20136.7,"long_share":50.1,"avg_hold_min":201.1},"by_coin":{"BTCUSDT":{"pnl":-350.54,"trades":21},"ETHUSDT":{"pnl":220.88,"trades":21},"SOLUSDT":{"pnl":-208.02,"trades":21},"XRPUSDT":{"pnl":196.47,"trades":21},"DOGEUSDT":{"pnl":-543.73,"trades":21},"BNBUSDT":{"pnl":-85.18,"trades":21}},"monthly":{"2025-11":7660.78,"2025-12":-2362.13,"2026-01":485.11,"2026-02":4157.5,"2026-03":-5913.36,"2026-04":-2568.34,"2026-05":-4978.34,"2026-06":1143.61,"2026-07":-3605.35,"2026-08":-762.78,"2026-09":-637.83,"2026-10":-770.13},"total12":-8151.26,"gross_ctx_bp":13.19,"gross_ctx_t":3.27,"gross_oct_bp":12.4},{"id":"S06","name":"Asia range, London breakout","family":"Opening range","source":"FX 'London breakout' practice; Eross et al. (2019) on activity rising at the European open","idea":"The quiet Asian-hours range breaks when Europe arrives, and the break continues.","rules":"Range = 00:00 UTC to the London open (07:00 or 08:00 UTC). Weekdays only. Trade the first 1m close outside it within 5 h; stop at the range middle, target 1x the range, exit 9 h after the London open.","capital":60000.0,"october":{"trades":75,"pnl":-3850.42,"return_pct":-6.42,"gross_pnl":-2453.67,"win_rate":25.3,"avg_gross_bp":-32.72,"avg_net_bp":-51.34,"profit_factor":0.3,"t_stat":-4.87,"max_dd":3850.42,"long_share":58.7,"avg_hold_min":240.9},"context":{"trades":972,"pnl":-7672.52,"return_pct":-12.79,"gross_pnl":10327.01,"win_rate":40.7,"avg_gross_bp":10.62,"avg_net_bp":-7.89,"profit_factor":0.88,"t_stat":-1.56,"max_dd":11618.26,"long_share":49.1,"avg_hold_min":270.4},"by_coin":{"BTCUSDT":{"pnl":-369.06,"trades":12},"ETHUSDT":{"pnl":-318.88,"trades":11},"SOLUSDT":{"pnl":-830.26,"trades":14},"XRPUSDT":{"pnl":-616.22,"trades":12},"DOGEUSDT":{"pnl":-1309.57,"trades":13},"BNBUSDT":{"pnl":-406.43,"trades":13}},"monthly":{"2025-11":-4086.49,"2025-12":-248.59,"2026-01":-1605.61,"2026-02":4712.36,"2026-03":1229.41,"2026-04":-3152.16,"2026-05":-3278.04,"2026-06":-1742.13,"2026-07":-390.42,"2026-08":813.8,"2026-09":75.36,"2026-10":-3850.42},"total12":-11522.93,"gross_ctx_bp":10.62,"gross_ctx_t":2.11,"gross_oct_bp":-32.72},{"id":"S07","name":"Session VWAP trend","family":"Trend","source":"Zarattini & Aziz (2023), 'Volume Weighted Average Price (VWAP): The Holy Grail for Day Trading Systems'","idea":"Price above the session VWAP means buyers are in control, below means sellers.","rules":"Every 15 min from 00:15 to 23:30 UTC hold long if the close is above the session VWAP and short if below, flipping when it crosses; exit at 00:00.","capital":60000.0,"october":{"trades":1902,"pnl":-35666.15,"return_pct":-59.44,"gross_pnl":-710.21,"win_rate":13.9,"avg_gross_bp":-0.37,"avg_net_bp":-18.75,"profit_factor":0.43,"t_stat":-11.96,"max_dd":35712.04,"long_share":50.6,"avg_hold_min":134.9},"context":{"trades":22024,"pnl":-441194.69,"return_pct":-735.32,"gross_pnl":-34282.87,"win_rate":14.1,"avg_gross_bp":-1.56,"avg_net_bp":-20.03,"profit_factor":0.47,"t_stat":-31.25,"max_dd":444446.35,"long_share":49.9,"avg_hold_min":129.7},"by_coin":{"BTCUSDT":{"pnl":-6003.9,"trades":340},"ETHUSDT":{"pnl":-6154.14,"trades":343},"SOLUSDT":{"pnl":-6986.93,"trades":301},"XRPUSDT":{"pnl":-6902.88,"trades":322},"DOGEUSDT":{"pnl":-5421.72,"trades":302},"BNBUSDT":{"pnl":-4196.59,"trades":294}},"monthly":{"2025-11":-43265.77,"2025-12":-31535.65,"2026-01":-43075.05,"2026-02":-35739.18,"2026-03":-45917.79,"2026-04":-39056.59,"2026-05":-36096.92,"2026-06":-53462.98,"2026-07":-39491.36,"2026-08":-30233.32,"2026-09":-43320.07,"2026-10":-35666.15},"total12":-476860.83,"gross_ctx_bp":-1.56,"gross_ctx_t":-2.43,"gross_oct_bp":-0.37},{"id":"S08","name":"Abnormal-hour continuation","family":"Overreaction","source":"Caporale & Plastun (2019), 'Price overreactions in the cryptocurrency market', Journal of Economic Studies","idea":"After an abnormally large hourly move, price keeps moving the same way for a while.","rules":"If an hour's return exceeds 3 standard deviations of the prior 30 days of hourly returns, trade in its direction for 2 h; stop at that hour's open.","capital":60000.0,"october":{"trades":58,"pnl":-1408.14,"return_pct":-2.35,"gross_pnl":-347.37,"win_rate":46.6,"avg_gross_bp":-5.99,"avg_net_bp":-24.28,"profit_factor":0.61,"t_stat":-1.53,"max_dd":2611.29,"long_share":39.7,"avg_hold_min":111.6},"context":{"trades":865,"pnl":-15743.73,"return_pct":-26.24,"gross_pnl":217.14,"win_rate":41.8,"avg_gross_bp":0.25,"avg_net_bp":-18.2,"profit_factor":0.73,"t_stat":-3.38,"max_dd":19759.56,"long_share":46.8,"avg_hold_min":109.4},"by_coin":{"BTCUSDT":{"pnl":-72.89,"trades":11},"ETHUSDT":{"pnl":-136.98,"trades":12},"SOLUSDT":{"pnl":-861.64,"trades":11},"XRPUSDT":{"pnl":-83.32,"trades":11},"DOGEUSDT":{"pnl":-117.98,"trades":7},"BNBUSDT":{"pnl":-135.33,"trades":6}},"monthly":{"2025-11":22.2,"2025-12":3758.59,"2026-01":-1291.69,"2026-02":-3129.25,"2026-03":1190.26,"2026-04":432.51,"2026-05":-2261.77,"2026-06":-11868.17,"2026-07":-1219.02,"2026-08":-903.21,"2026-09":-474.16,"2026-10":-1408.14},"total12":-17151.85,"gross_ctx_bp":0.25,"gross_ctx_t":0.05,"gross_oct_bp":-5.99},{"id":"S09","name":"Jump reversal","family":"Liquidity provision","source":"Nagel (2012), 'Evaporating liquidity', Review of Financial Studies (short-term reversal as paid liquidity provision)","idea":"A violent 5-minute move is often forced flow that partly reverses once it is absorbed.","rules":"If a 5m return exceeds 4 standard deviations of the prior 3 days, fade it. Target half the bar's move back, stop half the jump beyond its extreme, exit after 1 h.","capital":60000.0,"october":{"trades":338,"pnl":-7086.98,"return_pct":-11.81,"gross_pnl":-878.94,"win_rate":50.6,"avg_gross_bp":-2.6,"avg_net_bp":-20.97,"profit_factor":0.34,"t_stat":-7.05,"max_dd":7161.67,"long_share":58.3,"avg_hold_min":16.3},"context":{"trades":4058,"pnl":-81870.58,"return_pct":-136.45,"gross_pnl":-7559.78,"win_rate":50.6,"avg_gross_bp":-1.86,"avg_net_bp":-20.18,"profit_factor":0.41,"t_stat":-21.54,"max_dd":81899.99,"long_share":45.0,"avg_hold_min":14.3},"by_coin":{"BTCUSDT":{"pnl":-1113.86,"trades":62},"ETHUSDT":{"pnl":-1038.39,"trades":60},"SOLUSDT":{"pnl":-1192.59,"trades":57},"XRPUSDT":{"pnl":-974.52,"trades":50},"DOGEUSDT":{"pnl":-1654.98,"trades":56},"BNBUSDT":{"pnl":-1112.63,"trades":53}},"monthly":{"2025-11":-5170.06,"2025-12":-9025.14,"2026-01":-9246.1,"2026-02":-8712.53,"2026-03":-3651.47,"2026-04":-7088.86,"2026-05":-8744.82,"2026-06":-9134.62,"2026-07":-5582.0,"2026-08":-9244.42,"2026-09":-6270.57,"2026-10":-7086.98},"total12":-88957.57,"gross_ctx_bp":-1.86,"gross_ctx_t":-1.99,"gross_oct_bp":-2.6},{"id":"S10","name":"Taker-flow momentum","family":"Order flow","source":"Cont, Kukanov & Stoikov (2014), 'The price impact of order book events', Journal of Financial Econometrics; Silantyev (2019), 'Order flow analysis of cryptocurrency markets', Digital Finance","idea":"Heavy, one-sided aggressive buying or selling keeps pushing price the same way.","rules":"Every 15 min: if the last 30 min had taker imbalance above +0.10 (below -0.10), a return in the same direction, and volume at least 1.5x its 7-day average, follow it for 1 h. Stop 1 ATR (15m, 14).","capital":60000.0,"october":{"trades":727,"pnl":-9060.45,"return_pct":-15.1,"gross_pnl":4143.98,"win_rate":32.6,"avg_gross_bp":5.7,"avg_net_bp":-12.46,"profit_factor":0.59,"t_stat":-5.51,"max_dd":9607.98,"long_share":41.3,"avg_hold_min":44.6},"context":{"trades":7926,"pnl":-141472.57,"return_pct":-235.79,"gross_pnl":3912.95,"win_rate":29.9,"avg_gross_bp":0.49,"avg_net_bp":-17.85,"profit_factor":0.51,"t_stat":-22.4,"max_dd":142272.95,"long_share":43.2,"avg_hold_min":43.8},"by_coin":{"BTCUSDT":{"pnl":-1481.63,"trades":153},"ETHUSDT":{"pnl":-1352.57,"trades":145},"SOLUSDT":{"pnl":-1853.29,"trades":95},"XRPUSDT":{"pnl":-2270.75,"trades":100},"DOGEUSDT":{"pnl":-938.84,"trades":108},"BNBUSDT":{"pnl":-1163.36,"trades":126}},"monthly":{"2025-11":-6496.57,"2025-12":-6320.6,"2026-01":-9704.05,"2026-02":-12998.7,"2026-03":-16427.57,"2026-04":-12279.21,"2026-05":-13530.53,"2026-06":-14518.71,"2026-07":-17129.75,"2026-08":-16697.88,"2026-09":-15369.01,"2026-10":-9060.45},"total12":-150533.03,"gross_ctx_bp":0.49,"gross_ctx_t":0.62,"gross_oct_bp":5.7},{"id":"S11","name":"Absorption fade","family":"Order flow","source":"Kyle (1985) price-impact framework; order-flow 'absorption' as practitioners read it","idea":"Strong aggressive buying that fails to lift price is being absorbed by a large passive seller, so price turns down (and the mirror).","rules":"Every 15 min: if the last 30 min had taker imbalance above +0.15 but no gain (below -0.15 but no loss) on 1.5x average volume, trade against the flow for 1 h. Stop 1 ATR (15m, 14).","capital":60000.0,"october":{"trades":44,"pnl":-949.75,"return_pct":-1.58,"gross_pnl":-114.36,"win_rate":29.5,"avg_gross_bp":-2.6,"avg_net_bp":-21.59,"profit_factor":0.23,"t_stat":-3.91,"max_dd":962.23,"long_share":61.4,"avg_hold_min":44.8},"context":{"trades":416,"pnl":-5772.24,"return_pct":-9.62,"gross_pnl":2148.02,"win_rate":33.7,"avg_gross_bp":5.16,"avg_net_bp":-13.88,"profit_factor":0.53,"t_stat":-4.75,"max_dd":6637.98,"long_share":59.1,"avg_hold_min":48.0},"by_coin":{"BTCUSDT":{"pnl":-165.27,"trades":6},"ETHUSDT":{"pnl":-70.5,"trades":3},"SOLUSDT":{"pnl":-127.87,"trades":4},"XRPUSDT":{"pnl":71.78,"trades":4},"DOGEUSDT":{"pnl":-305.44,"trades":13},"BNBUSDT":{"pnl":-352.44,"trades":14}},"monthly":{"2025-11":-768.35,"2025-12":-933.6,"2026-01":-901.72,"2026-02":-159.91,"2026-03":-350.77,"2026-04":-514.19,"2026-05":-1166.28,"2026-06":-181.13,"2026-07":-611.06,"2026-08":-236.49,"2026-09":51.26,"2026-10":-949.75},"total12":-6721.99,"gross_ctx_bp":5.16,"gross_ctx_t":1.77,"gross_oct_bp":-2.6},{"id":"S12","name":"Round-number breakout","family":"Round numbers","source":"Osler (2003), 'Currency orders and exchange rate dynamics', Journal of Finance (stop orders cluster just past round numbers); Urquhart (2017), 'Price clustering in Bitcoin', Economics Letters","idea":"Crossing a round number triggers the stops parked just beyond it, which speeds the move up.","rules":"Round step = largest 1-2-5 step at most 1% of yesterday's close. When a 15m bar closes through a round level, follow it: stop 0.25 step back, target 0.75 step beyond, exit after 2 h.","capital":60000.0,"october":{"trades":2504,"pnl":-43061.01,"return_pct":-71.77,"gross_pnl":3787.05,"win_rate":36.4,"avg_gross_bp":1.51,"avg_net_bp":-17.2,"profit_factor":0.29,"t_stat":-26.97,"max_dd":43061.01,"long_share":49.9,"avg_hold_min":32.6},"context":{"trades":37909,"pnl":-723697.58,"return_pct":-1206.16,"gross_pnl":-17144.83,"win_rate":33.9,"avg_gross_bp":-0.45,"avg_net_bp":-19.09,"profit_factor":0.23,"t_stat":-119.53,"max_dd":723697.58,"long_share":49.2,"avg_hold_min":23.8},"by_coin":{"BTCUSDT":{"pnl":-5081.19,"trades":351},"ETHUSDT":{"pnl":-3970.2,"trades":335},"SOLUSDT":{"pnl":-6743.52,"trades":378},"XRPUSDT":{"pnl":-10190.73,"trades":494},"DOGEUSDT":{"pnl":-12616.85,"trades":630},"BNBUSDT":{"pnl":-4458.51,"trades":316}},"monthly":{"2025-11":-94837.6,"2025-12":-68684.31,"2026-01":-68585.94,"2026-02":-87714.62,"2026-03":-78580.69,"2026-04":-51263.75,"2026-05":-40117.22,"2026-06":-72671.65,"2026-07":-47841.12,"2026-08":-51782.2,"2026-09":-61618.47,"2026-10":-43061.01},"total12":-766758.58,"gross_ctx_bp":-0.45,"gross_ctx_t":-2.84,"gross_oct_bp":1.51},{"id":"S13","name":"Round-number rejection","family":"Round numbers","source":"Osler (2003): take-profit orders cluster at round numbers, so price tends to stall and reverse there","idea":"A test of a round level that closes well away from it is a rejection worth fading.","rules":"A 15m bar that reaches within 0.1 step of the round level above, then closes 0.3 step below it and down on the bar, is sold (mirror at support). Stop 0.2 step past the level, target 0.6 step, exit after 2 h.","capital":60000.0,"october":{"trades":1378,"pnl":-22231.51,"return_pct":-37.05,"gross_pnl":3719.89,"win_rate":51.7,"avg_gross_bp":2.7,"avg_net_bp":-16.13,"profit_factor":0.43,"t_stat":-13.05,"max_dd":22243.38,"long_share":50.9,"avg_hold_min":51.3},"context":{"trades":21865,"pnl":-426524.92,"return_pct":-710.87,"gross_pnl":-18022.64,"win_rate":54.9,"avg_gross_bp":-0.82,"avg_net_bp":-19.51,"profit_factor":0.37,"t_stat":-56.73,"max_dd":426537.28,"long_share":49.2,"avg_hold_min":39.7},"by_coin":{"BTCUSDT":{"pnl":-2712.3,"trades":155},"ETHUSDT":{"pnl":-2044.46,"trades":179},"SOLUSDT":{"pnl":-2012.27,"trades":240},"XRPUSDT":{"pnl":-5610.47,"trades":260},"DOGEUSDT":{"pnl":-6766.44,"trades":388},"BNBUSDT":{"pnl":-3085.57,"trades":156}},"monthly":{"2025-11":-60086.0,"2025-12":-37025.22,"2026-01":-39140.75,"2026-02":-59203.11,"2026-03":-46062.9,"2026-04":-28739.95,"2026-05":-23297.06,"2026-06":-42964.47,"2026-07":-24985.92,"2026-08":-27158.84,"2026-09":-37860.69,"2026-10":-22231.51},"total12":-448756.42,"gross_ctx_bp":-0.82,"gross_ctx_t":-2.4,"gross_oct_bp":2.7},{"id":"S14","name":"Pre-funding premium fade","family":"Perpetual mechanics","source":"He, Manela, Ross & von Wachter (2022), 'Fundamentals of Perpetual Futures' (funding ties the perpetual to spot)","idea":"An unusually rich (cheap) perpetual just before a funding settlement gets sold (bought) by traders avoiding the payment and by arbitrage.","rules":"30 min before each 08:00, 16:00 and 00:00 UTC settlement: if the 30-min mean premium is above the 90th (below the 10th) percentile of the prior 7 days, short (buy) the perpetual. Exit 15 min after the settlement, or at 23:59 for the 00:00 one.","capital":60000.0,"october":{"trades":39,"pnl":-1200.5,"return_pct":-2.0,"gross_pnl":-456.94,"win_rate":17.9,"avg_gross_bp":-11.72,"avg_net_bp":-30.78,"profit_factor":0.13,"t_stat":-4.37,"max_dd":1200.5,"long_share":53.8,"avg_hold_min":41.7},"context":{"trades":351,"pnl":-5309.95,"return_pct":-8.85,"gross_pnl":1388.25,"win_rate":31.6,"avg_gross_bp":3.96,"avg_net_bp":-15.13,"profit_factor":0.42,"t_stat":-5.29,"max_dd":5506.72,"long_share":51.9,"avg_hold_min":39.3},"by_coin":{"BTCUSDT":{"pnl":-44.47,"trades":3},"ETHUSDT":{"pnl":-204.7,"trades":2},"SOLUSDT":{"pnl":-207.35,"trades":5},"XRPUSDT":{"pnl":-299.51,"trades":8},"DOGEUSDT":{"pnl":-89.32,"trades":2},"BNBUSDT":{"pnl":-355.15,"trades":19}},"monthly":{"2025-11":-693.27,"2025-12":-721.18,"2026-01":-685.07,"2026-02":10.87,"2026-03":-561.76,"2026-04":-42.3,"2026-05":-357.07,"2026-06":29.36,"2026-07":-154.86,"2026-08":-1599.8,"2026-09":-534.86,"2026-10":-1200.5},"total12":-6510.44,"gross_ctx_bp":3.96,"gross_ctx_t":1.39,"gross_oct_bp":-11.72},{"id":"S15","name":"Prior-day high/low sweep reversal","family":"Liquidity sweep","source":"Osler (2003) on stop orders resting beyond prior highs and lows; the 'stop run' reversal","idea":"A brief push through yesterday's high or low that closes back inside has run the stops and tends to reverse.","rules":"A 15m bar that trades above yesterday's high but closes below it is sold (mirror at the low), once per side a day. Stop 0.1% beyond the bar's extreme, target 2x the risk, exit after 4 h.","capital":60000.0,"october":{"trades":155,"pnl":-3051.88,"return_pct":-5.09,"gross_pnl":-171.04,"win_rate":34.8,"avg_gross_bp":-1.1,"avg_net_bp":-19.69,"profit_factor":0.49,"t_stat":-3.94,"max_dd":3063.5,"long_share":58.1,"avg_hold_min":87.6},"context":{"trades":1582,"pnl":-29416.28,"return_pct":-49.03,"gross_pnl":-199.78,"win_rate":35.5,"avg_gross_bp":-0.13,"avg_net_bp":-18.59,"profit_factor":0.58,"t_stat":-8.67,"max_dd":29635.51,"long_share":52.0,"avg_hold_min":101.8},"by_coin":{"BTCUSDT":{"pnl":-357.44,"trades":24},"ETHUSDT":{"pnl":-216.58,"trades":23},"SOLUSDT":{"pnl":-931.78,"trades":24},"XRPUSDT":{"pnl":-729.87,"trades":30},"DOGEUSDT":{"pnl":-533.43,"trades":27},"BNBUSDT":{"pnl":-282.77,"trades":27}},"monthly":{"2025-11":-4460.06,"2025-12":408.6,"2026-01":-3010.8,"2026-02":-3151.93,"2026-03":-3642.4,"2026-04":-2700.62,"2026-05":-3542.17,"2026-06":-2327.24,"2026-07":-2493.77,"2026-08":-1576.92,"2026-09":-2918.96,"2026-10":-3051.88},"total12":-32468.15,"gross_ctx_bp":-0.13,"gross_ctx_t":-0.06,"gross_oct_bp":-1.1},{"id":"S16","name":"Calm-market Bollinger fade","family":"Mean reversion","source":"Bollinger (2001), 'Bollinger on Bollinger Bands'; Wilder (1978) ADX as the regime filter","idea":"When the market is not trending, closes far outside the band snap back to the middle.","rules":"5m Bollinger(20, 2.5). When the hourly ADX(14) is below 20, buy a close under the lower band (sell above the upper). Target the middle band, stop 1.5 band-widths away, exit after 2 h.","capital":60000.0,"october":{"trades":464,"pnl":-7239.91,"return_pct":-12.07,"gross_pnl":1312.3,"win_rate":42.2,"avg_gross_bp":2.83,"avg_net_bp":-15.6,"profit_factor":0.44,"t_stat":-6.22,"max_dd":7365.9,"long_share":50.2,"avg_hold_min":56.9},"context":{"trades":5006,"pnl":-96286.96,"return_pct":-160.48,"gross_pnl":-3480.69,"win_rate":43.4,"avg_gross_bp":-0.7,"avg_net_bp":-19.23,"profit_factor":0.43,"t_stat":-21.49,"max_dd":96704.71,"long_share":52.5,"avg_hold_min":61.5},"by_coin":{"BTCUSDT":{"pnl":-1310.93,"trades":85},"ETHUSDT":{"pnl":-959.95,"trades":73},"SOLUSDT":{"pnl":-1723.0,"trades":95},"XRPUSDT":{"pnl":-1083.02,"trades":76},"DOGEUSDT":{"pnl":-643.29,"trades":56},"BNBUSDT":{"pnl":-1519.72,"trades":79}},"monthly":{"2025-11":-8390.2,"2025-12":-12190.38,"2026-01":-7438.49,"2026-02":-6882.85,"2026-03":-13201.81,"2026-04":-8741.86,"2026-05":-10497.93,"2026-06":-5556.68,"2026-07":-7056.59,"2026-08":-8148.86,"2026-09":-8181.31,"2026-10":-7239.91},"total12":-103526.87,"gross_ctx_bp":-0.7,"gross_ctx_t":-0.78,"gross_oct_bp":2.83},{"id":"S17","name":"RSI(2) pullback in trend","family":"Mean reversion","source":"Connors & Alvarez (2009), 'Short Term Trading Strategies That Work'","idea":"A sharp short-term pullback inside a trend is bought (sold) and quickly recovers.","rules":"15m bars. Above the 200-bar average, buy RSI(2) under 5 and exit when RSI(2) goes above 70; below it, sell RSI(2) over 95 and exit under 30. Stop 2 ATR(14), exit after 2 h.","capital":60000.0,"october":{"trades":433,"pnl":-10245.44,"return_pct":-17.08,"gross_pnl":-2180.46,"win_rate":30.3,"avg_gross_bp":-5.04,"avg_net_bp":-23.66,"profit_factor":0.22,"t_stat":-10.27,"max_dd":10245.44,"long_share":37.0,"avg_hold_min":60.2},"context":{"trades":4528,"pnl":-70863.2,"return_pct":-118.11,"gross_pnl":12842.49,"win_rate":41.9,"avg_gross_bp":2.84,"avg_net_bp":-15.65,"profit_factor":0.45,"t_stat":-18.58,"max_dd":71084.36,"long_share":50.5,"avg_hold_min":59.6},"by_coin":{"BTCUSDT":{"pnl":-1196.5,"trades":63},"ETHUSDT":{"pnl":-1439.21,"trades":64},"SOLUSDT":{"pnl":-2634.09,"trades":75},"XRPUSDT":{"pnl":-1497.6,"trades":73},"DOGEUSDT":{"pnl":-1602.53,"trades":75},"BNBUSDT":{"pnl":-1875.5,"trades":83}},"monthly":{"2025-11":-4062.07,"2025-12":-8731.63,"2026-01":-9303.14,"2026-02":-2522.95,"2026-03":-3996.15,"2026-04":-7243.53,"2026-05":-9837.43,"2026-06":-4329.36,"2026-07":-7882.73,"2026-08":-7489.57,"2026-09":-5464.64,"2026-10":-10245.44},"total12":-81108.64,"gross_ctx_bp":2.84,"gross_ctx_t":3.37,"gross_oct_bp":-5.04},{"id":"S18","name":"BTC-to-alt catch-up","family":"Cross-asset","source":"Bitcoin's lead in crypto price discovery; tested here as a hypothesis on 5-minute bars","idea":"When BTC jumps and an alt has not followed yet, the alt catches up within minutes.","rules":"Every 5 min: if BTC moved more than 0.5% and the alt moved less than half of that, trade the alt in BTC's direction for 15 min. Stop 1%. Alts only.","capital":50000.0,"october":{"trades":1,"pnl":35.94,"return_pct":0.07,"gross_pnl":55.74,"win_rate":100.0,"avg_gross_bp":55.74,"avg_net_bp":35.94,"profit_factor":null,"t_stat":null,"max_dd":0.0,"long_share":100.0,"avg_hold_min":15.0},"context":{"trades":253,"pnl":-4696.68,"return_pct":-9.39,"gross_pnl":225.54,"win_rate":34.4,"avg_gross_bp":0.89,"avg_net_bp":-18.56,"profit_factor":0.54,"t_stat":-3.63,"max_dd":5722.54,"long_share":54.5,"avg_hold_min":13.8},"by_coin":{"ETHUSDT":{"pnl":0.0,"trades":0},"SOLUSDT":{"pnl":0.0,"trades":0},"XRPUSDT":{"pnl":0.0,"trades":0},"DOGEUSDT":{"pnl":0.0,"trades":0},"BNBUSDT":{"pnl":35.94,"trades":1}},"monthly":{"2025-11":-89.91,"2025-12":508.9,"2026-01":-122.06,"2026-02":-1970.54,"2026-03":-381.37,"2026-04":-597.39,"2026-05":-116.25,"2026-06":-60.86,"2026-07":-211.61,"2026-08":-1628.68,"2026-09":-26.9,"2026-10":35.94},"total12":-4660.73,"gross_ctx_bp":0.89,"gross_ctx_t":0.17,"gross_oct_bp":55.74},{"id":"S19","name":"Open-interest-confirmed breakout","family":"Positioning","source":"Bessembinder & Seguin (1993), 'Price volatility, trading volume, and market depth', Journal of Financial and Quantitative Analysis (open interest as new positioning)","idea":"A breakout that brings in new positions (rising open interest) is real money behind the move.","rules":"Hourly close above the prior 24-hour high (below the low) while open interest rose at least 1% in that hour: trade the break. Stop 1 ATR(1h, 14); exit at 00:00.","capital":60000.0,"october":{"trades":24,"pnl":-138.59,"return_pct":-0.23,"gross_pnl":314.57,"win_rate":41.7,"avg_gross_bp":13.11,"avg_net_bp":-5.77,"profit_factor":0.9,"t_stat":-0.21,"max_dd":529.55,"long_share":33.3,"avg_hold_min":564.7},"context":{"trades":465,"pnl":-2325.29,"return_pct":-3.88,"gross_pnl":6410.76,"win_rate":28.8,"avg_gross_bp":13.79,"avg_net_bp":-5.0,"profit_factor":0.93,"t_stat":-0.48,"max_dd":10169.56,"long_share":56.3,"avg_hold_min":372.8},"by_coin":{"BTCUSDT":{"pnl":-230.15,"trades":4},"ETHUSDT":{"pnl":106.37,"trades":3},"SOLUSDT":{"pnl":104.92,"trades":6},"XRPUSDT":{"pnl":252.29,"trades":3},"DOGEUSDT":{"pnl":-76.99,"trades":5},"BNBUSDT":{"pnl":-295.02,"trades":3}},"monthly":{"2025-11":-691.57,"2025-12":-28.53,"2026-01":2891.32,"2026-02":733.85,"2026-03":-1190.7,"2026-04":-2319.86,"2026-05":-2002.16,"2026-06":159.09,"2026-07":326.24,"2026-08":-2080.06,"2026-09":1877.09,"2026-10":-138.59},"total12":-2463.88,"gross_ctx_bp":13.79,"gross_ctx_t":1.33,"gross_oct_bp":13.11},{"id":"S20","name":"Crowded-account contrarian","family":"Positioning","source":"Contrarian reading of retail positioning (Kumar & Lee (2006), 'Retail investor sentiment and return comovements', Journal of Finance); Binance's all-account long/short ratio","idea":"When an extreme share of accounts is long (short) and price is already weak (strong), the crowd gets squeezed.","rules":"Hourly: if the account long/short ratio is at its 7-day 95th percentile and price is below the session VWAP, short (mirror at the 5th percentile). Stop 1.5 ATR(1h, 14), exit after 4 h.","capital":60000.0,"october":{"trades":240,"pnl":-7796.38,"return_pct":-12.99,"gross_pnl":-3377.77,"win_rate":32.1,"avg_gross_bp":-14.07,"avg_net_bp":-32.48,"profit_factor":0.42,"t_stat":-5.12,"max_dd":7796.38,"long_share":36.7,"avg_hold_min":194.9},"context":{"trades":2568,"pnl":-43406.9,"return_pct":-72.34,"gross_pnl":3817.95,"win_rate":34.7,"avg_gross_bp":1.49,"avg_net_bp":-16.9,"profit_factor":0.67,"t_stat":-7.1,"max_dd":44292.62,"long_share":50.6,"avg_hold_min":200.7},"by_coin":{"BTCUSDT":{"pnl":-1238.07,"trades":44},"ETHUSDT":{"pnl":-761.09,"trades":40},"SOLUSDT":{"pnl":-2227.44,"trades":50},"XRPUSDT":{"pnl":-1368.72,"trades":38},"DOGEUSDT":{"pnl":-1530.45,"trades":41},"BNBUSDT":{"pnl":-670.61,"trades":27}},"monthly":{"2025-11":-3665.1,"2025-12":-5108.54,"2026-01":-2933.18,"2026-02":274.73,"2026-03":-6340.18,"2026-04":-5113.85,"2026-05":-7027.04,"2026-06":-5128.1,"2026-07":-5538.64,"2026-08":1654.15,"2026-09":-4481.14,"2026-10":-7796.38},"total12":-51203.27,"gross_ctx_bp":1.49,"gross_ctx_t":0.62,"gross_oct_bp":-14.07}],"months":["2025-11","2025-12","2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07","2026-08","2026-09","2026-10"],"coins":["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","BNBUSDT"],"persistence":{"month_to_month":[{"from":"2025-11","to":"2025-12","spearman":0.79},{"from":"2025-12","to":"2026-01","spearman":0.63},{"from":"2026-01","to":"2026-02","spearman":0.84},{"from":"2026-02","to":"2026-03","spearman":0.58},{"from":"2026-03","to":"2026-04","spearman":0.77},{"from":"2026-04","to":"2026-05","spearman":0.91},{"from":"2026-05","to":"2026-06","spearman":0.74},{"from":"2026-06","to":"2026-07","spearman":0.73},{"from":"2026-07","to":"2026-08","spearman":0.71},{"from":"2026-08","to":"2026-09","spearman":0.69},{"from":"2026-09","to":"2026-10","spearman":0.79}],"mean_spearman":0.74,"last_month_top5":[{"picked_in":"2025-11","traded_in":"2025-12","top5":["S05","S08","S18","S19","S14"],"top5_next_pnl":1155.63,"all20_next_pnl_avg_per5":-47982.55},{"picked_in":"2025-12","traded_in":"2026-01","top5":["S08","S18","S15","S04","S19"],"top5_next_pnl":-1079.3,"all20_next_pnl_avg_per5":-45943.85},{"picked_in":"2026-01","traded_in":"2026-02","top5":["S02","S03","S19","S05","S04"],"top5_next_pnl":11083.57,"all20_next_pnl_avg_per5":-52593.55},{"picked_in":"2026-02","traded_in":"2026-03","top5":["S03","S06","S05","S04","S19"],"top5_next_pnl":-10903.32,"all20_next_pnl_avg_per5":-58392.73},{"picked_in":"2026-03","traded_in":"2026-04","top5":["S06","S08","S02","S11","S18"],"top5_next_pnl":-9681.71,"all20_next_pnl_avg_per5":-45669.53},{"picked_in":"2026-04","traded_in":"2026-05","top5":["S08","S14","S11","S18","S04"],"top5_next_pnl":-3942.36,"all20_next_pnl_avg_per5":-45568.39},{"picked_in":"2026-05","traded_in":"2026-06","top5":["S04","S18","S14","S11","S19"],"top5_next_pnl":-1728.62,"all20_next_pnl_avg_per5":-57144.58},{"picked_in":"2026-06","traded_in":"2026-07","top5":["S02","S05","S19","S14","S18"],"top5_next_pnl":-7523.4,"all20_next_pnl_avg_per5":-43772.59},{"picked_in":"2026-07","traded_in":"2026-08","top5":["S19","S14","S18","S06","S11"],"top5_next_pnl":-4731.23,"all20_next_pnl_avg_per5":-40622.19},{"picked_in":"2026-08","traded_in":"2026-09","top5":["S03","S20","S06","S11","S05"],"top5_next_pnl":-5791.88,"all20_next_pnl_avg_per5":-46427.38},{"picked_in":"2026-09","traded_in":"2026-10","top5":["S02","S19","S06","S11","S18"],"top5_next_pnl":-10532.94,"all20_next_pnl_avg_per5":-42237.02}],"top5_beat_average":11,"top5_positive":2,"context_top5":["S19","S18","S14","S11","S05"],"context_top5_october_pnl":-3023.03},"totals":{"oct_trades":8942,"oct_pnl":-168948.09,"oct_gross":-3029.42,"ctx_pnl":-2184075.2,"ctx_positive":0},"best_edge":{"name":"US-open range breakout","ctx_bp":13.19,"ctx_t":3.27},"significant":[{"name":"US-open range breakout","bp":13.19,"t":3.27},{"name":"RSI(2) pullback in trend","bp":2.84,"t":3.37}],"verify":{"fill_trades_checked":125940,"fill_mismatches":[],"truncation_cut":"2026-10-16","truncation_trades":121560,"truncation_mismatches":[]},"data":{"minutes":570240},"prereg":{"first":"ec341ddf8b5fa45d","last":"a9d3ffeb4e6e9aaf","why":"Found by the truncation test after the first full run: S05, S06 and S14 looped over _days(mk)[:-1], which dropped the last day of data, so they never traded 2026-10-31. Now every day is used. No rule or parameter changed. First-run October results for the 17 untouched strategies are unchanged by this edit."}};
+const MINUS = "−";
+const SVGNS = "http://www.w3.org/2000/svg";
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null) continue; if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function sv(tag, attrs, ...kids) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) if (v != null) e.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function fmt(v, d) { return Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function sgn(v, d, suffix, sign = true) {
+  if (v == null || Number.isNaN(v)) return "–";
+  if (Math.abs(v) < 0.5 * Math.pow(10, -d)) v = 0;
+  return (v < 0 ? MINUS : (sign && v > 0 ? "+" : "")) + fmt(v, d) + suffix;
+}
+const pct = (v, d = 1) => sgn(v, d, "%");
+const bp = (v) => sgn(v, 1, " bp");
+const usd = (v) => (v == null ? "–" : (v < 0 ? MINUS : v > 0 ? "+" : "") + "$" + fmt(v, 0));
+const num = (v, d = 2) => (v == null ? "–" : (v < 0 ? MINUS : "") + fmt(v, d));
+function heat(v, cap) {
+  if (v == null || Math.abs(v) < 0.5) return null;
+  const k = Math.min(Math.abs(v) / cap, 1);
+  return "background: color-mix(in oklab, var(" + (v > 0 ? "--gain" : "--loss") + ") " + Math.round(10 + k * 48) + "%, var(--panel))";
+}
+const S = D.strategies, T = D.totals, P = D.persistence;
+const byId = Object.fromEntries(S.map(s => [s.id, s]));
+const oct = [...S].sort((a, b) => b.october.pnl - a.october.pnl);
+const fee = D.costs;
+
+// ── header ───────────────────────────────────────────────────────────────
+document.getElementById("lede").textContent =
+  "Twenty intraday strategies drawn from published research and documented trading methods, run on six crypto perpetuals for October 2026. Every position closes by 00:00 UTC, every trade pays Delta India's taker fee, and every rule was fixed before the first backtest.";
+const pos = S.filter(s => s.october.pnl > 0);
+const figs = [
+  ["Profitable in October", pos.length + " of 20", pos.length === 1 ? "The one in profit made a single trade, " + usd(pos[0].october.pnl) + "." : "", false],
+  ["October, before costs", usd(T.oct_gross), "Across " + T.oct_trades.toLocaleString("en-US") + " trades, about zero. Fees and slippage took it to " + usd(T.oct_pnl) + ".", T.oct_gross < 0],
+  ["Best edge before costs", bp(D.best_edge.ctx_bp), D.best_edge.name + " over the 11 months before, t " + num(D.best_edge.ctx_t) + ". A Delta taker round trip costs " + fee.rt_low.toFixed(1) + " to " + fee.rt_high.toFixed(1) + " bp.", false],
+];
+for (const [l, v, s, neg] of figs) document.getElementById("figures").append(h("div", { class: "fig" }, h("div", { class: "label" }, l), h("div", { class: "value" + (neg ? " neg" : "") }, v), h("div", { class: "sub" }, s)));
+{
+  const sig = D.significant;
+  const n = P.last_month_top5.length;
+  document.getElementById("verdict").textContent =
+    pos.length + " of the 20 strategies made money in October 2026" + (pos.length === 1 && pos[0].october.trades === 1 ? ", and that one on a single trade" : "") +
+    ". Over the 11 months before, " + T.ctx_positive + " did. Only " + sig.length + " show an edge before costs that clears the multiple-testing bar: " +
+    sig.map(x => x.name + " at " + bp(x.bp) + " a trade").join(" and ") + ". Each is smaller than the " + fee.rt_low.toFixed(1) + " to " + fee.rt_high.toFixed(1) +
+    " bp a Delta taker round trip costs. Trading each month's best five the following month lost money in " + (n - P.top5_positive) + " of " + n + " months.";
+}
+
+// ── October table ────────────────────────────────────────────────────────
+document.getElementById("oct-intro").textContent =
+  "Sorted by net result. Each strategy trades all six coins with $10,000 on each, so its capital is $60,000 ($50,000 for the BTC-to-alt rule, which skips BTC). Every trade is $10,000 notional, 1x, no compounding.";
+{
+  const t = document.getElementById("t-oct");
+  t.append(h("thead", {}, h("tr", {}, ["Strategy", "Trades", "Win rate", "Before costs", "Net per trade", "Net", "Return", "Max drawdown", "t"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const s of oct) {
+    const o = s.october;
+    tb.append(h("tr", {},
+      h("td", { class: "strat" }, h("span", { class: "n" }, s.name), h("span", { class: "d" }, s.id + " · " + s.family)),
+      h("td", {}, o.trades), h("td", {}, o.trades ? pct(o.win_rate, 1).replace("+", "") : "–"),
+      h("td", { class: o.avg_gross_bp < 0 ? "neg" : null }, o.trades ? bp(o.avg_gross_bp) : "–"),
+      h("td", { class: o.avg_net_bp < 0 ? "neg" : null }, o.trades ? bp(o.avg_net_bp) : "–"),
+      h("td", { class: o.pnl < 0 ? "neg" : null }, usd(o.pnl)), h("td", { class: o.return_pct < 0 ? "neg" : null }, pct(o.return_pct, 2)),
+      h("td", {}, o.trades ? "$" + fmt(o.max_dd, 0) : "–"), h("td", {}, num(o.t_stat))));
+  }
+  tb.append(h("tr", { class: "total" }, h("td", { class: "l" }, "All 20"), h("td", {}, T.oct_trades.toLocaleString("en-US")), h("td", {}), h("td", {}),
+    h("td", {}), h("td", { class: "neg" }, usd(T.oct_pnl)), h("td", {}), h("td", {}), h("td", {})));
+  t.append(tb);
+  document.getElementById("oct-note").textContent =
+    "Before costs is the average move captured per trade; net per trade subtracts Delta's taker fee (0.05% + 18% GST = 5.9 bp a side), 2 bp (BTC, ETH) or 4 bp (alts) of spread and slippage a side, and funding. 28 October is excluded: Binance never published that day's perpetual data.";
+}
+
+// ── by coin ──────────────────────────────────────────────────────────────
+{
+  const coins = D.coins;
+  const t = document.getElementById("t-coin");
+  t.append(h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Strategy"), coins.map(c => h("th", {}, c.replace("USDT", ""))), h("th", {}, "All coins"))));
+  const tb = h("tbody");
+  for (const s of oct) {
+    tb.append(h("tr", {}, h("td", { class: "l" }, s.name), coins.map(c => {
+      const x = s.by_coin[c];
+      if (!x) return h("td", { class: "heat" }, "–");
+      return h("td", { class: "heat", style: heat(x.pnl, 2500) }, x.trades ? usd(x.pnl) : "0 trades");
+    }), h("td", { style: heat(s.october.pnl, 15000) }, usd(s.october.pnl))));
+  }
+  t.append(tb);
+}
+
+// ── edge chart ───────────────────────────────────────────────────────────
+document.getElementById("edge-intro").textContent =
+  "The bars show what each rule earned per trade before any cost over the 11 months before October, the dots what it earned in October. The shaded band is the cost of one Delta taker round trip, " +
+  fee.rt_low.toFixed(1) + " bp on BTC and ETH to " + fee.rt_high.toFixed(1) + " bp on the alts. A rule needs its bar past the band to make money.";
+{
+  const rows = [...S].sort((a, b) => b.gross_ctx_bp - a.gross_ctx_bp);
+  const W = 1000, L = 250, R = 130, T0 = 26, row = 26, Hh = T0 + rows.length * row + 34;
+  const lo = -35, hi = 30;
+  const x = v => L + ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (W - L - R);
+  const svg = sv("svg", { viewBox: "0 0 " + W + " " + Hh, role: "img", "aria-label": "Average gross basis points per trade by strategy, with the round-trip cost band." });
+  svg.append(sv("rect", { x: x(fee.rt_low), y: T0 - 8, width: x(fee.rt_high) - x(fee.rt_low), height: rows.length * row + 8, fill: "var(--band)" }));
+  svg.append(sv("text", { x: (x(fee.rt_low) + x(fee.rt_high)) / 2, y: T0 - 12, "text-anchor": "middle", class: "muted" }, "cost of a round trip"));
+  for (let v = -30; v <= 30; v += 10) {
+    svg.append(sv("line", { x1: x(v), x2: x(v), y1: T0 - 8, y2: T0 + rows.length * row, stroke: v === 0 ? "var(--ink-3)" : "var(--grid)" }));
+    svg.append(sv("text", { x: x(v), y: T0 + rows.length * row + 18, "text-anchor": "middle", class: "muted" }, sgn(v, 0, " bp")));
+  }
+  rows.forEach((s, k) => {
+    const yy = T0 + k * row;
+    svg.append(sv("text", { x: L - 10, y: yy + row / 2 + 4, "text-anchor": "end" }, s.name));
+    const v = s.gross_ctx_bp, x0 = x(0), x1 = x(v);
+    const w = Math.abs(x1 - x0), bh = 12;
+    const left = Math.min(x0, x1);
+    svg.append(sv("path", { d: barPath(left, yy + (row - bh) / 2, w, bh, v >= 0), fill: "var(--s1)" }));
+    const ov = s.gross_oct_bp;
+    if (ov != null) svg.append(sv("circle", { cx: x(ov), cy: yy + row / 2, r: 4.5, fill: "var(--s2)", stroke: "var(--panel)", "stroke-width": 2 }));
+    svg.append(sv("text", { x: W - R + 22, y: yy + row / 2 + 4, class: Math.abs(s.gross_ctx_t) >= 2.81 ? "strong" : "muted" }, sgn(v, 1, " bp") + "  t " + num(s.gross_ctx_t)));
+  });
+  function barPath(x0, y0, w, hgt, right) {
+    const r = Math.min(4, w / 2, hgt / 2);
+    if (w < 1) return "M" + x0 + " " + y0 + "h1v" + hgt + "h-1z";
+    if (right) return "M" + x0 + " " + y0 + "h" + (w - r) + "a" + r + " " + r + " 0 0 1 " + r + " " + r + "v" + (hgt - 2 * r) + "a" + r + " " + r + " 0 0 1 " + (-r) + " " + r + "h" + (-(w - r)) + "z";
+    return "M" + (x0 + w) + " " + y0 + "h" + (-(w - r)) + "a" + r + " " + r + " 0 0 0 " + (-r) + " " + r + "v" + (hgt - 2 * r) + "a" + r + " " + r + " 0 0 0 " + r + " " + r + "h" + (w - r) + "z";
+  }
+  document.getElementById("edge-wrap").append(svg);
+  const lg = document.getElementById("edge-legend");
+  lg.append(h("span", {}, h("i", { style: "background:var(--s1)" }), "Nov 2025 – Sep 2026, before costs"),
+    h("span", {}, h("i", { class: "dot", style: "background:var(--s2)" }), "October 2026, before costs"),
+    h("span", {}, h("i", { style: "background:var(--band)" }), "Delta taker round-trip cost"));
+  document.getElementById("edge-note").textContent =
+    "The column on the right gives the 11-month figure and its t-statistic; with 20 rules tried, a t beyond ±2.81 is the bar for 5% significance, and those are in bold. Values beyond ±30 bp are drawn at the edge. October's bars are short samples: a dot far from its bar is mostly noise.";
+}
+
+// ── monthly heat table ───────────────────────────────────────────────────
+{
+  const months = D.months;
+  const t = document.getElementById("t-month");
+  const ml = m => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+m.slice(5) - 1] + " " + m.slice(2, 4);
+  t.append(h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Strategy"), months.map(m => h("th", {}, ml(m))), h("th", {}, "12 months"))));
+  const tb = h("tbody");
+  for (const s of [...S].sort((a, b) => b.total12 - a.total12)) {
+    tb.append(h("tr", {}, h("td", { class: "l" }, s.name), months.map(m => { const v = s.monthly[m]; return h("td", { class: "heat", style: heat(v, 8000) }, usd(v)); }),
+      h("td", { style: heat(s.total12, 60000) }, usd(s.total12))));
+  }
+  t.append(tb);
+}
+
+// ── persistence ──────────────────────────────────────────────────────────
+document.getElementById("persist-intro").textContent =
+  "A common way to use a one-month backtest is to take its winners and trade them next month. This table does exactly that: each month's five best strategies, then what those five made the following month.";
+{
+  const t = document.getElementById("t-persist");
+  t.append(h("thead", {}, h("tr", {}, ["Picked in", "Its top 5", "Next month, top 5", "Next month, any 5 on average"].map((x, i) => h("th", { class: i < 2 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  const ml = m => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+m.slice(5) - 1] + " " + m.slice(0, 4);
+  for (const p of P.last_month_top5) tb.append(h("tr", {}, h("td", { class: "l" }, ml(p.picked_in)), h("td", { class: "l mono" }, p.top5.join(" ")),
+    h("td", { class: p.top5_next_pnl < 0 ? "neg" : null }, usd(p.top5_next_pnl)), h("td", { class: "neg" }, usd(p.all20_next_pnl_avg_per5))));
+  t.append(tb);
+  document.getElementById("persist-note").textContent =
+    "The picked five lost money in " + (P.last_month_top5.length - P.top5_positive) + " of " + P.last_month_top5.length + " months. They always beat the average strategy, and month-to-month rankings correlate strongly (Spearman " +
+    num(P.mean_spearman) + "), but that is cost, not skill: the rules that trade least lose least every month. Picked on all 11 months before October (" + P.context_top5.join(", ") + "), the best five lost " + usd(P.context_top5_october_pnl).replace("+", "") + " in October.";
+}
+
+// ── strategy book ────────────────────────────────────────────────────────
+{
+  const box = document.getElementById("book");
+  for (const s of S) box.append(h("article", { class: "card" },
+    h("div", { class: "top" }, h("span", { class: "id" }, s.id), h("span", { class: "fam" }, s.family)),
+    h("h3", {}, s.name), h("p", { class: "idea" }, s.idea), h("p", { class: "rules" }, s.rules), h("p", { class: "src" }, s.source),
+    h("p", { class: "res" }, "October " + usd(s.october.pnl) + " on " + s.october.trades + " trades · before costs, Nov–Sep " + bp(s.gross_ctx_bp) + " a trade (t " + num(s.gross_ctx_t) + ")")));
+}
+
+// ── method ───────────────────────────────────────────────────────────────
+{
+  const add = (id, items) => { const ul = document.getElementById(id); for (const x of items) ul.append(h("li", {}, x)); };
+  const dr = D.data;
+  add("m-data", [
+    "Binance Vision USDT-M perpetual data, every archive checked against its published SHA-256: 1-minute candles with taker-buy volume, the 1-minute premium index, 5-minute open interest and long/short ratios, and funding prints.",
+    "Six coins, October 2025 to October 2026, " + dr.minutes.toLocaleString("en-US") + " minutes each. October 2025 is warm-up only.",
+    "Binance never published the perpetual candles for 28 October 2026. That day was rebuilt from Binance spot candles so indicators looking back across it stay real, and no strategy trades on it.",
+    "The premium index is also missing for 28 and 29 October; those minutes stay empty, so the pre-funding rule sits out those days.",
+  ]);
+  add("m-sim", [
+    "A signal reads only bars that have closed. The entry fills at the open of the next 1-minute bar.",
+    "Open positions are walked minute by minute. A minute that opens beyond a level fills at that open. When one minute reaches both the stop and the target, the stop is taken.",
+    "Every position is flat by 00:00 UTC. One position per strategy per coin.",
+    "Costs per side: Delta India taker 0.05% plus 18% GST, plus 2 bp (BTC, ETH) or 4 bp (SOL, XRP, DOGE, BNB) of spread and slippage. Funding uses Binance's real prints, signed.",
+    "$10,000 notional per trade, no leverage and no compounding. Leverage multiplies returns and drawdowns alike.",
+  ]);
+  const V = D.verify, PR = D.prereg;
+  add("m-checks", [
+    "Pre-registered: the rules' fingerprint " + PR.first + " was recorded before the first backtest. One amendment followed (" + PR.last + "): " + PR.why,
+    "Fills: all " + V.fill_trades_checked.toLocaleString("en-US") + " trades were re-filled by a second simulator written separately: " + V.fill_mismatches.length + " mismatches.",
+    "No look-ahead: every strategy was re-run on data cut at " + V.truncation_cut + ", and all " + V.truncation_trades.toLocaleString("en-US") + " trades that closed before the cut came out identical.",
+  ]);
+  add("m-limits", [
+    "Binance prices and order flow stand in for Delta, where the trades would actually go. Delta's spreads on the alts are usually wider than the 4 bp assumed.",
+    "One month is a small sample: most strategies made 40 to 400 trades in October. The 11 earlier months are there to show which results repeat.",
+    "Taker fills on every side. A rule that could rest limit orders would pay Delta's 0.02% maker fee instead, but breakouts and stops rarely fill that way.",
+  ]);
+  document.getElementById("foot").textContent =
+    "Generated " + D.generated + ". Code and results: engine/research/crypto_intraday20_2026_11 (ci_fetch.py, ci_core.py, ci_strategies.py, ci_run.py, ci_verify.py, ci_report.py, REPORT.md, results/). The market data stays in the git-ignored engine/data/historical/intraday20.";
+}
+</script>

@@ -1,0 +1,380 @@
+<title>Crypto Intraday Strategy Test</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,600..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a lab notebook for one test month. Prose holds ~68ch; tables and charts take the full 1120px. */
+:root {
+  --paper: #f3f5f4;
+  --panel: #ffffff;
+  --ink: #131816;
+  --ink-2: #47514d;
+  --ink-3: #74807b;
+  --rule: #dce1de;
+  --grid: #ebefed;
+  --gain: #2a78d6;
+  --loss: #e34948;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --band: #f6e3c8;
+  --accent: #0f6b5c;
+  --accent-soft: #dff0eb;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --measure: 1120px;
+  --prose: 68ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1211; --panel: #161b19; --ink: #e7ecea; --ink-2: #b1bbb7; --ink-3: #87928e;
+    --rule: #2a322f; --grid: #212825; --gain: #3987e5; --loss: #e66767; --s1: #3987e5; --s2: #d95926;
+    --band: #3d2f1c; --accent: #5cc4ae; --accent-soft: #173029; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1211; --panel: #161b19; --ink: #e7ecea; --ink-2: #b1bbb7; --ink-3: #87928e;
+  --rule: #2a322f; --grid: #212825; --gain: #3987e5; --loss: #e66767; --s1: #3987e5; --s2: #d95926;
+  --band: #3d2f1c; --accent: #5cc4ae; --accent-soft: #173029; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.6; }
+.page { max-width: var(--measure); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: grid; gap: 56px; }
+section, header, footer { display: grid; gap: 18px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); font-stretch: 85%; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 800; line-height: 1.02; }
+h2 { font-size: clamp(1.45rem, 3vw, 1.9rem); font-weight: 750; line-height: 1.12; }
+h3 { font-size: 1.08rem; font-weight: 700; font-stretch: 90%; }
+p { margin: 0; max-width: var(--prose); }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 1.12rem; color: var(--ink-2); }
+.note { font-size: 0.86rem; color: var(--ink-3); }
+.mono { font-family: var(--font-mono); font-size: 0.86em; }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.fig { background: var(--panel); padding: 18px 20px 20px; display: grid; gap: 6px; align-content: start; }
+.fig .label { font-size: 0.84rem; font-weight: 600; color: var(--ink-2); }
+.fig .value { font-weight: 600; font-size: 2.3rem; line-height: 1.05; letter-spacing: -0.02em; }
+.fig .value.neg { color: var(--loss); }
+.fig .sub { font-size: 0.84rem; color: var(--ink-3); }
+.verdict { font-size: 1.05rem; max-width: 74ch; border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.table-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.88rem; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.76rem; letter-spacing: 0.03em; text-transform: uppercase; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th.l, td.l { text-align: left; }
+td.strat { white-space: normal; min-width: 230px; text-align: left; }
+td.strat .n { font-weight: 600; }
+td.strat .d { display: block; color: var(--ink-3); font-size: 0.78rem; line-height: 1.35; }
+td.heat { min-width: 66px; }
+tr.total td { font-weight: 600; border-top: 1px solid var(--rule); }
+.neg { color: var(--loss); }
+.chart-wrap { overflow-x: auto; min-width: 0; position: relative; }
+.chart-wrap svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.chart-wrap svg text { fill: var(--ink-2); font-family: var(--font-body); font-size: 12px; font-variant-numeric: tabular-nums; }
+.chart-wrap svg text.muted { fill: var(--ink-3); }
+.chart-wrap svg text.strong { fill: var(--ink); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.84rem; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+.legend i.dot { width: 9px; height: 9px; border-radius: 50%; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; font-size: 0.8rem; line-height: 1.45; box-shadow: 0 4px 14px rgba(0,0,0,0.12); min-width: 190px; z-index: 2; }
+.tip .t { color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+.tip .r { display: flex; gap: 12px; justify-content: space-between; color: var(--ink-2); }
+.tip .r b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.book { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.card .top { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+.card .id { font-family: var(--font-mono); font-size: 0.78rem; color: var(--accent); font-weight: 500; }
+.card .fam { font-size: 0.74rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.card h3 { font-size: 1.02rem; }
+.card .idea { font-size: 0.9rem; }
+.card .rules { font-size: 0.84rem; color: var(--ink-2); }
+.card .src { font-size: 0.78rem; color: var(--ink-3); font-style: italic; }
+.card .res { font-size: 0.8rem; font-variant-numeric: tabular-nums; color: var(--ink-2); border-top: 1px solid var(--grid); padding-top: 6px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+ul.facts { margin: 0; padding-left: 1.1em; display: grid; gap: 8px; max-width: var(--prose); }
+ul.facts li::marker { color: var(--ink-3); }
+footer { border-top: 1px solid var(--rule); padding-top: 18px; color: var(--ink-3); font-size: 0.84rem; }
+svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 560px) {
+  body { font-size: 15px; }
+  .fig .value { font-size: 2rem; }
+  .page { gap: 44px; padding-block: 28px 48px; }
+}
+</style>
+
+<main class="page">
+  <header>
+    <p class="eyebrow">Binance USDT-M perpetuals · BTC ETH SOL XRP DOGE BNB · 1–31 October 2026 · Delta India costs</p>
+    <h1>Crypto Intraday Strategy Test</h1>
+    <p class="lede" id="lede"></p>
+    <div class="figures" id="figures"></div>
+    <p class="verdict" id="verdict"></p>
+  </header>
+
+  <section id="october">
+    <h2>October 2026, all 20 strategies</h2>
+    <p id="oct-intro"></p>
+    <div class="panel"><div class="table-wrap"><table id="t-oct"></table></div></div>
+    <p class="note" id="oct-note"></p>
+  </section>
+
+  <section id="coins">
+    <h2>October by coin</h2>
+    <p>Net result of each strategy on each coin, in dollars on that coin's $10,000. Blue cells made money, red cells lost it.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-coin"></table></div></div>
+  </section>
+
+  <section id="edge">
+    <h2>Edge before costs against the cost of a trade</h2>
+    <p id="edge-intro"></p>
+    <div class="panel">
+      <div class="legend" id="edge-legend"></div>
+      <div class="chart-wrap" id="edge-wrap"></div>
+      <p class="note" id="edge-note"></p>
+    </div>
+  </section>
+
+  <section id="months">
+    <h2>Twelve months, same rules</h2>
+    <p>The same 20 strategies, untouched, from November 2025 to October 2026. Net dollars per month on each strategy's capital.</p>
+    <div class="panel"><div class="table-wrap"><table id="t-month"></table></div></div>
+  </section>
+
+  <section id="persist">
+    <h2>Does last month's top 5 win next month?</h2>
+    <p id="persist-intro"></p>
+    <div class="panel"><div class="table-wrap"><table id="t-persist"></table></div></div>
+    <p class="note" id="persist-note"></p>
+  </section>
+
+  <section id="strategies">
+    <h2>The 20 strategies and where they come from</h2>
+    <p>Each rule follows a published finding or a documented trading method, adapted to crypto's 24-hour UTC day. Every parameter was fixed before the first backtest and none was changed after.</p>
+    <div class="book" id="book"></div>
+  </section>
+
+  <section id="method">
+    <h2>Data, method and checks</h2>
+    <div class="two">
+      <div class="panel"><h3>Data</h3><ul class="facts" id="m-data"></ul></div>
+      <div class="panel"><h3>How a trade is simulated</h3><ul class="facts" id="m-sim"></ul></div>
+      <div class="panel"><h3>Checks</h3><ul class="facts" id="m-checks"></ul></div>
+      <div class="panel"><h3>Limits</h3><ul class="facts" id="m-limits"></ul></div>
+    </div>
+  </section>
+
+  <footer><p id="foot"></p></footer>
+</main>
+
+<script>
+const D = /*DATA*/null;
+const MINUS = "−";
+const SVGNS = "http://www.w3.org/2000/svg";
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (v == null) continue; if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function sv(tag, attrs, ...kids) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) if (v != null) e.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function fmt(v, d) { return Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function sgn(v, d, suffix, sign = true) {
+  if (v == null || Number.isNaN(v)) return "–";
+  if (Math.abs(v) < 0.5 * Math.pow(10, -d)) v = 0;
+  return (v < 0 ? MINUS : (sign && v > 0 ? "+" : "")) + fmt(v, d) + suffix;
+}
+const pct = (v, d = 1) => sgn(v, d, "%");
+const bp = (v) => sgn(v, 1, " bp");
+const usd = (v) => (v == null ? "–" : (v < 0 ? MINUS : v > 0 ? "+" : "") + "$" + fmt(v, 0));
+const num = (v, d = 2) => (v == null ? "–" : (v < 0 ? MINUS : "") + fmt(v, d));
+function heat(v, cap) {
+  if (v == null || Math.abs(v) < 0.5) return null;
+  const k = Math.min(Math.abs(v) / cap, 1);
+  return "background: color-mix(in oklab, var(" + (v > 0 ? "--gain" : "--loss") + ") " + Math.round(10 + k * 48) + "%, var(--panel))";
+}
+const S = D.strategies, T = D.totals, P = D.persistence;
+const byId = Object.fromEntries(S.map(s => [s.id, s]));
+const oct = [...S].sort((a, b) => b.october.pnl - a.october.pnl);
+const fee = D.costs;
+
+// ── header ───────────────────────────────────────────────────────────────
+document.getElementById("lede").textContent =
+  "Twenty intraday strategies drawn from published research and documented trading methods, run on six crypto perpetuals for October 2026. Every position closes by 00:00 UTC, every trade pays Delta India's taker fee, and every rule was fixed before the first backtest.";
+const pos = S.filter(s => s.october.pnl > 0);
+const figs = [
+  ["Profitable in October", pos.length + " of 20", pos.length === 1 ? "The one in profit made a single trade, " + usd(pos[0].october.pnl) + "." : "", false],
+  ["October, before costs", usd(T.oct_gross), "Across " + T.oct_trades.toLocaleString("en-US") + " trades, about zero. Fees and slippage took it to " + usd(T.oct_pnl) + ".", T.oct_gross < 0],
+  ["Best edge before costs", bp(D.best_edge.ctx_bp), D.best_edge.name + " over the 11 months before, t " + num(D.best_edge.ctx_t) + ". A Delta taker round trip costs " + fee.rt_low.toFixed(1) + " to " + fee.rt_high.toFixed(1) + " bp.", false],
+];
+for (const [l, v, s, neg] of figs) document.getElementById("figures").append(h("div", { class: "fig" }, h("div", { class: "label" }, l), h("div", { class: "value" + (neg ? " neg" : "") }, v), h("div", { class: "sub" }, s)));
+{
+  const sig = D.significant;
+  const n = P.last_month_top5.length;
+  document.getElementById("verdict").textContent =
+    pos.length + " of the 20 strategies made money in October 2026" + (pos.length === 1 && pos[0].october.trades === 1 ? ", and that one on a single trade" : "") +
+    ". Over the 11 months before, " + T.ctx_positive + " did. Only " + sig.length + " show an edge before costs that clears the multiple-testing bar: " +
+    sig.map(x => x.name + " at " + bp(x.bp) + " a trade").join(" and ") + ". Each is smaller than the " + fee.rt_low.toFixed(1) + " to " + fee.rt_high.toFixed(1) +
+    " bp a Delta taker round trip costs. Trading each month's best five the following month lost money in " + (n - P.top5_positive) + " of " + n + " months.";
+}
+
+// ── October table ────────────────────────────────────────────────────────
+document.getElementById("oct-intro").textContent =
+  "Sorted by net result. Each strategy trades all six coins with $10,000 on each, so its capital is $60,000 ($50,000 for the BTC-to-alt rule, which skips BTC). Every trade is $10,000 notional, 1x, no compounding.";
+{
+  const t = document.getElementById("t-oct");
+  t.append(h("thead", {}, h("tr", {}, ["Strategy", "Trades", "Win rate", "Before costs", "Net per trade", "Net", "Return", "Max drawdown", "t"].map((x, i) => h("th", { class: i === 0 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  for (const s of oct) {
+    const o = s.october;
+    tb.append(h("tr", {},
+      h("td", { class: "strat" }, h("span", { class: "n" }, s.name), h("span", { class: "d" }, s.id + " · " + s.family)),
+      h("td", {}, o.trades), h("td", {}, o.trades ? pct(o.win_rate, 1).replace("+", "") : "–"),
+      h("td", { class: o.avg_gross_bp < 0 ? "neg" : null }, o.trades ? bp(o.avg_gross_bp) : "–"),
+      h("td", { class: o.avg_net_bp < 0 ? "neg" : null }, o.trades ? bp(o.avg_net_bp) : "–"),
+      h("td", { class: o.pnl < 0 ? "neg" : null }, usd(o.pnl)), h("td", { class: o.return_pct < 0 ? "neg" : null }, pct(o.return_pct, 2)),
+      h("td", {}, o.trades ? "$" + fmt(o.max_dd, 0) : "–"), h("td", {}, num(o.t_stat))));
+  }
+  tb.append(h("tr", { class: "total" }, h("td", { class: "l" }, "All 20"), h("td", {}, T.oct_trades.toLocaleString("en-US")), h("td", {}), h("td", {}),
+    h("td", {}), h("td", { class: "neg" }, usd(T.oct_pnl)), h("td", {}), h("td", {}), h("td", {})));
+  t.append(tb);
+  document.getElementById("oct-note").textContent =
+    "Before costs is the average move captured per trade; net per trade subtracts Delta's taker fee (0.05% + 18% GST = 5.9 bp a side), 2 bp (BTC, ETH) or 4 bp (alts) of spread and slippage a side, and funding. 28 October is excluded: Binance never published that day's perpetual data.";
+}
+
+// ── by coin ──────────────────────────────────────────────────────────────
+{
+  const coins = D.coins;
+  const t = document.getElementById("t-coin");
+  t.append(h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Strategy"), coins.map(c => h("th", {}, c.replace("USDT", ""))), h("th", {}, "All coins"))));
+  const tb = h("tbody");
+  for (const s of oct) {
+    tb.append(h("tr", {}, h("td", { class: "l" }, s.name), coins.map(c => {
+      const x = s.by_coin[c];
+      if (!x) return h("td", { class: "heat" }, "–");
+      return h("td", { class: "heat", style: heat(x.pnl, 2500) }, x.trades ? usd(x.pnl) : "0 trades");
+    }), h("td", { style: heat(s.october.pnl, 15000) }, usd(s.october.pnl))));
+  }
+  t.append(tb);
+}
+
+// ── edge chart ───────────────────────────────────────────────────────────
+document.getElementById("edge-intro").textContent =
+  "The bars show what each rule earned per trade before any cost over the 11 months before October, the dots what it earned in October. The shaded band is the cost of one Delta taker round trip, " +
+  fee.rt_low.toFixed(1) + " bp on BTC and ETH to " + fee.rt_high.toFixed(1) + " bp on the alts. A rule needs its bar past the band to make money.";
+{
+  const rows = [...S].sort((a, b) => b.gross_ctx_bp - a.gross_ctx_bp);
+  const W = 1000, L = 250, R = 130, T0 = 26, row = 26, Hh = T0 + rows.length * row + 34;
+  const lo = -35, hi = 30;
+  const x = v => L + ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (W - L - R);
+  const svg = sv("svg", { viewBox: "0 0 " + W + " " + Hh, role: "img", "aria-label": "Average gross basis points per trade by strategy, with the round-trip cost band." });
+  svg.append(sv("rect", { x: x(fee.rt_low), y: T0 - 8, width: x(fee.rt_high) - x(fee.rt_low), height: rows.length * row + 8, fill: "var(--band)" }));
+  svg.append(sv("text", { x: (x(fee.rt_low) + x(fee.rt_high)) / 2, y: T0 - 12, "text-anchor": "middle", class: "muted" }, "cost of a round trip"));
+  for (let v = -30; v <= 30; v += 10) {
+    svg.append(sv("line", { x1: x(v), x2: x(v), y1: T0 - 8, y2: T0 + rows.length * row, stroke: v === 0 ? "var(--ink-3)" : "var(--grid)" }));
+    svg.append(sv("text", { x: x(v), y: T0 + rows.length * row + 18, "text-anchor": "middle", class: "muted" }, sgn(v, 0, " bp")));
+  }
+  rows.forEach((s, k) => {
+    const yy = T0 + k * row;
+    svg.append(sv("text", { x: L - 10, y: yy + row / 2 + 4, "text-anchor": "end" }, s.name));
+    const v = s.gross_ctx_bp, x0 = x(0), x1 = x(v);
+    const w = Math.abs(x1 - x0), bh = 12;
+    const left = Math.min(x0, x1);
+    svg.append(sv("path", { d: barPath(left, yy + (row - bh) / 2, w, bh, v >= 0), fill: "var(--s1)" }));
+    const ov = s.gross_oct_bp;
+    if (ov != null) svg.append(sv("circle", { cx: x(ov), cy: yy + row / 2, r: 4.5, fill: "var(--s2)", stroke: "var(--panel)", "stroke-width": 2 }));
+    svg.append(sv("text", { x: W - R + 22, y: yy + row / 2 + 4, class: Math.abs(s.gross_ctx_t) >= 2.81 ? "strong" : "muted" }, sgn(v, 1, " bp") + "  t " + num(s.gross_ctx_t)));
+  });
+  function barPath(x0, y0, w, hgt, right) {
+    const r = Math.min(4, w / 2, hgt / 2);
+    if (w < 1) return "M" + x0 + " " + y0 + "h1v" + hgt + "h-1z";
+    if (right) return "M" + x0 + " " + y0 + "h" + (w - r) + "a" + r + " " + r + " 0 0 1 " + r + " " + r + "v" + (hgt - 2 * r) + "a" + r + " " + r + " 0 0 1 " + (-r) + " " + r + "h" + (-(w - r)) + "z";
+    return "M" + (x0 + w) + " " + y0 + "h" + (-(w - r)) + "a" + r + " " + r + " 0 0 0 " + (-r) + " " + r + "v" + (hgt - 2 * r) + "a" + r + " " + r + " 0 0 0 " + r + " " + r + "h" + (w - r) + "z";
+  }
+  document.getElementById("edge-wrap").append(svg);
+  const lg = document.getElementById("edge-legend");
+  lg.append(h("span", {}, h("i", { style: "background:var(--s1)" }), "Nov 2025 – Sep 2026, before costs"),
+    h("span", {}, h("i", { class: "dot", style: "background:var(--s2)" }), "October 2026, before costs"),
+    h("span", {}, h("i", { style: "background:var(--band)" }), "Delta taker round-trip cost"));
+  document.getElementById("edge-note").textContent =
+    "The column on the right gives the 11-month figure and its t-statistic; with 20 rules tried, a t beyond ±2.81 is the bar for 5% significance, and those are in bold. Values beyond ±30 bp are drawn at the edge. October's bars are short samples: a dot far from its bar is mostly noise.";
+}
+
+// ── monthly heat table ───────────────────────────────────────────────────
+{
+  const months = D.months;
+  const t = document.getElementById("t-month");
+  const ml = m => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+m.slice(5) - 1] + " " + m.slice(2, 4);
+  t.append(h("thead", {}, h("tr", {}, h("th", { class: "l" }, "Strategy"), months.map(m => h("th", {}, ml(m))), h("th", {}, "12 months"))));
+  const tb = h("tbody");
+  for (const s of [...S].sort((a, b) => b.total12 - a.total12)) {
+    tb.append(h("tr", {}, h("td", { class: "l" }, s.name), months.map(m => { const v = s.monthly[m]; return h("td", { class: "heat", style: heat(v, 8000) }, usd(v)); }),
+      h("td", { style: heat(s.total12, 60000) }, usd(s.total12))));
+  }
+  t.append(tb);
+}
+
+// ── persistence ──────────────────────────────────────────────────────────
+document.getElementById("persist-intro").textContent =
+  "A common way to use a one-month backtest is to take its winners and trade them next month. This table does exactly that: each month's five best strategies, then what those five made the following month.";
+{
+  const t = document.getElementById("t-persist");
+  t.append(h("thead", {}, h("tr", {}, ["Picked in", "Its top 5", "Next month, top 5", "Next month, any 5 on average"].map((x, i) => h("th", { class: i < 2 ? "l" : null }, x)))));
+  const tb = h("tbody");
+  const ml = m => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+m.slice(5) - 1] + " " + m.slice(0, 4);
+  for (const p of P.last_month_top5) tb.append(h("tr", {}, h("td", { class: "l" }, ml(p.picked_in)), h("td", { class: "l mono" }, p.top5.join(" ")),
+    h("td", { class: p.top5_next_pnl < 0 ? "neg" : null }, usd(p.top5_next_pnl)), h("td", { class: "neg" }, usd(p.all20_next_pnl_avg_per5))));
+  t.append(tb);
+  document.getElementById("persist-note").textContent =
+    "The picked five lost money in " + (P.last_month_top5.length - P.top5_positive) + " of " + P.last_month_top5.length + " months. They always beat the average strategy, and month-to-month rankings correlate strongly (Spearman " +
+    num(P.mean_spearman) + "), but that is cost, not skill: the rules that trade least lose least every month. Picked on all 11 months before October (" + P.context_top5.join(", ") + "), the best five lost " + usd(P.context_top5_october_pnl).replace("+", "") + " in October.";
+}
+
+// ── strategy book ────────────────────────────────────────────────────────
+{
+  const box = document.getElementById("book");
+  for (const s of S) box.append(h("article", { class: "card" },
+    h("div", { class: "top" }, h("span", { class: "id" }, s.id), h("span", { class: "fam" }, s.family)),
+    h("h3", {}, s.name), h("p", { class: "idea" }, s.idea), h("p", { class: "rules" }, s.rules), h("p", { class: "src" }, s.source),
+    h("p", { class: "res" }, "October " + usd(s.october.pnl) + " on " + s.october.trades + " trades · before costs, Nov–Sep " + bp(s.gross_ctx_bp) + " a trade (t " + num(s.gross_ctx_t) + ")")));
+}
+
+// ── method ───────────────────────────────────────────────────────────────
+{
+  const add = (id, items) => { const ul = document.getElementById(id); for (const x of items) ul.append(h("li", {}, x)); };
+  const dr = D.data;
+  add("m-data", [
+    "Binance Vision USDT-M perpetual data, every archive checked against its published SHA-256: 1-minute candles with taker-buy volume, the 1-minute premium index, 5-minute open interest and long/short ratios, and funding prints.",
+    "Six coins, October 2025 to October 2026, " + dr.minutes.toLocaleString("en-US") + " minutes each. October 2025 is warm-up only.",
+    "Binance never published the perpetual candles for 28 October 2026. That day was rebuilt from Binance spot candles so indicators looking back across it stay real, and no strategy trades on it.",
+    "The premium index is also missing for 28 and 29 October; those minutes stay empty, so the pre-funding rule sits out those days.",
+  ]);
+  add("m-sim", [
+    "A signal reads only bars that have closed. The entry fills at the open of the next 1-minute bar.",
+    "Open positions are walked minute by minute. A minute that opens beyond a level fills at that open. When one minute reaches both the stop and the target, the stop is taken.",
+    "Every position is flat by 00:00 UTC. One position per strategy per coin.",
+    "Costs per side: Delta India taker 0.05% plus 18% GST, plus 2 bp (BTC, ETH) or 4 bp (SOL, XRP, DOGE, BNB) of spread and slippage. Funding uses Binance's real prints, signed.",
+    "$10,000 notional per trade, no leverage and no compounding. Leverage multiplies returns and drawdowns alike.",
+  ]);
+  const V = D.verify, PR = D.prereg;
+  add("m-checks", [
+    "Pre-registered: the rules' fingerprint " + PR.first + " was recorded before the first backtest. One amendment followed (" + PR.last + "): " + PR.why,
+    "Fills: all " + V.fill_trades_checked.toLocaleString("en-US") + " trades were re-filled by a second simulator written separately: " + V.fill_mismatches.length + " mismatches.",
+    "No look-ahead: every strategy was re-run on data cut at " + V.truncation_cut + ", and all " + V.truncation_trades.toLocaleString("en-US") + " trades that closed before the cut came out identical.",
+  ]);
+  add("m-limits", [
+    "Binance prices and order flow stand in for Delta, where the trades would actually go. Delta's spreads on the alts are usually wider than the 4 bp assumed.",
+    "One month is a small sample: most strategies made 40 to 400 trades in October. The 11 earlier months are there to show which results repeat.",
+    "Taker fills on every side. A rule that could rest limit orders would pay Delta's 0.02% maker fee instead, but breakouts and stops rarely fill that way.",
+  ]);
+  document.getElementById("foot").textContent =
+    "Generated " + D.generated + ". Code and results: engine/research/crypto_intraday20_2026_11 (ci_fetch.py, ci_core.py, ci_strategies.py, ci_run.py, ci_verify.py, ci_report.py, REPORT.md, results/). The market data stays in the git-ignored engine/data/historical/intraday20.";
+}
+</script>

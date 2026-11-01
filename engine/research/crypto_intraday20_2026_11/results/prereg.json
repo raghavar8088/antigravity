@@ -1,0 +1,195 @@
+{
+ "fingerprint": "ec341ddf8b5fa45d",
+ "registered_utc": "2026-11-01T13:23:13+00:00",
+ "test": "2026-10-01..2026-10-31 (no trades on the rebuilt 2026-10-28)",
+ "context": "2025-11-01..2026-09-30",
+ "symbols": [
+  "BTCUSDT",
+  "ETHUSDT",
+  "SOLUSDT",
+  "XRPUSDT",
+  "DOGEUSDT",
+  "BNBUSDT"
+ ],
+ "fee_leg": 0.00059,
+ "slip_leg": {
+  "BTCUSDT": 0.0002,
+  "ETHUSDT": 0.0002,
+  "SOLUSDT": 0.0004,
+  "XRPUSDT": 0.0004,
+  "DOGEUSDT": 0.0004,
+  "BNBUSDT": 0.0004
+ },
+ "notional": 10000.0,
+ "strategies": [
+  {
+   "id": "S01",
+   "name": "First-half-hour momentum",
+   "family": "Time-series momentum",
+   "source": "Shen, Urquhart & Wang (2022), 'Bitcoin intraday time series momentum', Financial Review; Gao, Han, Li & Zhou (2018), 'Market intraday momentum', Journal of Financial Economics",
+   "idea": "The return of the first half-hour of the UTC day predicts the return of the last half-hour.",
+   "rules": "Take the 00:00-00:30 UTC return. At 23:30 UTC trade in its direction; exit at 00:00. No stop. One trade a day."
+  },
+  {
+   "id": "S02",
+   "name": "Williams volatility breakout",
+   "family": "Volatility breakout",
+   "source": "Williams (1999), 'Long-Term Secrets to Short-Term Trading'; widely run on Bitcoin as the k = 0.5 volatility breakout",
+   "idea": "A move of half of yesterday's range away from today's open signals a directional day.",
+   "rules": "Long when a 1m close is above the 00:00 open + 0.5 x yesterday's range; short below the open - 0.5 x range. First trigger only; exit at 00:00. No stop."
+  },
+  {
+   "id": "S03",
+   "name": "Dual Thrust",
+   "family": "Volatility breakout",
+   "source": "Michael Chalek's Dual Thrust system, a standard intraday breakout in futures and crypto trading",
+   "idea": "Breakouts beyond a range built from the last four days continue within the day.",
+   "rules": "Range = max(HH - LC, HC - LL) over the prior 4 days. Long above open + 0.5 x range, short below open - 0.5 x range, reversing on the opposite line; exit at 00:00."
+  },
+  {
+   "id": "S04",
+   "name": "First 5-minute direction",
+   "family": "Opening range",
+   "source": "Zarattini, Barbon & Aziz (2024), 'A Profitable Day Trading Strategy for the U.S. Equity Market' (5-minute opening-range rule)",
+   "idea": "The direction of the first 5-minute candle, on days with heavy early volume, carries through the session.",
+   "rules": "If the 00:00-00:05 candle is up (down) and its volume is at least its 14-day average, buy (sell) at 00:05. Stop 10% of the 14-day ATR; exit at 00:00."
+  },
+  {
+   "id": "S05",
+   "name": "US-open range breakout",
+   "family": "Opening range",
+   "source": "Crabel (1990), 'Day Trading with Short Term Price Patterns and Opening Range Breakout'; Eross, McGroarty, Urquhart & Wolfe (2019), 'The intraday dynamics of bitcoin', Research in International Business and Finance (activity peaks in US hours)",
+   "idea": "Crypto volume and volatility peak when US equities open; the first 30 minutes set a range whose break carries on.",
+   "rules": "Range = first 30 min after the NYSE open (13:30 or 14:30 UTC). Weekdays only. Trade the first 1m close outside it within 4 h; stop at the other side, target 2x the range, exit at the NYSE close."
+  },
+  {
+   "id": "S06",
+   "name": "Asia range, London breakout",
+   "family": "Opening range",
+   "source": "FX 'London breakout' practice; Eross et al. (2019) on activity rising at the European open",
+   "idea": "The quiet Asian-hours range breaks when Europe arrives, and the break continues.",
+   "rules": "Range = 00:00 UTC to the London open (07:00 or 08:00 UTC). Weekdays only. Trade the first 1m close outside it within 5 h; stop at the range middle, target 1x the range, exit 9 h after the London open."
+  },
+  {
+   "id": "S07",
+   "name": "Session VWAP trend",
+   "family": "Trend",
+   "source": "Zarattini & Aziz (2023), 'Volume Weighted Average Price (VWAP): The Holy Grail for Day Trading Systems'",
+   "idea": "Price above the session VWAP means buyers are in control, below means sellers.",
+   "rules": "Every 15 min from 00:15 to 23:30 UTC hold long if the close is above the session VWAP and short if below, flipping when it crosses; exit at 00:00."
+  },
+  {
+   "id": "S08",
+   "name": "Abnormal-hour continuation",
+   "family": "Overreaction",
+   "source": "Caporale & Plastun (2019), 'Price overreactions in the cryptocurrency market', Journal of Economic Studies",
+   "idea": "After an abnormally large hourly move, price keeps moving the same way for a while.",
+   "rules": "If an hour's return exceeds 3 standard deviations of the prior 30 days of hourly returns, trade in its direction for 2 h; stop at that hour's open."
+  },
+  {
+   "id": "S09",
+   "name": "Jump reversal",
+   "family": "Liquidity provision",
+   "source": "Nagel (2012), 'Evaporating liquidity', Review of Financial Studies (short-term reversal as paid liquidity provision)",
+   "idea": "A violent 5-minute move is often forced flow that partly reverses once it is absorbed.",
+   "rules": "If a 5m return exceeds 4 standard deviations of the prior 3 days, fade it. Target half the bar's move back, stop half the jump beyond its extreme, exit after 1 h."
+  },
+  {
+   "id": "S10",
+   "name": "Taker-flow momentum",
+   "family": "Order flow",
+   "source": "Cont, Kukanov & Stoikov (2014), 'The price impact of order book events', Journal of Financial Econometrics; Silantyev (2019), 'Order flow analysis of cryptocurrency markets', Digital Finance",
+   "idea": "Heavy, one-sided aggressive buying or selling keeps pushing price the same way.",
+   "rules": "Every 15 min: if the last 30 min had taker imbalance above +0.10 (below -0.10), a return in the same direction, and volume at least 1.5x its 7-day average, follow it for 1 h. Stop 1 ATR (15m, 14)."
+  },
+  {
+   "id": "S11",
+   "name": "Absorption fade",
+   "family": "Order flow",
+   "source": "Kyle (1985) price-impact framework; order-flow 'absorption' as practitioners read it",
+   "idea": "Strong aggressive buying that fails to lift price is being absorbed by a large passive seller, so price turns down (and the mirror).",
+   "rules": "Every 15 min: if the last 30 min had taker imbalance above +0.15 but no gain (below -0.15 but no loss) on 1.5x average volume, trade against the flow for 1 h. Stop 1 ATR (15m, 14)."
+  },
+  {
+   "id": "S12",
+   "name": "Round-number breakout",
+   "family": "Round numbers",
+   "source": "Osler (2003), 'Currency orders and exchange rate dynamics', Journal of Finance (stop orders cluster just past round numbers); Urquhart (2017), 'Price clustering in Bitcoin', Economics Letters",
+   "idea": "Crossing a round number triggers the stops parked just beyond it, which speeds the move up.",
+   "rules": "Round step = largest 1-2-5 step at most 1% of yesterday's close. When a 15m bar closes through a round level, follow it: stop 0.25 step back, target 0.75 step beyond, exit after 2 h."
+  },
+  {
+   "id": "S13",
+   "name": "Round-number rejection",
+   "family": "Round numbers",
+   "source": "Osler (2003): take-profit orders cluster at round numbers, so price tends to stall and reverse there",
+   "idea": "A test of a round level that closes well away from it is a rejection worth fading.",
+   "rules": "A 15m bar that reaches within 0.1 step of the round level above, then closes 0.3 step below it and down on the bar, is sold (mirror at support). Stop 0.2 step past the level, target 0.6 step, exit after 2 h."
+  },
+  {
+   "id": "S14",
+   "name": "Pre-funding premium fade",
+   "family": "Perpetual mechanics",
+   "source": "He, Manela, Ross & von Wachter (2022), 'Fundamentals of Perpetual Futures' (funding ties the perpetual to spot)",
+   "idea": "An unusually rich (cheap) perpetual just before a funding settlement gets sold (bought) by traders avoiding the payment and by arbitrage.",
+   "rules": "30 min before each 08:00, 16:00 and 00:00 UTC settlement: if the 30-min mean premium is above the 90th (below the 10th) percentile of the prior 7 days, short (buy) the perpetual. Exit 15 min after the settlement, or at 23:59 for the 00:00 one."
+  },
+  {
+   "id": "S15",
+   "name": "Prior-day high/low sweep reversal",
+   "family": "Liquidity sweep",
+   "source": "Osler (2003) on stop orders resting beyond prior highs and lows; the 'stop run' reversal",
+   "idea": "A brief push through yesterday's high or low that closes back inside has run the stops and tends to reverse.",
+   "rules": "A 15m bar that trades above yesterday's high but closes below it is sold (mirror at the low), once per side a day. Stop 0.1% beyond the bar's extreme, target 2x the risk, exit after 4 h."
+  },
+  {
+   "id": "S16",
+   "name": "Calm-market Bollinger fade",
+   "family": "Mean reversion",
+   "source": "Bollinger (2001), 'Bollinger on Bollinger Bands'; Wilder (1978) ADX as the regime filter",
+   "idea": "When the market is not trending, closes far outside the band snap back to the middle.",
+   "rules": "5m Bollinger(20, 2.5). When the hourly ADX(14) is below 20, buy a close under the lower band (sell above the upper). Target the middle band, stop 1.5 band-widths away, exit after 2 h."
+  },
+  {
+   "id": "S17",
+   "name": "RSI(2) pullback in trend",
+   "family": "Mean reversion",
+   "source": "Connors & Alvarez (2009), 'Short Term Trading Strategies That Work'",
+   "idea": "A sharp short-term pullback inside a trend is bought (sold) and quickly recovers.",
+   "rules": "15m bars. Above the 200-bar average, buy RSI(2) under 5 and exit when RSI(2) goes above 70; below it, sell RSI(2) over 95 and exit under 30. Stop 2 ATR(14), exit after 2 h."
+  },
+  {
+   "id": "S18",
+   "name": "BTC-to-alt catch-up",
+   "family": "Cross-asset",
+   "source": "Bitcoin's lead in crypto price discovery; tested here as a hypothesis on 5-minute bars",
+   "idea": "When BTC jumps and an alt has not followed yet, the alt catches up within minutes.",
+   "rules": "Every 5 min: if BTC moved more than 0.5% and the alt moved less than half of that, trade the alt in BTC's direction for 15 min. Stop 1%. Alts only."
+  },
+  {
+   "id": "S19",
+   "name": "Open-interest-confirmed breakout",
+   "family": "Positioning",
+   "source": "Bessembinder & Seguin (1993), 'Price volatility, trading volume, and market depth', Journal of Financial and Quantitative Analysis (open interest as new positioning)",
+   "idea": "A breakout that brings in new positions (rising open interest) is real money behind the move.",
+   "rules": "Hourly close above the prior 24-hour high (below the low) while open interest rose at least 1% in that hour: trade the break. Stop 1 ATR(1h, 14); exit at 00:00."
+  },
+  {
+   "id": "S20",
+   "name": "Crowded-account contrarian",
+   "family": "Positioning",
+   "source": "Contrarian reading of retail positioning (Kumar & Lee (2006), 'Retail investor sentiment and return comovements', Journal of Finance); Binance's all-account long/short ratio",
+   "idea": "When an extreme share of accounts is long (short) and price is already weak (strong), the crowd gets squeezed.",
+   "rules": "Hourly: if the account long/short ratio is at its 7-day 95th percentile and price is below the session VWAP, short (mirror at the 5th percentile). Stop 1.5 ATR(1h, 14), exit after 4 h."
+  }
+ ],
+ "amendments": [
+  {
+   "from": "ec341ddf8b5fa45d",
+   "to": "a9d3ffeb4e6e9aaf",
+   "logged_utc": "2026-11-01T13:27:44+00:00",
+   "rules_changed": false,
+   "why": "Found by the truncation test after the first full run: S05, S06 and S14 looped over _days(mk)[:-1], which dropped the last day of data, so they never traded 2026-10-31. Now every day is used. No rule or parameter changed. First-run October results for the 17 untouched strategies are unchanged by this edit."
+  }
+ ]
+}

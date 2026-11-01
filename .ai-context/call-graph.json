@@ -1,1 +1,1 @@
-{"engine/cmd/deep_backtest/data.go::toHistorical()":["engine/cmd/deep_backtest/engine.go::Duration"],"engine/cmd/deep_backtest/main.go::main()":["engine/cmd/deep_backtest/data.go::loadDeep()","engine/cmd/deep_backtest/engine.go::newEngineShared()","engine/cmd/deep_backtest/engine.go::runEngine()","engine/cmd/deep_backtest/engine.go::runProbe()","engine/cmd/deep_backtest/sim.go::buildDecisions()","engine/cmd/deep_backtest/sim.go::runFixed()"]}
+{}
