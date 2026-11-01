@@ -1,0 +1,2970 @@
+{
+ "tested": 52,
+ "confirmed": 30,
+ "results": [
+  {
+   "id": "A|US|60|stop|far|3.0|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 2942.05,
+    "return_pct": 4.9,
+    "win_rate": 51.0,
+    "halves": [
+     2477.23,
+     464.82
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.84,
+    "by_coin": {
+     "BNBUSDT": 315.0,
+     "BTCUSDT": -38.79,
+     "DOGEUSDT": 1026.59,
+     "ETHUSDT": 37.0,
+     "SOLUSDT": 637.6,
+     "XRPUSDT": 964.65
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 77,
+    "pnl": 3532.16,
+    "return_pct": 3.53,
+    "gross_pnl": 5124.58,
+    "win_rate": 45.5,
+    "avg_net_bp": 45.87,
+    "max_dd": 1446.23,
+    "max_dd_pct": 1.45,
+    "halves": [
+     3055.41,
+     476.75
+    ],
+    "by_coin": {
+     "ADAUSDT": -35.31,
+     "APTUSDT": 1797.73,
+     "AVAXUSDT": 199.5,
+     "BCHUSDT": 328.93,
+     "DOTUSDT": 538.32,
+     "LINKUSDT": 353.12,
+     "LTCUSDT": 36.14,
+     "NEARUSDT": 228.45,
+     "SUIUSDT": 408.05,
+     "TRXUSDT": -322.78
+    },
+    "capital": 100000.0,
+    "coins_positive": 8,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "G|15|4|short",
+   "title": "Short 15:00-19:00 UTC",
+   "rules": "Every day, sell at 15:00 UTC and close at 19:00 UTC. No stop.",
+   "original6": {
+    "trades": 180,
+    "pnl": 2820.26,
+    "return_pct": 4.7,
+    "win_rate": 50.6,
+    "halves": [
+     1086.93,
+     1733.32
+    ],
+    "coins_positive": 6,
+    "max_dd_pct": 2.21,
+    "by_coin": {
+     "BNBUSDT": 179.91,
+     "BTCUSDT": 266.64,
+     "DOGEUSDT": 666.03,
+     "ETHUSDT": 485.64,
+     "SOLUSDT": 600.5,
+     "XRPUSDT": 621.55
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 300,
+    "pnl": 4425.92,
+    "return_pct": 4.43,
+    "gross_pnl": 10922.08,
+    "win_rate": 46.3,
+    "avg_net_bp": 14.75,
+    "max_dd": 4749.24,
+    "max_dd_pct": 4.75,
+    "halves": [
+     1199.08,
+     3226.84
+    ],
+    "by_coin": {
+     "ADAUSDT": 921.55,
+     "APTUSDT": 618.73,
+     "AVAXUSDT": 1056.33,
+     "BCHUSDT": 62.08,
+     "DOTUSDT": 676.33,
+     "LINKUSDT": 342.5,
+     "LTCUSDT": 500.4,
+     "NEARUSDT": -130.19,
+     "SUIUSDT": 718.82,
+     "TRXUSDT": -340.64
+    },
+    "capital": 100000.0,
+    "coins_positive": 8,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|close|far|1.5|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 2763.57,
+    "return_pct": 4.61,
+    "win_rate": 58.8,
+    "halves": [
+     1544.51,
+     1219.07
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.64,
+    "by_coin": {
+     "BNBUSDT": 173.1,
+     "BTCUSDT": -79.09,
+     "DOGEUSDT": 669.39,
+     "ETHUSDT": 452.26,
+     "SOLUSDT": 736.78,
+     "XRPUSDT": 811.12
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 79,
+    "pnl": 1681.36,
+    "return_pct": 1.68,
+    "gross_pnl": 3196.61,
+    "win_rate": 49.4,
+    "avg_net_bp": 21.28,
+    "max_dd": 1620.42,
+    "max_dd_pct": 1.62,
+    "halves": [
+     1360.09,
+     321.27
+    ],
+    "by_coin": {
+     "ADAUSDT": 35.64,
+     "APTUSDT": 1035.95,
+     "AVAXUSDT": 41.28,
+     "BCHUSDT": -133.83,
+     "DOTUSDT": 98.17,
+     "LINKUSDT": 324.89,
+     "LTCUSDT": -126.54,
+     "NEARUSDT": 609.39,
+     "SUIUSDT": 74.1,
+     "TRXUSDT": -277.68
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|close|far|3.0|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 2308.89,
+    "return_pct": 3.85,
+    "win_rate": 52.9,
+    "halves": [
+     1940.05,
+     368.84
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.64,
+    "by_coin": {
+     "BNBUSDT": 244.99,
+     "BTCUSDT": -76.12,
+     "DOGEUSDT": 599.94,
+     "ETHUSDT": 103.87,
+     "SOLUSDT": 528.75,
+     "XRPUSDT": 907.46
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 79,
+    "pnl": 3806.87,
+    "return_pct": 3.81,
+    "gross_pnl": 5450.31,
+    "win_rate": 48.1,
+    "avg_net_bp": 48.19,
+    "max_dd": 1620.42,
+    "max_dd_pct": 1.62,
+    "halves": [
+     3402.38,
+     404.5
+    ],
+    "by_coin": {
+     "ADAUSDT": -65.55,
+     "APTUSDT": 1757.82,
+     "AVAXUSDT": 156.99,
+     "BCHUSDT": 336.85,
+     "DOTUSDT": 652.01,
+     "LINKUSDT": 425.09,
+     "LTCUSDT": -221.1,
+     "NEARUSDT": 1062.32,
+     "SUIUSDT": 21.42,
+     "TRXUSDT": -318.98
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|stop|far|1.5|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 2261.65,
+    "return_pct": 3.77,
+    "win_rate": 56.9,
+    "halves": [
+     1432.29,
+     829.37
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.84,
+    "by_coin": {
+     "BNBUSDT": 252.08,
+     "BTCUSDT": -47.74,
+     "DOGEUSDT": 431.06,
+     "ETHUSDT": 238.94,
+     "SOLUSDT": 483.59,
+     "XRPUSDT": 903.72
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 77,
+    "pnl": 1847.15,
+    "return_pct": 1.85,
+    "gross_pnl": 3304.78,
+    "win_rate": 49.4,
+    "avg_net_bp": 23.99,
+    "max_dd": 1446.23,
+    "max_dd_pct": 1.45,
+    "halves": [
+     910.57,
+     936.58
+    ],
+    "by_coin": {
+     "ADAUSDT": 32.43,
+     "APTUSDT": 1012.14,
+     "AVAXUSDT": 18.99,
+     "BCHUSDT": -88.37,
+     "DOTUSDT": 298.74,
+     "LINKUSDT": 214.39,
+     "LTCUSDT": 297.76,
+     "NEARUSDT": 220.6,
+     "SUIUSDT": 124.2,
+     "TRXUSDT": -283.74
+    },
+    "capital": 100000.0,
+    "coins_positive": 8,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|15|retest|mid|none|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 2065.21,
+    "return_pct": 3.44,
+    "win_rate": 55.0,
+    "halves": [
+     1725.82,
+     339.39
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.63,
+    "by_coin": {
+     "BNBUSDT": 194.54,
+     "BTCUSDT": -51.2,
+     "DOGEUSDT": 707.09,
+     "ETHUSDT": 309.78,
+     "SOLUSDT": 393.23,
+     "XRPUSDT": 511.76
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 59,
+    "pnl": 2639.35,
+    "return_pct": 2.64,
+    "gross_pnl": 3425.58,
+    "win_rate": 28.8,
+    "avg_net_bp": 44.73,
+    "max_dd": 1246.12,
+    "max_dd_pct": 1.25,
+    "halves": [
+     1881.31,
+     758.04
+    ],
+    "by_coin": {
+     "ADAUSDT": 822.93,
+     "APTUSDT": 943.01,
+     "AVAXUSDT": -121.58,
+     "BCHUSDT": 559.02,
+     "DOTUSDT": -551.7,
+     "LINKUSDT": 530.13,
+     "LTCUSDT": 63.6,
+     "NEARUSDT": -102.02,
+     "SUIUSDT": 547.01,
+     "TRXUSDT": -51.04
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|retest|far|3.0|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 39,
+    "pnl": 2017.57,
+    "return_pct": 3.36,
+    "win_rate": 51.3,
+    "halves": [
+     1713.25,
+     304.31
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.55,
+    "by_coin": {
+     "BNBUSDT": 115.61,
+     "BTCUSDT": -183.79,
+     "DOGEUSDT": 508.38,
+     "ETHUSDT": 70.26,
+     "SOLUSDT": 707.74,
+     "XRPUSDT": 799.36
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 67,
+    "pnl": 2202.83,
+    "return_pct": 2.2,
+    "gross_pnl": 3040.67,
+    "win_rate": 43.3,
+    "avg_net_bp": 32.88,
+    "max_dd": 1414.47,
+    "max_dd_pct": 1.41,
+    "halves": [
+     1716.36,
+     486.47
+    ],
+    "by_coin": {
+     "ADAUSDT": -146.27,
+     "APTUSDT": 1866.05,
+     "AVAXUSDT": 103.9,
+     "BCHUSDT": 251.0,
+     "DOTUSDT": 799.6,
+     "LINKUSDT": -21.37,
+     "LTCUSDT": -465.77,
+     "NEARUSDT": 262.61,
+     "SUIUSDT": -232.62,
+     "TRXUSDT": -214.3
+    },
+    "capital": 100000.0,
+    "coins_positive": 5,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|close|mid|3.0|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 1962.11,
+    "return_pct": 3.27,
+    "win_rate": 51.0,
+    "halves": [
+     1457.98,
+     504.13
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.65,
+    "by_coin": {
+     "BNBUSDT": 182.37,
+     "BTCUSDT": -183.89,
+     "DOGEUSDT": 761.53,
+     "ETHUSDT": 356.33,
+     "SOLUSDT": 364.55,
+     "XRPUSDT": 481.22
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 79,
+    "pnl": -349.23,
+    "return_pct": -0.35,
+    "gross_pnl": 1207.46,
+    "win_rate": 38.0,
+    "avg_net_bp": -4.42,
+    "max_dd": 1925.11,
+    "max_dd_pct": 1.93,
+    "halves": [
+     -170.64,
+     -178.59
+    ],
+    "by_coin": {
+     "ADAUSDT": 28.66,
+     "APTUSDT": 461.16,
+     "AVAXUSDT": -484.5,
+     "BCHUSDT": -366.01,
+     "DOTUSDT": -405.06,
+     "LINKUSDT": 247.73,
+     "LTCUSDT": -1.41,
+     "NEARUSDT": 267.05,
+     "SUIUSDT": 127.32,
+     "TRXUSDT": -224.16
+    },
+    "capital": 100000.0,
+    "coins_positive": 5,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|60|close|far|none|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 1956.25,
+    "return_pct": 3.26,
+    "win_rate": 52.9,
+    "halves": [
+     1655.17,
+     301.08
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.64,
+    "by_coin": {
+     "BNBUSDT": 200.79,
+     "BTCUSDT": -76.12,
+     "DOGEUSDT": 523.64,
+     "ETHUSDT": 103.87,
+     "SOLUSDT": 528.75,
+     "XRPUSDT": 675.31
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 79,
+    "pnl": 2050.68,
+    "return_pct": 2.05,
+    "gross_pnl": 3770.3,
+    "win_rate": 48.1,
+    "avg_net_bp": 25.96,
+    "max_dd": 1620.42,
+    "max_dd_pct": 1.62,
+    "halves": [
+     1983.56,
+     67.13
+    ],
+    "by_coin": {
+     "ADAUSDT": -65.55,
+     "APTUSDT": 1205.6,
+     "AVAXUSDT": 63.26,
+     "BCHUSDT": -28.69,
+     "DOTUSDT": 547.83,
+     "LINKUSDT": 89.81,
+     "LTCUSDT": -221.1,
+     "NEARUSDT": 757.08,
+     "SUIUSDT": 21.42,
+     "TRXUSDT": -318.98
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|15|retest|far|none|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1920.23,
+    "return_pct": 3.2,
+    "win_rate": 55.0,
+    "halves": [
+     1704.04,
+     216.19
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.79,
+    "by_coin": {
+     "BNBUSDT": 200.19,
+     "BTCUSDT": -22.71,
+     "DOGEUSDT": 742.65,
+     "ETHUSDT": 222.93,
+     "SOLUSDT": 342.01,
+     "XRPUSDT": 435.16
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 59,
+    "pnl": 2866.46,
+    "return_pct": 2.87,
+    "gross_pnl": 3652.12,
+    "win_rate": 37.3,
+    "avg_net_bp": 48.58,
+    "max_dd": 2080.54,
+    "max_dd_pct": 2.08,
+    "halves": [
+     3111.47,
+     -245.01
+    ],
+    "by_coin": {
+     "ADAUSDT": 721.88,
+     "APTUSDT": 653.06,
+     "AVAXUSDT": 860.95,
+     "BCHUSDT": 482.3,
+     "DOTUSDT": -405.86,
+     "LINKUSDT": 375.71,
+     "LTCUSDT": -93.94,
+     "NEARUSDT": 27.18,
+     "SUIUSDT": 306.16,
+     "TRXUSDT": -61.0
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|15|stop|mid|none|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the middle of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1874.06,
+    "return_pct": 3.12,
+    "win_rate": 50.0,
+    "halves": [
+     1682.58,
+     191.48
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.8,
+    "by_coin": {
+     "BNBUSDT": 106.31,
+     "BTCUSDT": -56.74,
+     "DOGEUSDT": 684.66,
+     "ETHUSDT": 287.62,
+     "SOLUSDT": 370.61,
+     "XRPUSDT": 481.6
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 1304.61,
+    "return_pct": 1.3,
+    "gross_pnl": 2614.01,
+    "win_rate": 23.3,
+    "avg_net_bp": 21.74,
+    "max_dd": 1533.26,
+    "max_dd_pct": 1.53,
+    "halves": [
+     1077.46,
+     227.15
+    ],
+    "by_coin": {
+     "ADAUSDT": 780.23,
+     "APTUSDT": 883.35,
+     "AVAXUSDT": -164.28,
+     "BCHUSDT": 516.26,
+     "DOTUSDT": -629.24,
+     "LINKUSDT": -241.59,
+     "LTCUSDT": -79.37,
+     "NEARUSDT": -144.72,
+     "SUIUSDT": 496.28,
+     "TRXUSDT": -112.32
+    },
+    "capital": 100000.0,
+    "coins_positive": 4,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|15|close|mid|none|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1781.05,
+    "return_pct": 2.97,
+    "win_rate": 50.0,
+    "halves": [
+     1647.71,
+     133.34
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.81,
+    "by_coin": {
+     "BNBUSDT": 120.42,
+     "BTCUSDT": -66.31,
+     "DOGEUSDT": 655.55,
+     "ETHUSDT": 271.56,
+     "SOLUSDT": 349.42,
+     "XRPUSDT": 450.4
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 1673.77,
+    "return_pct": 1.67,
+    "gross_pnl": 2983.25,
+    "win_rate": 28.3,
+    "avg_net_bp": 27.9,
+    "max_dd": 1520.96,
+    "max_dd_pct": 1.52,
+    "halves": [
+     1485.65,
+     188.11
+    ],
+    "by_coin": {
+     "ADAUSDT": 737.68,
+     "APTUSDT": 798.78,
+     "AVAXUSDT": -195.57,
+     "BCHUSDT": 467.41,
+     "DOTUSDT": -695.78,
+     "LINKUSDT": 413.31,
+     "LTCUSDT": -47.04,
+     "NEARUSDT": -170.09,
+     "SUIUSDT": 453.56,
+     "TRXUSDT": -88.48
+    },
+    "capital": 100000.0,
+    "coins_positive": 5,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|stop|far|none|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 1770.83,
+    "return_pct": 2.95,
+    "win_rate": 49.0,
+    "halves": [
+     1656.59,
+     114.23
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.84,
+    "by_coin": {
+     "BNBUSDT": 213.01,
+     "BTCUSDT": -38.79,
+     "DOGEUSDT": 436.45,
+     "ETHUSDT": 37.0,
+     "SOLUSDT": 371.83,
+     "XRPUSDT": 751.33
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 77,
+    "pnl": 1964.81,
+    "return_pct": 1.96,
+    "gross_pnl": 3641.32,
+    "win_rate": 45.5,
+    "avg_net_bp": 25.52,
+    "max_dd": 1446.23,
+    "max_dd_pct": 1.45,
+    "halves": [
+     1709.93,
+     254.88
+    ],
+    "by_coin": {
+     "ADAUSDT": -35.31,
+     "APTUSDT": 1260.57,
+     "AVAXUSDT": 156.57,
+     "BCHUSDT": 131.1,
+     "DOTUSDT": 447.35,
+     "LINKUSDT": 65.07,
+     "LTCUSDT": -68.16,
+     "NEARUSDT": 228.45,
+     "SUIUSDT": 101.97,
+     "TRXUSDT": -322.78
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|30|retest|far|3.0|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 18,
+    "pnl": 1671.95,
+    "return_pct": 2.79,
+    "win_rate": 55.6,
+    "halves": [
+     1660.27,
+     11.69
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.53,
+    "by_coin": {
+     "BNBUSDT": 216.96,
+     "BTCUSDT": -22.71,
+     "DOGEUSDT": 522.42,
+     "ETHUSDT": 197.33,
+     "SOLUSDT": 314.76,
+     "XRPUSDT": 443.2
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 57,
+    "pnl": 1242.71,
+    "return_pct": 1.24,
+    "gross_pnl": 1944.67,
+    "win_rate": 40.4,
+    "avg_net_bp": 21.8,
+    "max_dd": 1921.27,
+    "max_dd_pct": 1.92,
+    "halves": [
+     2073.19,
+     -830.48
+    ],
+    "by_coin": {
+     "ADAUSDT": 556.29,
+     "APTUSDT": 432.29,
+     "AVAXUSDT": 297.6,
+     "BCHUSDT": 508.08,
+     "DOTUSDT": -572.99,
+     "LINKUSDT": 12.04,
+     "LTCUSDT": -156.82,
+     "NEARUSDT": 109.18,
+     "SUIUSDT": 103.73,
+     "TRXUSDT": -46.69
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|30|stop|far|3.0|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1639.88,
+    "return_pct": 2.73,
+    "win_rate": 55.0,
+    "halves": [
+     1637.02,
+     2.87
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.62,
+    "by_coin": {
+     "BNBUSDT": 199.25,
+     "BTCUSDT": -28.25,
+     "DOGEUSDT": 499.8,
+     "ETHUSDT": 264.34,
+     "SOLUSDT": 292.14,
+     "XRPUSDT": 412.6
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 3003.23,
+    "return_pct": 3.0,
+    "gross_pnl": 4222.4,
+    "win_rate": 41.7,
+    "avg_net_bp": 50.05,
+    "max_dd": 2213.98,
+    "max_dd_pct": 2.21,
+    "halves": [
+     3880.85,
+     -877.62
+    ],
+    "by_coin": {
+     "ADAUSDT": 513.59,
+     "APTUSDT": 1074.03,
+     "AVAXUSDT": 699.02,
+     "BCHUSDT": 326.38,
+     "DOTUSDT": -652.97,
+     "LINKUSDT": -48.66,
+     "LTCUSDT": -215.6,
+     "NEARUSDT": 1335.78,
+     "SUIUSDT": 52.49,
+     "TRXUSDT": -80.85
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|retest|far|1.5|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 39,
+    "pnl": 1638.77,
+    "return_pct": 2.73,
+    "win_rate": 56.4,
+    "halves": [
+     829.29,
+     809.48
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.55,
+    "by_coin": {
+     "BNBUSDT": 212.62,
+     "BTCUSDT": -183.79,
+     "DOGEUSDT": 293.26,
+     "ETHUSDT": 253.99,
+     "SOLUSDT": 470.31,
+     "XRPUSDT": 592.38
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 67,
+    "pnl": 987.59,
+    "return_pct": 0.99,
+    "gross_pnl": 1722.41,
+    "win_rate": 46.3,
+    "avg_net_bp": 14.74,
+    "max_dd": 1414.47,
+    "max_dd_pct": 1.41,
+    "halves": [
+     186.52,
+     801.07
+    ],
+    "by_coin": {
+     "ADAUSDT": -98.23,
+     "APTUSDT": 1080.46,
+     "AVAXUSDT": -121.44,
+     "BCHUSDT": -20.2,
+     "DOTUSDT": 250.8,
+     "LINKUSDT": 126.99,
+     "LTCUSDT": -142.1,
+     "NEARUSDT": 254.76,
+     "SUIUSDT": -168.19,
+     "TRXUSDT": -175.26
+    },
+    "capital": 100000.0,
+    "coins_positive": 4,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|15|close|far|none|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1635.95,
+    "return_pct": 2.73,
+    "win_rate": 50.0,
+    "halves": [
+     1625.92,
+     10.03
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.98,
+    "by_coin": {
+     "BNBUSDT": 126.09,
+     "BTCUSDT": -37.84,
+     "DOGEUSDT": 691.04,
+     "ETHUSDT": 184.69,
+     "SOLUSDT": 298.2,
+     "XRPUSDT": 373.78
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 1901.04,
+    "return_pct": 1.9,
+    "gross_pnl": 3209.95,
+    "win_rate": 36.7,
+    "avg_net_bp": 31.68,
+    "max_dd": 2355.77,
+    "max_dd_pct": 2.36,
+    "halves": [
+     2716.44,
+     -815.4
+    ],
+    "by_coin": {
+     "ADAUSDT": 636.58,
+     "APTUSDT": 508.57,
+     "AVAXUSDT": 787.01,
+     "BCHUSDT": 390.68,
+     "DOTUSDT": -549.66,
+     "LINKUSDT": 258.84,
+     "LTCUSDT": -204.6,
+     "NEARUSDT": -40.43,
+     "SUIUSDT": 212.5,
+     "TRXUSDT": -98.45
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|30|retest|far|none|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 18,
+    "pnl": 1632.56,
+    "return_pct": 2.72,
+    "win_rate": 55.6,
+    "halves": [
+     1620.88,
+     11.69
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.53,
+    "by_coin": {
+     "BNBUSDT": 209.16,
+     "BTCUSDT": -22.71,
+     "DOGEUSDT": 645.49,
+     "ETHUSDT": 147.23,
+     "SOLUSDT": 256.34,
+     "XRPUSDT": 397.05
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 57,
+    "pnl": 1788.62,
+    "return_pct": 1.79,
+    "gross_pnl": 2550.36,
+    "win_rate": 40.4,
+    "avg_net_bp": 31.38,
+    "max_dd": 1921.27,
+    "max_dd_pct": 1.92,
+    "halves": [
+     2619.1,
+     -830.48
+    ],
+    "by_coin": {
+     "ADAUSDT": 689.04,
+     "APTUSDT": 453.78,
+     "AVAXUSDT": 312.56,
+     "BCHUSDT": 498.27,
+     "DOTUSDT": -556.81,
+     "LINKUSDT": 247.06,
+     "LTCUSDT": -156.82,
+     "NEARUSDT": 109.18,
+     "SUIUSDT": 239.05,
+     "TRXUSDT": -46.69
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|30|stop|far|none|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1600.5,
+    "return_pct": 2.67,
+    "win_rate": 55.0,
+    "halves": [
+     1597.63,
+     2.87
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.62,
+    "by_coin": {
+     "BNBUSDT": 191.45,
+     "BTCUSDT": -28.25,
+     "DOGEUSDT": 622.87,
+     "ETHUSDT": 214.25,
+     "SOLUSDT": 233.72,
+     "XRPUSDT": 366.46
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 3901.69,
+    "return_pct": 3.9,
+    "gross_pnl": 5216.18,
+    "win_rate": 41.7,
+    "avg_net_bp": 65.03,
+    "max_dd": 2213.98,
+    "max_dd_pct": 2.21,
+    "halves": [
+     5170.98,
+     -1269.29
+    ],
+    "by_coin": {
+     "ADAUSDT": 646.34,
+     "APTUSDT": 1101.97,
+     "AVAXUSDT": 722.09,
+     "BCHUSDT": 316.57,
+     "DOTUSDT": -636.79,
+     "LINKUSDT": 186.37,
+     "LTCUSDT": -215.6,
+     "NEARUSDT": 1673.78,
+     "SUIUSDT": 187.81,
+     "TRXUSDT": -80.85
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|15|retest|far|3.0|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1574.45,
+    "return_pct": 2.62,
+    "win_rate": 55.0,
+    "halves": [
+     1165.41,
+     409.05
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.79,
+    "by_coin": {
+     "BNBUSDT": 198.77,
+     "BTCUSDT": -22.71,
+     "DOGEUSDT": 467.97,
+     "ETHUSDT": 275.49,
+     "SOLUSDT": 398.2,
+     "XRPUSDT": 256.74
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 59,
+    "pnl": 1625.84,
+    "return_pct": 1.63,
+    "gross_pnl": 2269.19,
+    "win_rate": 37.3,
+    "avg_net_bp": 27.56,
+    "max_dd": 2080.54,
+    "max_dd_pct": 2.08,
+    "halves": [
+     1631.62,
+     -5.77
+    ],
+    "by_coin": {
+     "ADAUSDT": 556.28,
+     "APTUSDT": 106.53,
+     "AVAXUSDT": 706.0,
+     "BCHUSDT": 386.13,
+     "DOTUSDT": -488.85,
+     "LINKUSDT": 255.05,
+     "LTCUSDT": -130.68,
+     "NEARUSDT": 108.28,
+     "SUIUSDT": 188.11,
+     "TRXUSDT": -61.0
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|15|close|far|3.0|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1573.91,
+    "return_pct": 2.62,
+    "win_rate": 50.0,
+    "halves": [
+     1222.87,
+     351.04
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.98,
+    "by_coin": {
+     "BNBUSDT": 143.62,
+     "BTCUSDT": -37.84,
+     "DOGEUSDT": 459.72,
+     "ETHUSDT": 284.05,
+     "SOLUSDT": 440.51,
+     "XRPUSDT": 283.85
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 1182.35,
+    "return_pct": 1.18,
+    "gross_pnl": 2349.74,
+    "win_rate": 36.7,
+    "avg_net_bp": 19.71,
+    "max_dd": 2355.77,
+    "max_dd_pct": 2.36,
+    "halves": [
+     1470.16,
+     -287.81
+    ],
+    "by_coin": {
+     "ADAUSDT": 538.75,
+     "APTUSDT": 47.76,
+     "AVAXUSDT": 721.53,
+     "BCHUSDT": 311.47,
+     "DOTUSDT": -607.23,
+     "LINKUSDT": 272.2,
+     "LTCUSDT": -180.41,
+     "NEARUSDT": 49.13,
+     "SUIUSDT": 127.61,
+     "TRXUSDT": -98.45
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|stop|mid|3.0|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 1488.5,
+    "return_pct": 2.48,
+    "win_rate": 47.1,
+    "halves": [
+     1277.56,
+     210.93
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.84,
+    "by_coin": {
+     "BNBUSDT": 265.07,
+     "BTCUSDT": -156.16,
+     "DOGEUSDT": 238.35,
+     "ETHUSDT": 306.88,
+     "SOLUSDT": 209.29,
+     "XRPUSDT": 625.06
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 77,
+    "pnl": -270.32,
+    "return_pct": -0.27,
+    "gross_pnl": 1236.37,
+    "win_rate": 37.7,
+    "avg_net_bp": -3.51,
+    "max_dd": 1717.42,
+    "max_dd_pct": 1.72,
+    "halves": [
+     -593.37,
+     323.05
+    ],
+    "by_coin": {
+     "ADAUSDT": 5.29,
+     "APTUSDT": 497.43,
+     "AVAXUSDT": -396.05,
+     "BCHUSDT": -388.93,
+     "DOTUSDT": -55.42,
+     "LINKUSDT": 136.78,
+     "LTCUSDT": 185.61,
+     "NEARUSDT": -151.67,
+     "SUIUSDT": 120.36,
+     "TRXUSDT": -223.72
+    },
+    "capital": 100000.0,
+    "coins_positive": 5,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|60|retest|far|none|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 39,
+    "pnl": 1453.02,
+    "return_pct": 2.42,
+    "win_rate": 51.3,
+    "halves": [
+     1148.7,
+     304.31
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.55,
+    "by_coin": {
+     "BNBUSDT": 33.36,
+     "BTCUSDT": -183.79,
+     "DOGEUSDT": 440.43,
+     "ETHUSDT": 70.26,
+     "SOLUSDT": 441.97,
+     "XRPUSDT": 650.79
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 67,
+    "pnl": 1404.25,
+    "return_pct": 1.4,
+    "gross_pnl": 2292.03,
+    "win_rate": 43.3,
+    "avg_net_bp": 20.96,
+    "max_dd": 1414.47,
+    "max_dd_pct": 1.41,
+    "halves": [
+     1072.94,
+     331.31
+    ],
+    "by_coin": {
+     "ADAUSDT": -146.27,
+     "APTUSDT": 1328.89,
+     "AVAXUSDT": 64.59,
+     "BCHUSDT": 119.88,
+     "DOTUSDT": 708.62,
+     "LINKUSDT": -21.37,
+     "LTCUSDT": -465.77,
+     "NEARUSDT": 262.61,
+     "SUIUSDT": -232.62,
+     "TRXUSDT": -214.3
+    },
+    "capital": 100000.0,
+    "coins_positive": 5,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|15|stop|far|3.0|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1282.7,
+    "return_pct": 2.14,
+    "win_rate": 50.0,
+    "halves": [
+     1122.17,
+     160.54
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 1.17,
+    "by_coin": {
+     "BNBUSDT": 95.77,
+     "BTCUSDT": -28.25,
+     "DOGEUSDT": 359.7,
+     "ETHUSDT": 253.33,
+     "SOLUSDT": 375.58,
+     "XRPUSDT": 226.58
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 1263.13,
+    "return_pct": 1.26,
+    "gross_pnl": 2423.6,
+    "win_rate": 38.3,
+    "avg_net_bp": 21.05,
+    "max_dd": 2232.26,
+    "max_dd_pct": 2.23,
+    "halves": [
+     1566.68,
+     -303.56
+    ],
+    "by_coin": {
+     "ADAUSDT": 513.58,
+     "APTUSDT": 46.99,
+     "AVAXUSDT": 663.3,
+     "BCHUSDT": 343.3,
+     "DOTUSDT": -567.07,
+     "LINKUSDT": 195.1,
+     "LTCUSDT": -17.01,
+     "NEARUSDT": 65.58,
+     "SUIUSDT": 137.9,
+     "TRXUSDT": -118.56
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|30|stop|mid|3.0|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1252.38,
+    "return_pct": 2.09,
+    "win_rate": 60.0,
+    "halves": [
+     795.24,
+     457.14
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.61,
+    "by_coin": {
+     "BNBUSDT": 236.05,
+     "BTCUSDT": -56.74,
+     "DOGEUSDT": 302.63,
+     "ETHUSDT": 239.88,
+     "SOLUSDT": 294.14,
+     "XRPUSDT": 236.44
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 354.54,
+    "return_pct": 0.35,
+    "gross_pnl": 1527.95,
+    "win_rate": 31.7,
+    "avg_net_bp": 5.91,
+    "max_dd": 1685.33,
+    "max_dd_pct": 1.69,
+    "halves": [
+     433.28,
+     -78.75
+    ],
+    "by_coin": {
+     "ADAUSDT": 418.28,
+     "APTUSDT": 197.67,
+     "AVAXUSDT": 198.61,
+     "BCHUSDT": 298.3,
+     "DOTUSDT": -706.89,
+     "LINKUSDT": -51.63,
+     "LTCUSDT": -53.09,
+     "NEARUSDT": 388.11,
+     "SUIUSDT": -285.68,
+     "TRXUSDT": -49.15
+    },
+    "capital": 100000.0,
+    "coins_positive": 5,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|30|stop|far|1.5|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 1234.77,
+    "return_pct": 2.06,
+    "win_rate": 60.0,
+    "halves": [
+     795.24,
+     439.52
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.58,
+    "by_coin": {
+     "BNBUSDT": 236.05,
+     "BTCUSDT": -28.25,
+     "DOGEUSDT": 338.83,
+     "ETHUSDT": 200.19,
+     "SOLUSDT": 242.91,
+     "XRPUSDT": 245.03
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 1029.12,
+    "return_pct": 1.03,
+    "gross_pnl": 2152.3,
+    "win_rate": 45.0,
+    "avg_net_bp": 17.15,
+    "max_dd": 2173.36,
+    "max_dd_pct": 2.17,
+    "halves": [
+     1760.33,
+     -731.22
+    ],
+    "by_coin": {
+     "ADAUSDT": 424.94,
+     "APTUSDT": 309.64,
+     "AVAXUSDT": 455.74,
+     "BCHUSDT": 191.48,
+     "DOTUSDT": -796.29,
+     "LINKUSDT": -42.19,
+     "LTCUSDT": -220.09,
+     "NEARUSDT": 628.77,
+     "SUIUSDT": 117.34,
+     "TRXUSDT": -40.22
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "G|15|2|short",
+   "title": "Short 15:00-17:00 UTC",
+   "rules": "Every day, sell at 15:00 UTC and close at 17:00 UTC. No stop.",
+   "original6": {
+    "trades": 180,
+    "pnl": 1107.45,
+    "return_pct": 1.85,
+    "win_rate": 47.2,
+    "halves": [
+     734.68,
+     372.77
+    ],
+    "coins_positive": 6,
+    "max_dd_pct": 2.97,
+    "by_coin": {
+     "BNBUSDT": 30.78,
+     "BTCUSDT": 34.68,
+     "DOGEUSDT": 206.69,
+     "ETHUSDT": 309.3,
+     "SOLUSDT": 115.49,
+     "XRPUSDT": 410.51
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 300,
+    "pnl": 1129.39,
+    "return_pct": 1.13,
+    "gross_pnl": 7625.55,
+    "win_rate": 42.0,
+    "avg_net_bp": 3.76,
+    "max_dd": 4943.52,
+    "max_dd_pct": 4.94,
+    "halves": [
+     530.33,
+     599.06
+    ],
+    "by_coin": {
+     "ADAUSDT": 155.07,
+     "APTUSDT": 788.56,
+     "AVAXUSDT": 488.2,
+     "BCHUSDT": -247.54,
+     "DOTUSDT": 516.14,
+     "LINKUSDT": -4.66,
+     "LTCUSDT": 341.5,
+     "NEARUSDT": -592.18,
+     "SUIUSDT": 253.34,
+     "TRXUSDT": -569.04
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|close|far|1.5|none",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close.",
+   "original6": {
+    "trades": 108,
+    "pnl": 1021.26,
+    "return_pct": 1.7,
+    "win_rate": 45.4,
+    "halves": [
+     802.83,
+     218.43
+    ],
+    "coins_positive": 4,
+    "max_dd_pct": 2.22,
+    "by_coin": {
+     "BNBUSDT": -62.88,
+     "BTCUSDT": -276.19,
+     "DOGEUSDT": 14.22,
+     "ETHUSDT": 474.63,
+     "SOLUSDT": 516.8,
+     "XRPUSDT": 354.68
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 195,
+    "pnl": 3283.58,
+    "return_pct": 3.28,
+    "gross_pnl": 7081.41,
+    "win_rate": 49.7,
+    "avg_net_bp": 16.84,
+    "max_dd": 2993.73,
+    "max_dd_pct": 2.99,
+    "halves": [
+     4095.63,
+     -812.05
+    ],
+    "by_coin": {
+     "ADAUSDT": 870.52,
+     "APTUSDT": 542.22,
+     "AVAXUSDT": 570.15,
+     "BCHUSDT": 248.98,
+     "DOTUSDT": 116.7,
+     "LINKUSDT": 518.39,
+     "LTCUSDT": -222.18,
+     "NEARUSDT": 1456.0,
+     "SUIUSDT": -474.38,
+     "TRXUSDT": -342.83
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|retest|mid|3.0|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 39,
+    "pnl": 1010.62,
+    "return_pct": 1.68,
+    "win_rate": 43.6,
+    "halves": [
+     653.83,
+     356.78
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.57,
+    "by_coin": {
+     "BNBUSDT": 224.8,
+     "BTCUSDT": -292.2,
+     "DOGEUSDT": 293.85,
+     "ETHUSDT": 321.93,
+     "SOLUSDT": 148.52,
+     "XRPUSDT": 313.72
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 67,
+    "pnl": -1372.58,
+    "return_pct": -1.37,
+    "gross_pnl": -587.77,
+    "win_rate": 31.3,
+    "avg_net_bp": -20.49,
+    "max_dd": 2009.26,
+    "max_dd_pct": 2.01,
+    "halves": [
+     -1431.48,
+     58.9
+    ],
+    "by_coin": {
+     "ADAUSDT": -125.37,
+     "APTUSDT": 565.75,
+     "AVAXUSDT": -662.84,
+     "BCHUSDT": -320.77,
+     "DOTUSDT": -178.87,
+     "LINKUSDT": 16.3,
+     "LTCUSDT": -254.25,
+     "NEARUSDT": -117.51,
+     "SUIUSDT": -172.03,
+     "TRXUSDT": -123.01
+    },
+    "capital": 100000.0,
+    "coins_positive": 2,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|30|stop|mid|1.5|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 950.64,
+    "return_pct": 1.58,
+    "win_rate": 85.0,
+    "halves": [
+     403.49,
+     547.14
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.09,
+    "by_coin": {
+     "BNBUSDT": 178.64,
+     "BTCUSDT": -56.74,
+     "DOGEUSDT": 237.89,
+     "ETHUSDT": 167.59,
+     "SOLUSDT": 234.9,
+     "XRPUSDT": 188.36
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": -191.97,
+    "return_pct": -0.19,
+    "gross_pnl": 888.44,
+    "win_rate": 43.3,
+    "avg_net_bp": -3.2,
+    "max_dd": 1207.8,
+    "max_dd_pct": 1.21,
+    "halves": [
+     -57.85,
+     -134.12
+    ],
+    "by_coin": {
+     "ADAUSDT": 238.04,
+     "APTUSDT": -167.05,
+     "AVAXUSDT": 139.39,
+     "BCHUSDT": 54.05,
+     "DOTUSDT": -430.66,
+     "LINKUSDT": -56.97,
+     "LTCUSDT": -79.82,
+     "NEARUSDT": 272.73,
+     "SUIUSDT": -99.2,
+     "TRXUSDT": -62.48
+    },
+    "capital": 100000.0,
+    "coins_positive": 4,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|30|close|far|1.5|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 930.29,
+    "return_pct": 1.55,
+    "win_rate": 55.0,
+    "halves": [
+     823.15,
+     107.14
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.79,
+    "by_coin": {
+     "BNBUSDT": 62.15,
+     "BTCUSDT": -37.84,
+     "DOGEUSDT": 343.9,
+     "ETHUSDT": 57.15,
+     "SOLUSDT": 261.47,
+     "XRPUSDT": 243.46
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 1404.4,
+    "return_pct": 1.4,
+    "gross_pnl": 2527.66,
+    "win_rate": 45.0,
+    "avg_net_bp": 23.41,
+    "max_dd": 2179.56,
+    "max_dd_pct": 2.18,
+    "halves": [
+     1985.09,
+     -580.69
+    ],
+    "by_coin": {
+     "ADAUSDT": 439.7,
+     "APTUSDT": 405.17,
+     "AVAXUSDT": 504.15,
+     "BCHUSDT": 414.02,
+     "DOTUSDT": -888.25,
+     "LINKUSDT": -9.4,
+     "LTCUSDT": -247.32,
+     "NEARUSDT": 711.27,
+     "SUIUSDT": 124.45,
+     "TRXUSDT": -49.39
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|30|retest|far|1.5|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 18,
+    "pnl": 922.67,
+    "return_pct": 1.54,
+    "win_rate": 61.1,
+    "halves": [
+     818.49,
+     104.18
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.5,
+    "by_coin": {
+     "BNBUSDT": 220.34,
+     "BTCUSDT": -22.71,
+     "DOGEUSDT": 325.5,
+     "ETHUSDT": 40.45,
+     "SOLUSDT": 128.88,
+     "XRPUSDT": 230.22
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 57,
+    "pnl": 184.85,
+    "return_pct": 0.18,
+    "gross_pnl": 812.23,
+    "win_rate": 43.9,
+    "avg_net_bp": 3.24,
+    "max_dd": 1880.64,
+    "max_dd_pct": 1.88,
+    "halves": [
+     971.01,
+     -786.15
+    ],
+    "by_coin": {
+     "ADAUSDT": 308.05,
+     "APTUSDT": 20.01,
+     "AVAXUSDT": 92.9,
+     "BCHUSDT": 373.18,
+     "DOTUSDT": -716.31,
+     "LINKUSDT": -128.24,
+     "LTCUSDT": -161.75,
+     "NEARUSDT": 234.49,
+     "SUIUSDT": 168.58,
+     "TRXUSDT": -6.06
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|close|mid|1.5|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 896.17,
+    "return_pct": 1.49,
+    "win_rate": 56.9,
+    "halves": [
+     432.16,
+     464.01
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.62,
+    "by_coin": {
+     "BNBUSDT": 74.12,
+     "BTCUSDT": -78.41,
+     "DOGEUSDT": 285.5,
+     "ETHUSDT": 122.96,
+     "SOLUSDT": 174.81,
+     "XRPUSDT": 317.18
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 79,
+    "pnl": -1528.68,
+    "return_pct": -1.53,
+    "gross_pnl": -92.16,
+    "win_rate": 44.3,
+    "avg_net_bp": -19.35,
+    "max_dd": 2255.73,
+    "max_dd_pct": 2.26,
+    "halves": [
+     -1679.15,
+     150.47
+    ],
+    "by_coin": {
+     "ADAUSDT": -166.72,
+     "APTUSDT": -48.87,
+     "AVAXUSDT": -434.96,
+     "BCHUSDT": -348.64,
+     "DOTUSDT": 4.49,
+     "LINKUSDT": -13.63,
+     "LTCUSDT": -216.06,
+     "NEARUSDT": -51.55,
+     "SUIUSDT": -19.77,
+     "TRXUSDT": -232.98
+    },
+    "capital": 100000.0,
+    "coins_positive": 1,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|30|close|mid|3.0|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 896.06,
+    "return_pct": 1.49,
+    "win_rate": 50.0,
+    "halves": [
+     855.26,
+     40.8
+    ],
+    "coins_positive": 4,
+    "max_dd_pct": 0.88,
+    "by_coin": {
+     "BNBUSDT": -57.61,
+     "BTCUSDT": -66.31,
+     "DOGEUSDT": 329.87,
+     "ETHUSDT": 96.96,
+     "SOLUSDT": 331.29,
+     "XRPUSDT": 261.87
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": 1006.83,
+    "return_pct": 1.01,
+    "gross_pnl": 2183.03,
+    "win_rate": 33.3,
+    "avg_net_bp": 16.78,
+    "max_dd": 1589.54,
+    "max_dd_pct": 1.59,
+    "halves": [
+     1003.2,
+     3.63
+    ],
+    "by_coin": {
+     "ADAUSDT": 476.0,
+     "APTUSDT": 417.45,
+     "AVAXUSDT": 293.45,
+     "BCHUSDT": 539.85,
+     "DOTUSDT": -820.18,
+     "LINKUSDT": -12.61,
+     "LTCUSDT": -65.26,
+     "NEARUSDT": 526.83,
+     "SUIUSDT": -290.82,
+     "TRXUSDT": -57.86
+    },
+    "capital": 100000.0,
+    "coins_positive": 5,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "C|08|day|rev|1",
+   "title": "Cross-coin reversal at 08:00 UTC",
+   "rules": "At 08:00 UTC rank BTC, ETH, SOL, XRP, DOGE and BNB by return since 00:00 UTC. Sell the top 1 and buy the bottom 1, $10,000 each, and close everything at 00:00 UTC. No stops.",
+   "original6": {
+    "trades": 60,
+    "pnl": 891.82,
+    "return_pct": 4.46,
+    "win_rate": 51.7,
+    "halves": [
+     399.21,
+     492.61
+    ],
+    "coins_positive": 4,
+    "max_dd_pct": 3.46,
+    "by_coin": {
+     "BNBUSDT": 392.36,
+     "BTCUSDT": -505.87,
+     "DOGEUSDT": 192.35,
+     "ETHUSDT": 427.56,
+     "SOLUSDT": 514.75,
+     "XRPUSDT": -129.33
+    },
+    "capital": 20000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": -2040.26,
+    "return_pct": -10.2,
+    "gross_pnl": -744.91,
+    "win_rate": 38.3,
+    "avg_net_bp": -34.0,
+    "max_dd": 2919.68,
+    "max_dd_pct": 14.6,
+    "halves": [
+     619.4,
+     -2659.66
+    ],
+    "by_coin": {
+     "ADAUSDT": -519.12,
+     "APTUSDT": 175.23,
+     "AVAXUSDT": -808.44,
+     "BCHUSDT": -131.33,
+     "DOTUSDT": 919.7,
+     "LINKUSDT": -549.51,
+     "LTCUSDT": 812.41,
+     "NEARUSDT": -1129.41,
+     "SUIUSDT": 369.88,
+     "TRXUSDT": -1179.68
+    },
+    "capital": 20000.0,
+    "coins_positive": 4,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|30|retest|mid|1.5|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 18,
+    "pnl": 862.52,
+    "return_pct": 1.44,
+    "win_rate": 77.8,
+    "halves": [
+     396.44,
+     466.07
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.15,
+    "by_coin": {
+     "BNBUSDT": 77.13,
+     "BTCUSDT": -51.2,
+     "DOGEUSDT": 259.55,
+     "ETHUSDT": 101.16,
+     "SOLUSDT": 257.15,
+     "XRPUSDT": 218.73
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 57,
+    "pnl": -278.27,
+    "return_pct": -0.28,
+    "gross_pnl": 287.96,
+    "win_rate": 42.1,
+    "avg_net_bp": -4.88,
+    "max_dd": 715.78,
+    "max_dd_pct": 0.72,
+    "halves": [
+     -265.49,
+     -12.78
+    ],
+    "by_coin": {
+     "ADAUSDT": 144.71,
+     "APTUSDT": -280.12,
+     "AVAXUSDT": 73.94,
+     "BCHUSDT": 291.5,
+     "DOTUSDT": -352.01,
+     "LINKUSDT": -3.13,
+     "LTCUSDT": -72.75,
+     "NEARUSDT": 99.56,
+     "SUIUSDT": -151.67,
+     "TRXUSDT": -28.32
+    },
+    "capital": 100000.0,
+    "coins_positive": 4,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|30|retest|mid|3.0|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 18,
+    "pnl": 835.74,
+    "return_pct": 1.39,
+    "win_rate": 55.6,
+    "halves": [
+     818.49,
+     17.25
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.53,
+    "by_coin": {
+     "BNBUSDT": 116.01,
+     "BTCUSDT": -51.2,
+     "DOGEUSDT": 289.3,
+     "ETHUSDT": 80.13,
+     "SOLUSDT": 180.1,
+     "XRPUSDT": 221.41
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 57,
+    "pnl": -372.08,
+    "return_pct": -0.37,
+    "gross_pnl": 297.8,
+    "win_rate": 31.6,
+    "avg_net_bp": -6.53,
+    "max_dd": 1290.87,
+    "max_dd_pct": 1.29,
+    "halves": [
+     -162.1,
+     -209.98
+    ],
+    "by_coin": {
+     "ADAUSDT": 301.39,
+     "APTUSDT": -91.95,
+     "AVAXUSDT": -164.24,
+     "BCHUSDT": 404.45,
+     "DOTUSDT": -628.24,
+     "LINKUSDT": 57.84,
+     "LTCUSDT": 5.25,
+     "NEARUSDT": -6.17,
+     "SUIUSDT": -235.42,
+     "TRXUSDT": -14.99
+    },
+    "capital": 100000.0,
+    "coins_positive": 4,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|LDN|60|retest|far|1.5|trend",
+   "title": "London-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from 08:00 London time (07:00 UTC in British summer time, 08:00 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 4 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at 16:30 London time. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 52,
+    "pnl": 747.47,
+    "return_pct": 1.25,
+    "win_rate": 53.8,
+    "halves": [
+     745.44,
+     2.03
+    ],
+    "coins_positive": 4,
+    "max_dd_pct": 0.73,
+    "by_coin": {
+     "BNBUSDT": 75.63,
+     "BTCUSDT": 95.75,
+     "DOGEUSDT": -27.43,
+     "ETHUSDT": -6.56,
+     "SOLUSDT": 341.28,
+     "XRPUSDT": 268.8
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 103,
+    "pnl": -1062.63,
+    "return_pct": -1.06,
+    "gross_pnl": -59.22,
+    "win_rate": 42.7,
+    "avg_net_bp": -10.32,
+    "max_dd": 2209.22,
+    "max_dd_pct": 2.21,
+    "halves": [
+     413.87,
+     -1476.5
+    ],
+    "by_coin": {
+     "ADAUSDT": -574.25,
+     "APTUSDT": -623.43,
+     "AVAXUSDT": 7.89,
+     "BCHUSDT": 10.22,
+     "DOTUSDT": -511.13,
+     "LINKUSDT": 92.65,
+     "LTCUSDT": 436.03,
+     "NEARUSDT": 0.69,
+     "SUIUSDT": 168.19,
+     "TRXUSDT": -69.48
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|15|close|mid|3.0|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 654.5,
+    "return_pct": 1.09,
+    "win_rate": 50.0,
+    "halves": [
+     619.95,
+     34.55
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.81,
+    "by_coin": {
+     "BNBUSDT": 50.55,
+     "BTCUSDT": -66.31,
+     "DOGEUSDT": 171.5,
+     "ETHUSDT": 131.3,
+     "SOLUSDT": 229.45,
+     "XRPUSDT": 138.01
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": -127.83,
+    "return_pct": -0.13,
+    "gross_pnl": 1016.0,
+    "win_rate": 35.0,
+    "avg_net_bp": -2.13,
+    "max_dd": 1515.76,
+    "max_dd_pct": 1.52,
+    "halves": [
+     81.91,
+     -209.74
+    ],
+    "by_coin": {
+     "ADAUSDT": 350.16,
+     "APTUSDT": -42.96,
+     "AVAXUSDT": 46.81,
+     "BCHUSDT": 338.91,
+     "DOTUSDT": -695.78,
+     "LINKUSDT": 155.39,
+     "LTCUSDT": 18.88,
+     "NEARUSDT": -267.99,
+     "SUIUSDT": 2.41,
+     "TRXUSDT": -33.64
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|15|retest|mid|3.0|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 620.56,
+    "return_pct": 1.03,
+    "win_rate": 55.0,
+    "halves": [
+     562.93,
+     57.63
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.63,
+    "by_coin": {
+     "BNBUSDT": 71.32,
+     "BTCUSDT": -51.2,
+     "DOGEUSDT": 179.62,
+     "ETHUSDT": 122.68,
+     "SOLUSDT": 187.25,
+     "XRPUSDT": 110.89
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 59,
+    "pnl": 139.12,
+    "return_pct": 0.14,
+    "gross_pnl": 771.24,
+    "win_rate": 33.9,
+    "avg_net_bp": 2.36,
+    "max_dd": 1226.92,
+    "max_dd_pct": 1.23,
+    "halves": [
+     60.48,
+     78.64
+    ],
+    "by_coin": {
+     "ADAUSDT": 464.38,
+     "APTUSDT": 14.89,
+     "AVAXUSDT": 38.54,
+     "BCHUSDT": 277.43,
+     "DOTUSDT": -551.7,
+     "LINKUSDT": 138.16,
+     "LTCUSDT": -84.92,
+     "NEARUSDT": -208.42,
+     "SUIUSDT": 62.68,
+     "TRXUSDT": -11.92
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": true
+   },
+   "confirmed": true
+  },
+  {
+   "id": "C|04|day|rev|1",
+   "title": "Cross-coin reversal at 04:00 UTC",
+   "rules": "At 04:00 UTC rank BTC, ETH, SOL, XRP, DOGE and BNB by return since 00:00 UTC. Sell the top 1 and buy the bottom 1, $10,000 each, and close everything at 00:00 UTC. No stops.",
+   "original6": {
+    "trades": 60,
+    "pnl": 590.74,
+    "return_pct": 2.95,
+    "win_rate": 50.0,
+    "halves": [
+     427.23,
+     163.51
+    ],
+    "coins_positive": 4,
+    "max_dd_pct": 3.67,
+    "by_coin": {
+     "BNBUSDT": 599.9,
+     "BTCUSDT": -615.69,
+     "DOGEUSDT": -759.07,
+     "ETHUSDT": 568.75,
+     "SOLUSDT": 570.16,
+     "XRPUSDT": 226.68
+    },
+    "capital": 20000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": -3341.99,
+    "return_pct": -16.71,
+    "gross_pnl": -2078.66,
+    "win_rate": 41.7,
+    "avg_net_bp": -55.7,
+    "max_dd": 4733.36,
+    "max_dd_pct": 23.67,
+    "halves": [
+     1307.26,
+     -4649.25
+    ],
+    "by_coin": {
+     "ADAUSDT": 104.37,
+     "APTUSDT": -860.76,
+     "AVAXUSDT": -1306.09,
+     "BCHUSDT": -346.92,
+     "DOTUSDT": 1444.12,
+     "LINKUSDT": 73.09,
+     "LTCUSDT": 686.85,
+     "NEARUSDT": -235.86,
+     "SUIUSDT": -1016.96,
+     "TRXUSDT": -1883.84
+    },
+    "capital": 20000.0,
+    "coins_positive": 4,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|30|close|mid|1.5|nr4",
+   "title": "US-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 573.56,
+    "return_pct": 0.96,
+    "win_rate": 65.0,
+    "halves": [
+     399.9,
+     173.66
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.51,
+    "by_coin": {
+     "BNBUSDT": 134.44,
+     "BTCUSDT": -66.31,
+     "DOGEUSDT": 107.73,
+     "ETHUSDT": 105.08,
+     "SOLUSDT": 253.48,
+     "XRPUSDT": 39.14
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 60,
+    "pnl": -8.14,
+    "return_pct": -0.01,
+    "gross_pnl": 1090.48,
+    "win_rate": 43.3,
+    "avg_net_bp": -0.14,
+    "max_dd": 1077.94,
+    "max_dd_pct": 1.08,
+    "halves": [
+     53.44,
+     -61.58
+    ],
+    "by_coin": {
+     "ADAUSDT": 117.4,
+     "APTUSDT": -97.46,
+     "AVAXUSDT": -7.68,
+     "BCHUSDT": 354.03,
+     "DOTUSDT": -625.58,
+     "LINKUSDT": -16.67,
+     "LTCUSDT": -149.46,
+     "NEARUSDT": 356.23,
+     "SUIUSDT": 127.64,
+     "TRXUSDT": -66.58
+    },
+    "capital": 100000.0,
+    "coins_positive": 4,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "B|US1h|0.5|trend|half",
+   "title": "Trend-day follow at 1 h after the NYSE open",
+   "rules": "At 1 h after the NYSE open (weekdays), if price has moved at least 0.5 x the 14-day ATR from the 00:00 UTC open, follow the move at market until 00:00 UTC. Stop at halfway back to the day open. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 17,
+    "pnl": 451.48,
+    "return_pct": 0.75,
+    "win_rate": 58.8,
+    "halves": [
+     360.05,
+     91.43
+    ],
+    "coins_positive": 4,
+    "max_dd_pct": 0.6,
+    "by_coin": {
+     "BNBUSDT": 286.75,
+     "BTCUSDT": -57.61,
+     "DOGEUSDT": -242.19,
+     "ETHUSDT": 168.94,
+     "SOLUSDT": 162.46,
+     "XRPUSDT": 133.13
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 22,
+    "pnl": -3.69,
+    "return_pct": -0.0,
+    "gross_pnl": 485.22,
+    "win_rate": 40.9,
+    "avg_net_bp": -0.17,
+    "max_dd": 822.93,
+    "max_dd_pct": 0.82,
+    "halves": [
+     134.91,
+     -138.6
+    ],
+    "by_coin": {
+     "ADAUSDT": -87.21,
+     "APTUSDT": -223.22,
+     "AVAXUSDT": -146.34,
+     "BCHUSDT": 206.02,
+     "DOTUSDT": -532.56,
+     "LINKUSDT": 58.64,
+     "LTCUSDT": 28.74,
+     "NEARUSDT": 745.84,
+     "SUIUSDT": 98.46,
+     "TRXUSDT": -152.05
+    },
+    "capital": 100000.0,
+    "coins_positive": 5,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|LDN|30|retest|far|none|none",
+   "title": "London-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from 08:00 London time (07:00 UTC in British summer time, 08:00 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 4 h 15 min after the open. Stop at the far side of the range, no target; exit at 16:30 London time.",
+   "original6": {
+    "trades": 121,
+    "pnl": 385.93,
+    "return_pct": 0.64,
+    "win_rate": 27.3,
+    "halves": [
+     103.79,
+     282.14
+    ],
+    "coins_positive": 4,
+    "max_dd_pct": 2.99,
+    "by_coin": {
+     "BNBUSDT": 158.6,
+     "BTCUSDT": 4.67,
+     "DOGEUSDT": -99.66,
+     "ETHUSDT": 52.57,
+     "SOLUSDT": 477.02,
+     "XRPUSDT": -207.26
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 200,
+    "pnl": -392.35,
+    "return_pct": -0.39,
+    "gross_pnl": 2273.29,
+    "win_rate": 27.0,
+    "avg_net_bp": -1.96,
+    "max_dd": 4216.31,
+    "max_dd_pct": 4.22,
+    "halves": [
+     2214.7,
+     -2607.05
+    ],
+    "by_coin": {
+     "ADAUSDT": 92.06,
+     "APTUSDT": -948.39,
+     "AVAXUSDT": -49.84,
+     "BCHUSDT": 420.99,
+     "DOTUSDT": -178.98,
+     "LINKUSDT": 430.78,
+     "LTCUSDT": -309.76,
+     "NEARUSDT": -177.91,
+     "SUIUSDT": 662.56,
+     "TRXUSDT": -333.86
+    },
+    "capital": 100000.0,
+    "coins_positive": 4,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|15|retest|mid|1.5|nr4",
+   "title": "US-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "original6": {
+    "trades": 20,
+    "pnl": 375.73,
+    "return_pct": 0.63,
+    "win_rate": 65.0,
+    "halves": [
+     252.64,
+     123.08
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.34,
+    "by_coin": {
+     "BNBUSDT": 44.16,
+     "BTCUSDT": -51.2,
+     "DOGEUSDT": 186.4,
+     "ETHUSDT": 2.93,
+     "SOLUSDT": 193.27,
+     "XRPUSDT": 0.16
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 59,
+    "pnl": -390.08,
+    "return_pct": -0.39,
+    "gross_pnl": 171.22,
+    "win_rate": 44.1,
+    "avg_net_bp": -6.61,
+    "max_dd": 1136.9,
+    "max_dd_pct": 1.14,
+    "halves": [
+     46.92,
+     -437.0
+    ],
+    "by_coin": {
+     "ADAUSDT": 182.84,
+     "APTUSDT": -61.14,
+     "AVAXUSDT": -7.68,
+     "BCHUSDT": 80.52,
+     "DOTUSDT": -347.99,
+     "LINKUSDT": 84.49,
+     "LTCUSDT": -120.3,
+     "NEARUSDT": -53.34,
+     "SUIUSDT": -120.41,
+     "TRXUSDT": -27.06
+    },
+    "capital": 100000.0,
+    "coins_positive": 3,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|LDN|30|retest|far|1.5|trend",
+   "title": "London-open 30-min range breakout",
+   "rules": "Opening range = the first 30 minutes from 08:00 London time (07:00 UTC in British summer time, 08:00 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 4 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at 16:30 London time. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 61,
+    "pnl": 257.69,
+    "return_pct": 0.43,
+    "win_rate": 45.9,
+    "halves": [
+     224.42,
+     33.27
+    ],
+    "coins_positive": 5,
+    "max_dd_pct": 0.77,
+    "by_coin": {
+     "BNBUSDT": 47.11,
+     "BTCUSDT": -14.2,
+     "DOGEUSDT": 38.71,
+     "ETHUSDT": 1.3,
+     "SOLUSDT": 3.77,
+     "XRPUSDT": 180.99
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 95,
+    "pnl": -1360.24,
+    "return_pct": -1.36,
+    "gross_pnl": -408.82,
+    "win_rate": 38.9,
+    "avg_net_bp": -14.32,
+    "max_dd": 1457.51,
+    "max_dd_pct": 1.46,
+    "halves": [
+     -162.74,
+     -1197.49
+    ],
+    "by_coin": {
+     "ADAUSDT": -195.47,
+     "APTUSDT": -433.88,
+     "AVAXUSDT": -131.93,
+     "BCHUSDT": 71.03,
+     "DOTUSDT": -646.25,
+     "LINKUSDT": 119.37,
+     "LTCUSDT": 313.02,
+     "NEARUSDT": -323.46,
+     "SUIUSDT": 34.34,
+     "TRXUSDT": -167.0
+    },
+    "capital": 100000.0,
+    "coins_positive": 4,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "G|15|1|short",
+   "title": "Short 15:00-16:00 UTC",
+   "rules": "Every day, sell at 15:00 UTC and close at 16:00 UTC. No stop.",
+   "original6": {
+    "trades": 180,
+    "pnl": 201.65,
+    "return_pct": 0.34,
+    "win_rate": 41.1,
+    "halves": [
+     17.04,
+     184.61
+    ],
+    "coins_positive": 4,
+    "max_dd_pct": 3.21,
+    "by_coin": {
+     "BNBUSDT": 72.83,
+     "BTCUSDT": -119.14,
+     "DOGEUSDT": 64.05,
+     "ETHUSDT": 152.02,
+     "SOLUSDT": -53.78,
+     "XRPUSDT": 85.66
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 300,
+    "pnl": -244.87,
+    "return_pct": -0.24,
+    "gross_pnl": 6295.13,
+    "win_rate": 42.0,
+    "avg_net_bp": -0.82,
+    "max_dd": 4820.17,
+    "max_dd_pct": 4.82,
+    "halves": [
+     -206.62,
+     -38.25
+    ],
+    "by_coin": {
+     "ADAUSDT": 214.3,
+     "APTUSDT": 320.89,
+     "AVAXUSDT": 184.21,
+     "BCHUSDT": -367.32,
+     "DOTUSDT": -2.39,
+     "LINKUSDT": -22.52,
+     "LTCUSDT": -26.4,
+     "NEARUSDT": 34.79,
+     "SUIUSDT": -135.19,
+     "TRXUSDT": -445.24
+    },
+    "capital": 100000.0,
+    "coins_positive": 4,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|US|60|stop|far|3.0|tight",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only when the opening range is narrower than its 20-day median.",
+   "original6": {
+    "trades": 75,
+    "pnl": 153.93,
+    "return_pct": 0.26,
+    "win_rate": 38.7,
+    "halves": [
+     121.58,
+     32.34
+    ],
+    "coins_positive": 3,
+    "max_dd_pct": 1.92,
+    "by_coin": {
+     "BNBUSDT": -249.69,
+     "BTCUSDT": -428.83,
+     "DOGEUSDT": 598.65,
+     "ETHUSDT": -445.56,
+     "SOLUSDT": 213.56,
+     "XRPUSDT": 465.79
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 137,
+    "pnl": 3485.08,
+    "return_pct": 3.49,
+    "gross_pnl": 6326.98,
+    "win_rate": 48.9,
+    "avg_net_bp": 25.44,
+    "max_dd": 2584.22,
+    "max_dd_pct": 2.58,
+    "halves": [
+     3628.02,
+     -142.94
+    ],
+    "by_coin": {
+     "ADAUSDT": 1149.84,
+     "APTUSDT": 245.08,
+     "AVAXUSDT": 73.15,
+     "BCHUSDT": 991.71,
+     "DOTUSDT": 508.98,
+     "LINKUSDT": 551.45,
+     "LTCUSDT": 371.98,
+     "NEARUSDT": -215.49,
+     "SUIUSDT": -12.81,
+     "TRXUSDT": -178.82
+    },
+    "capital": 100000.0,
+    "coins_positive": 7,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|LDN|15|close|far|none|tight",
+   "title": "London-open 15-min range breakout",
+   "rules": "Opening range = the first 15 minutes from 08:00 London time (07:00 UTC in British summer time, 08:00 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 4 h 15 min after the open. Stop at the far side of the range, no target; exit at 16:30 London time. Only when the opening range is narrower than its 20-day median.",
+   "original6": {
+    "trades": 74,
+    "pnl": 149.2,
+    "return_pct": 0.25,
+    "win_rate": 23.0,
+    "halves": [
+     36.35,
+     112.85
+    ],
+    "coins_positive": 3,
+    "max_dd_pct": 2.11,
+    "by_coin": {
+     "BNBUSDT": -272.4,
+     "BTCUSDT": -24.76,
+     "DOGEUSDT": 61.43,
+     "ETHUSDT": -271.89,
+     "SOLUSDT": 32.89,
+     "XRPUSDT": 623.93
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 130,
+    "pnl": -648.73,
+    "return_pct": -0.65,
+    "gross_pnl": 2197.16,
+    "win_rate": 23.1,
+    "avg_net_bp": -4.99,
+    "max_dd": 2858.81,
+    "max_dd_pct": 2.86,
+    "halves": [
+     609.54,
+     -1258.27
+    ],
+    "by_coin": {
+     "ADAUSDT": 258.28,
+     "APTUSDT": 339.99,
+     "AVAXUSDT": -654.84,
+     "BCHUSDT": 28.82,
+     "DOTUSDT": -198.55,
+     "LINKUSDT": 10.8,
+     "LTCUSDT": -355.69,
+     "NEARUSDT": 228.75,
+     "SUIUSDT": -56.84,
+     "TRXUSDT": -249.46
+    },
+    "capital": 100000.0,
+    "coins_positive": 5,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "A|UTC|60|close|mid|none|tight",
+   "title": "UTC-day 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from 00:00 UTC, every day. Enter at market after a 1-minute close outside the range, until 12:00 UTC. Stop at the middle of the range, no target; exit at 00:00 UTC the next day. Only when the opening range is narrower than its 20-day median.",
+   "original6": {
+    "trades": 99,
+    "pnl": 134.74,
+    "return_pct": 0.22,
+    "win_rate": 16.2,
+    "halves": [
+     121.65,
+     13.09
+    ],
+    "coins_positive": 3,
+    "max_dd_pct": 2.44,
+    "by_coin": {
+     "BNBUSDT": -382.38,
+     "BTCUSDT": -131.93,
+     "DOGEUSDT": -316.71,
+     "ETHUSDT": 124.02,
+     "SOLUSDT": 11.45,
+     "XRPUSDT": 830.31
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 180,
+    "pnl": -3818.77,
+    "return_pct": -3.82,
+    "gross_pnl": 120.78,
+    "win_rate": 11.1,
+    "avg_net_bp": -21.22,
+    "max_dd": 6523.1,
+    "max_dd_pct": 6.52,
+    "halves": [
+     -169.18,
+     -3649.58
+    ],
+    "by_coin": {
+     "ADAUSDT": -216.85,
+     "APTUSDT": -211.88,
+     "AVAXUSDT": -1008.15,
+     "BCHUSDT": -231.56,
+     "DOTUSDT": -364.74,
+     "LINKUSDT": -716.91,
+     "LTCUSDT": -635.1,
+     "NEARUSDT": 215.25,
+     "SUIUSDT": -235.06,
+     "TRXUSDT": -413.76
+    },
+    "capital": 100000.0,
+    "coins_positive": 1,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  },
+  {
+   "id": "B|US1h|0.5|trend|open",
+   "title": "Trend-day follow at 1 h after the NYSE open",
+   "rules": "At 1 h after the NYSE open (weekdays), if price has moved at least 0.5 x the 14-day ATR from the 00:00 UTC open, follow the move at market until 00:00 UTC. Stop at the day open. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 17,
+    "pnl": 79.11,
+    "return_pct": 0.13,
+    "win_rate": 58.8,
+    "halves": [
+     59.27,
+     19.84
+    ],
+    "coins_positive": 4,
+    "max_dd_pct": 1.1,
+    "by_coin": {
+     "BNBUSDT": 286.75,
+     "BTCUSDT": -129.2,
+     "DOGEUSDT": -435.16,
+     "ETHUSDT": 61.12,
+     "SOLUSDT": 162.46,
+     "XRPUSDT": 133.13
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 22,
+    "pnl": 1147.19,
+    "return_pct": 1.15,
+    "gross_pnl": 1636.54,
+    "win_rate": 45.5,
+    "avg_net_bp": 52.15,
+    "max_dd": 1015.07,
+    "max_dd_pct": 1.02,
+    "halves": [
+     -20.32,
+     1167.52
+    ],
+    "by_coin": {
+     "ADAUSDT": 75.51,
+     "APTUSDT": -223.22,
+     "AVAXUSDT": -111.39,
+     "BCHUSDT": 319.37,
+     "DOTUSDT": -868.22,
+     "LINKUSDT": 58.64,
+     "LTCUSDT": 28.74,
+     "NEARUSDT": 1938.6,
+     "SUIUSDT": 98.46,
+     "TRXUSDT": -169.3
+    },
+    "capital": 100000.0,
+    "coins_positive": 6,
+    "profitable": true,
+    "consistent": false
+   },
+   "confirmed": true
+  },
+  {
+   "id": "A|US|60|stop|mid|1.5|trend",
+   "title": "US-open 60-min range breakout",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "original6": {
+    "trades": 51,
+    "pnl": 77.58,
+    "return_pct": 0.13,
+    "win_rate": 51.0,
+    "halves": [
+     71.8,
+     5.78
+    ],
+    "coins_positive": 3,
+    "max_dd_pct": 0.95,
+    "by_coin": {
+     "BNBUSDT": 39.05,
+     "BTCUSDT": -74.9,
+     "DOGEUSDT": -23.14,
+     "ETHUSDT": 6.55,
+     "SOLUSDT": -101.8,
+     "XRPUSDT": 231.82
+    },
+    "capital": 60000.0
+   },
+   "new10": {
+    "trades": 77,
+    "pnl": -738.92,
+    "return_pct": -0.74,
+    "gross_pnl": 607.04,
+    "win_rate": 50.6,
+    "avg_net_bp": -9.6,
+    "max_dd": 2129.72,
+    "max_dd_pct": 2.13,
+    "halves": [
+     -1192.96,
+     454.04
+    ],
+    "by_coin": {
+     "ADAUSDT": -169.98,
+     "APTUSDT": 232.65,
+     "AVAXUSDT": -314.73,
+     "BCHUSDT": -137.87,
+     "DOTUSDT": 88.99,
+     "LINKUSDT": -18.31,
+     "LTCUSDT": 53.28,
+     "NEARUSDT": -223.17,
+     "SUIUSDT": -119.0,
+     "TRXUSDT": -130.77
+    },
+    "capital": 100000.0,
+    "coins_positive": 3,
+    "profitable": false,
+    "consistent": false
+   },
+   "confirmed": false
+  }
+ ]
+}

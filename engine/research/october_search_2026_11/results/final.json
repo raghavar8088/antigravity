@@ -1,0 +1,641 @@
+{
+ "generated": "2026-11-01",
+ "funnel": {
+  "pool": 900,
+  "profitable": 157,
+  "consistent": 52,
+  "confirmed": 30
+ },
+ "rows": [
+  {
+   "id": "G|15|4|short",
+   "title": "Short 15:00-19:00 UTC",
+   "rules": "Every day, sell at 15:00 UTC and close at 19:00 UTC. No stop.",
+   "trades": 480,
+   "pnl": 7246.18,
+   "capital": 160000.0,
+   "return_pct": 4.53,
+   "coins_up": 14,
+   "orig_return_pct": 4.7,
+   "orig_pnl": 2820.26,
+   "orig_win": 50.6,
+   "new_return_pct": 4.43,
+   "new_pnl": 4425.92,
+   "new_win": 46.3,
+   "max_dd_pct": 4.75,
+   "halves": [
+    1086.93,
+    1733.32
+   ]
+  },
+  {
+   "id": "A|US|60|stop|far|3.0|trend",
+   "title": "US-open 60-min breakout, stop entry, stop at far side, 3R target, with 10-day trend",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "trades": 128,
+   "pnl": 6474.21,
+   "capital": 160000.0,
+   "return_pct": 4.05,
+   "coins_up": 13,
+   "orig_return_pct": 4.9,
+   "orig_pnl": 2942.05,
+   "orig_win": 51.0,
+   "new_return_pct": 3.53,
+   "new_pnl": 3532.16,
+   "new_win": 45.5,
+   "max_dd_pct": 1.45,
+   "halves": [
+    2477.23,
+    464.82
+   ]
+  },
+  {
+   "id": "A|US|60|close|far|3.0|trend",
+   "title": "US-open 60-min breakout, market entry, stop at far side, 3R target, with 10-day trend",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "trades": 130,
+   "pnl": 6115.76,
+   "capital": 160000.0,
+   "return_pct": 3.82,
+   "coins_up": 12,
+   "orig_return_pct": 3.85,
+   "orig_pnl": 2308.89,
+   "orig_win": 52.9,
+   "new_return_pct": 3.81,
+   "new_pnl": 3806.87,
+   "new_win": 48.1,
+   "max_dd_pct": 1.62,
+   "halves": [
+    1940.05,
+    368.84
+   ]
+  },
+  {
+   "id": "A|US|30|stop|far|none|nr4",
+   "title": "US-open 30-min breakout, stop entry, stop at far side, no target, after a narrow-range day",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 5502.19,
+   "capital": 160000.0,
+   "return_pct": 3.44,
+   "coins_up": 12,
+   "orig_return_pct": 2.67,
+   "orig_pnl": 1600.5,
+   "orig_win": 55.0,
+   "new_return_pct": 3.9,
+   "new_pnl": 3901.69,
+   "new_win": 41.7,
+   "max_dd_pct": 2.21,
+   "halves": [
+    1597.63,
+    2.87
+   ]
+  },
+  {
+   "id": "A|US|15|retest|far|none|nr4",
+   "title": "US-open 15-min breakout, limit retest, stop at far side, no target, after a narrow-range day",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 79,
+   "pnl": 4786.69,
+   "capital": 160000.0,
+   "return_pct": 2.99,
+   "coins_up": 12,
+   "orig_return_pct": 3.2,
+   "orig_pnl": 1920.23,
+   "orig_win": 55.0,
+   "new_return_pct": 2.87,
+   "new_pnl": 2866.46,
+   "new_win": 37.3,
+   "max_dd_pct": 2.08,
+   "halves": [
+    1704.04,
+    216.19
+   ]
+  },
+  {
+   "id": "A|US|15|retest|mid|none|nr4",
+   "title": "US-open 15-min breakout, limit retest, stop at middle, no target, after a narrow-range day",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 79,
+   "pnl": 4704.56,
+   "capital": 160000.0,
+   "return_pct": 2.94,
+   "coins_up": 11,
+   "orig_return_pct": 3.44,
+   "orig_pnl": 2065.21,
+   "orig_win": 55.0,
+   "new_return_pct": 2.64,
+   "new_pnl": 2639.35,
+   "new_win": 28.8,
+   "max_dd_pct": 1.25,
+   "halves": [
+    1725.82,
+    339.39
+   ]
+  },
+  {
+   "id": "A|US|30|stop|far|3.0|nr4",
+   "title": "US-open 30-min breakout, stop entry, stop at far side, 3R target, after a narrow-range day",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 4643.11,
+   "capital": 160000.0,
+   "return_pct": 2.9,
+   "coins_up": 11,
+   "orig_return_pct": 2.73,
+   "orig_pnl": 1639.88,
+   "orig_win": 55.0,
+   "new_return_pct": 3.0,
+   "new_pnl": 3003.23,
+   "new_win": 41.7,
+   "max_dd_pct": 2.21,
+   "halves": [
+    1637.02,
+    2.87
+   ]
+  },
+  {
+   "id": "A|US|60|close|far|1.5|trend",
+   "title": "US-open 60-min breakout, market entry, stop at far side, 1.5R target, with 10-day trend",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "trades": 130,
+   "pnl": 4444.93,
+   "capital": 160000.0,
+   "return_pct": 2.78,
+   "coins_up": 12,
+   "orig_return_pct": 4.61,
+   "orig_pnl": 2763.57,
+   "orig_win": 58.8,
+   "new_return_pct": 1.68,
+   "new_pnl": 1681.36,
+   "new_win": 49.4,
+   "max_dd_pct": 1.62,
+   "halves": [
+    1544.51,
+    1219.07
+   ]
+  },
+  {
+   "id": "A|US|60|close|far|1.5|none",
+   "title": "US-open 60-min breakout, market entry, stop at far side, 1.5R target",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close.",
+   "trades": 303,
+   "pnl": 4304.84,
+   "capital": 160000.0,
+   "return_pct": 2.69,
+   "coins_up": 11,
+   "orig_return_pct": 1.7,
+   "orig_pnl": 1021.26,
+   "orig_win": 45.4,
+   "new_return_pct": 3.28,
+   "new_pnl": 3283.58,
+   "new_win": 49.7,
+   "max_dd_pct": 2.99,
+   "halves": [
+    802.83,
+    218.43
+   ]
+  },
+  {
+   "id": "A|US|60|retest|far|3.0|trend",
+   "title": "US-open 60-min breakout, limit retest, stop at far side, 3R target, with 10-day trend",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "trades": 106,
+   "pnl": 4220.4,
+   "capital": 160000.0,
+   "return_pct": 2.64,
+   "coins_up": 10,
+   "orig_return_pct": 3.36,
+   "orig_pnl": 2017.57,
+   "orig_win": 51.3,
+   "new_return_pct": 2.2,
+   "new_pnl": 2202.83,
+   "new_win": 43.3,
+   "max_dd_pct": 1.41,
+   "halves": [
+    1713.25,
+    304.31
+   ]
+  },
+  {
+   "id": "A|US|60|stop|far|1.5|trend",
+   "title": "US-open 60-min breakout, stop entry, stop at far side, 1.5R target, with 10-day trend",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "trades": 128,
+   "pnl": 4108.8,
+   "capital": 160000.0,
+   "return_pct": 2.57,
+   "coins_up": 13,
+   "orig_return_pct": 3.77,
+   "orig_pnl": 2261.65,
+   "orig_win": 56.9,
+   "new_return_pct": 1.85,
+   "new_pnl": 1847.15,
+   "new_win": 49.4,
+   "max_dd_pct": 1.45,
+   "halves": [
+    1432.29,
+    829.37
+   ]
+  },
+  {
+   "id": "A|US|60|close|far|none|trend",
+   "title": "US-open 60-min breakout, market entry, stop at far side, no target, with 10-day trend",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "trades": 130,
+   "pnl": 4006.93,
+   "capital": 160000.0,
+   "return_pct": 2.5,
+   "coins_up": 11,
+   "orig_return_pct": 3.26,
+   "orig_pnl": 1956.25,
+   "orig_win": 52.9,
+   "new_return_pct": 2.05,
+   "new_pnl": 2050.68,
+   "new_win": 48.1,
+   "max_dd_pct": 1.62,
+   "halves": [
+    1655.17,
+    301.08
+   ]
+  },
+  {
+   "id": "A|US|60|stop|far|none|trend",
+   "title": "US-open 60-min breakout, stop entry, stop at far side, no target, with 10-day trend",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "trades": 128,
+   "pnl": 3735.64,
+   "capital": 160000.0,
+   "return_pct": 2.33,
+   "coins_up": 12,
+   "orig_return_pct": 2.95,
+   "orig_pnl": 1770.83,
+   "orig_win": 49.0,
+   "new_return_pct": 1.96,
+   "new_pnl": 1964.81,
+   "new_win": 45.5,
+   "max_dd_pct": 1.45,
+   "halves": [
+    1656.59,
+    114.23
+   ]
+  },
+  {
+   "id": "A|US|60|stop|far|3.0|tight",
+   "title": "US-open 60-min breakout, stop entry, stop at far side, 3R target, tight opening range",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only when the opening range is narrower than its 20-day median.",
+   "trades": 212,
+   "pnl": 3639.01,
+   "capital": 160000.0,
+   "return_pct": 2.27,
+   "coins_up": 10,
+   "orig_return_pct": 0.26,
+   "orig_pnl": 153.93,
+   "orig_win": 38.7,
+   "new_return_pct": 3.49,
+   "new_pnl": 3485.08,
+   "new_win": 48.9,
+   "max_dd_pct": 2.58,
+   "halves": [
+    121.58,
+    32.34
+   ]
+  },
+  {
+   "id": "A|US|15|close|far|none|nr4",
+   "title": "US-open 15-min breakout, market entry, stop at far side, no target, after a narrow-range day",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 3536.99,
+   "capital": 160000.0,
+   "return_pct": 2.21,
+   "coins_up": 11,
+   "orig_return_pct": 2.73,
+   "orig_pnl": 1635.95,
+   "orig_win": 50.0,
+   "new_return_pct": 1.9,
+   "new_pnl": 1901.04,
+   "new_win": 36.7,
+   "max_dd_pct": 2.36,
+   "halves": [
+    1625.92,
+    10.03
+   ]
+  },
+  {
+   "id": "A|US|15|close|mid|none|nr4",
+   "title": "US-open 15-min breakout, market entry, stop at middle, no target, after a narrow-range day",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 3454.82,
+   "capital": 160000.0,
+   "return_pct": 2.16,
+   "coins_up": 10,
+   "orig_return_pct": 2.97,
+   "orig_pnl": 1781.05,
+   "orig_win": 50.0,
+   "new_return_pct": 1.67,
+   "new_pnl": 1673.77,
+   "new_win": 28.3,
+   "max_dd_pct": 1.52,
+   "halves": [
+    1647.71,
+    133.34
+   ]
+  },
+  {
+   "id": "A|US|30|retest|far|none|nr4",
+   "title": "US-open 30-min breakout, limit retest, stop at far side, no target, after a narrow-range day",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 75,
+   "pnl": 3421.18,
+   "capital": 160000.0,
+   "return_pct": 2.14,
+   "coins_up": 12,
+   "orig_return_pct": 2.72,
+   "orig_pnl": 1632.56,
+   "orig_win": 55.6,
+   "new_return_pct": 1.79,
+   "new_pnl": 1788.62,
+   "new_win": 40.4,
+   "max_dd_pct": 1.92,
+   "halves": [
+    1620.88,
+    11.69
+   ]
+  },
+  {
+   "id": "A|US|15|retest|far|3.0|nr4",
+   "title": "US-open 15-min breakout, limit retest, stop at far side, 3R target, after a narrow-range day",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 79,
+   "pnl": 3200.29,
+   "capital": 160000.0,
+   "return_pct": 2.0,
+   "coins_up": 12,
+   "orig_return_pct": 2.62,
+   "orig_pnl": 1574.45,
+   "orig_win": 55.0,
+   "new_return_pct": 1.63,
+   "new_pnl": 1625.84,
+   "new_win": 37.3,
+   "max_dd_pct": 2.08,
+   "halves": [
+    1165.41,
+    409.05
+   ]
+  },
+  {
+   "id": "A|US|30|retest|far|3.0|nr4",
+   "title": "US-open 30-min breakout, limit retest, stop at far side, 3R target, after a narrow-range day",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 75,
+   "pnl": 2914.66,
+   "capital": 160000.0,
+   "return_pct": 1.82,
+   "coins_up": 12,
+   "orig_return_pct": 2.79,
+   "orig_pnl": 1671.95,
+   "orig_win": 55.6,
+   "new_return_pct": 1.24,
+   "new_pnl": 1242.71,
+   "new_win": 40.4,
+   "max_dd_pct": 1.92,
+   "halves": [
+    1660.27,
+    11.69
+   ]
+  },
+  {
+   "id": "A|US|60|retest|far|none|trend",
+   "title": "US-open 60-min breakout, limit retest, stop at far side, no target, with 10-day trend",
+   "rules": "Opening range = the first 60 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, no target; exit at the NYSE close. Only in the direction of the last 10 days' move.",
+   "trades": 106,
+   "pnl": 2857.27,
+   "capital": 160000.0,
+   "return_pct": 1.79,
+   "coins_up": 10,
+   "orig_return_pct": 2.42,
+   "orig_pnl": 1453.02,
+   "orig_win": 51.3,
+   "new_return_pct": 1.4,
+   "new_pnl": 1404.25,
+   "new_win": 43.3,
+   "max_dd_pct": 1.41,
+   "halves": [
+    1148.7,
+    304.31
+   ]
+  },
+  {
+   "id": "A|US|15|close|far|3.0|nr4",
+   "title": "US-open 15-min breakout, market entry, stop at far side, 3R target, after a narrow-range day",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 2756.26,
+   "capital": 160000.0,
+   "return_pct": 1.72,
+   "coins_up": 12,
+   "orig_return_pct": 2.62,
+   "orig_pnl": 1573.91,
+   "orig_win": 50.0,
+   "new_return_pct": 1.18,
+   "new_pnl": 1182.35,
+   "new_win": 36.7,
+   "max_dd_pct": 2.36,
+   "halves": [
+    1222.87,
+    351.04
+   ]
+  },
+  {
+   "id": "A|US|15|stop|far|3.0|nr4",
+   "title": "US-open 15-min breakout, stop entry, stop at far side, 3R target, after a narrow-range day",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 2545.83,
+   "capital": 160000.0,
+   "return_pct": 1.59,
+   "coins_up": 12,
+   "orig_return_pct": 2.14,
+   "orig_pnl": 1282.7,
+   "orig_win": 50.0,
+   "new_return_pct": 1.26,
+   "new_pnl": 1263.13,
+   "new_win": 38.3,
+   "max_dd_pct": 2.23,
+   "halves": [
+    1122.17,
+    160.54
+   ]
+  },
+  {
+   "id": "A|US|30|close|far|1.5|nr4",
+   "title": "US-open 30-min breakout, market entry, stop at far side, 1.5R target, after a narrow-range day",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 2334.69,
+   "capital": 160000.0,
+   "return_pct": 1.46,
+   "coins_up": 11,
+   "orig_return_pct": 1.55,
+   "orig_pnl": 930.29,
+   "orig_win": 55.0,
+   "new_return_pct": 1.4,
+   "new_pnl": 1404.4,
+   "new_win": 45.0,
+   "max_dd_pct": 2.18,
+   "halves": [
+    823.15,
+    107.14
+   ]
+  },
+  {
+   "id": "A|US|30|stop|far|1.5|nr4",
+   "title": "US-open 30-min breakout, stop entry, stop at far side, 1.5R target, after a narrow-range day",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 2263.89,
+   "capital": 160000.0,
+   "return_pct": 1.41,
+   "coins_up": 11,
+   "orig_return_pct": 2.06,
+   "orig_pnl": 1234.77,
+   "orig_win": 60.0,
+   "new_return_pct": 1.03,
+   "new_pnl": 1029.12,
+   "new_win": 45.0,
+   "max_dd_pct": 2.17,
+   "halves": [
+    795.24,
+    439.52
+   ]
+  },
+  {
+   "id": "G|15|2|short",
+   "title": "Short 15:00-17:00 UTC",
+   "rules": "Every day, sell at 15:00 UTC and close at 17:00 UTC. No stop.",
+   "trades": 480,
+   "pnl": 2236.84,
+   "capital": 160000.0,
+   "return_pct": 1.4,
+   "coins_up": 12,
+   "orig_return_pct": 1.85,
+   "orig_pnl": 1107.45,
+   "orig_win": 47.2,
+   "new_return_pct": 1.13,
+   "new_pnl": 1129.39,
+   "new_win": 42.0,
+   "max_dd_pct": 4.94,
+   "halves": [
+    734.68,
+    372.77
+   ]
+  },
+  {
+   "id": "A|US|30|close|mid|3.0|nr4",
+   "title": "US-open 30-min breakout, market entry, stop at middle, 3R target, after a narrow-range day",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Enter at market after a 1-minute close outside the range, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 1902.89,
+   "capital": 160000.0,
+   "return_pct": 1.19,
+   "coins_up": 9,
+   "orig_return_pct": 1.49,
+   "orig_pnl": 896.06,
+   "orig_win": 50.0,
+   "new_return_pct": 1.01,
+   "new_pnl": 1006.83,
+   "new_win": 33.3,
+   "max_dd_pct": 1.59,
+   "halves": [
+    855.26,
+    40.8
+   ]
+  },
+  {
+   "id": "A|US|30|stop|mid|3.0|nr4",
+   "title": "US-open 30-min breakout, stop entry, stop at middle, 3R target, after a narrow-range day",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. Rest buy-stop and sell-stop orders at the two range edges; the first one touched is the trade, until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 80,
+   "pnl": 1606.92,
+   "capital": 160000.0,
+   "return_pct": 1.0,
+   "coins_up": 10,
+   "orig_return_pct": 2.09,
+   "orig_pnl": 1252.38,
+   "orig_win": 60.0,
+   "new_return_pct": 0.35,
+   "new_pnl": 354.54,
+   "new_win": 31.7,
+   "max_dd_pct": 1.69,
+   "halves": [
+    795.24,
+    457.14
+   ]
+  },
+  {
+   "id": "B|US1h|0.5|trend|open",
+   "title": "Follow a 0.5 ATR move 1 h after the US open, with 10-day trend, stop at day open",
+   "rules": "At 1 h after the NYSE open (weekdays), if price has moved at least 0.5 x the 14-day ATR from the 00:00 UTC open, follow the move at market until 00:00 UTC. Stop at the day open. Only in the direction of the last 10 days' move.",
+   "trades": 39,
+   "pnl": 1226.3,
+   "capital": 160000.0,
+   "return_pct": 0.77,
+   "coins_up": 10,
+   "orig_return_pct": 0.13,
+   "orig_pnl": 79.11,
+   "orig_win": 58.8,
+   "new_return_pct": 1.15,
+   "new_pnl": 1147.19,
+   "new_win": 45.5,
+   "max_dd_pct": 1.1,
+   "halves": [
+    59.27,
+    19.84
+   ]
+  },
+  {
+   "id": "A|US|30|retest|far|1.5|nr4",
+   "title": "US-open 30-min breakout, limit retest, stop at far side, 1.5R target, after a narrow-range day",
+   "rules": "Opening range = the first 30 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the far side of the range, a limit target at 1.5x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 75,
+   "pnl": 1107.52,
+   "capital": 160000.0,
+   "return_pct": 0.69,
+   "coins_up": 11,
+   "orig_return_pct": 1.54,
+   "orig_pnl": 922.67,
+   "orig_win": 61.1,
+   "new_return_pct": 0.18,
+   "new_pnl": 184.85,
+   "new_win": 43.9,
+   "max_dd_pct": 1.88,
+   "halves": [
+    818.49,
+    104.18
+   ]
+  },
+  {
+   "id": "A|US|15|retest|mid|3.0|nr4",
+   "title": "US-open 15-min breakout, limit retest, stop at middle, 3R target, after a narrow-range day",
+   "rules": "Opening range = the first 15 minutes from the NYSE open (13:30 UTC in US summer time, 14:30 in winter), weekdays only. After a 1-minute close outside the range, rest a limit order back at the broken edge (maker fill), until 3 h 15 min after the open. Stop at the middle of the range, a limit target at 3.0x the risk; exit at the NYSE close. Only after a day whose range was the narrowest of the last four.",
+   "trades": 79,
+   "pnl": 759.68,
+   "capital": 160000.0,
+   "return_pct": 0.47,
+   "coins_up": 11,
+   "orig_return_pct": 1.03,
+   "orig_pnl": 620.56,
+   "orig_win": 55.0,
+   "new_return_pct": 0.14,
+   "new_pnl": 139.12,
+   "new_win": 33.9,
+   "max_dd_pct": 1.23,
+   "halves": [
+    562.93,
+    57.63
+   ]
+  }
+ ]
+}
